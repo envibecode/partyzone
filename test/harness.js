@@ -29,7 +29,7 @@ async function makeGuest(name) {
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
   const cookie = raw.map((c) => c.split(';')[0]).join('; ');
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
-  const player = { name, socket, cookie, state: null, game: null, vault: null, online: null, profile: null, events: [] };
+  const player = { name, socket, cookie, state: null, game: null, vault: null, online: null, admin: null, kicked: null, lastToast: null, profile: null, events: [] };
 
   socket.on('room:state', ({ room, you, game }) => {
     player.state = room;
@@ -51,6 +51,15 @@ async function makeGuest(name) {
   });
   socket.on('online:list', ({ online }) => {
     player.online = online;
+  });
+  socket.on('admin:state', (payload) => {
+    player.admin = payload;
+  });
+  socket.on('kicked', (payload) => {
+    player.kicked = payload;
+  });
+  socket.on('toast', (payload) => {
+    player.lastToast = payload;
   });
   socket.onAny((ev, payload) => {
     if (!['room:state', 'vault:state', 'online:list'].includes(ev)) player.events.push([ev, payload]);
@@ -276,7 +285,114 @@ async function testPresence() {
   a.socket.close();
 }
 
-/* ══════════════ 4 — Classement ══════════════ */
+
+/* ══════════════ 4 — Panel d'administration ══════════════ */
+
+async function testAdmin() {
+  section('Panel administrateur');
+  const boss = await makeGuest('Patron');
+  const cible = await makeGuest('Cible');
+
+  // Sans droits, le panel est inaccessible
+  boss.socket.emit('admin:open', {});
+  await until(() => boss.lastToast, 4000, 'refus');
+  check('le panel refuse les non-admins', /administrateurs/i.test(boss.lastToast.message), boss.lastToast.message);
+  check('aucun état admin n’a fuité', boss.admin === null);
+
+  // Mauvaise clé
+  boss.lastToast = null;
+  boss.socket.emit('admin:claim', { key: 'pas-la-bonne' });
+  await until(() => boss.lastToast, 4000, 'clé invalide');
+  check('mauvaise clé refusée', /incorrecte/i.test(boss.lastToast.message), boss.lastToast.message);
+  check('toujours pas admin', boss.profile.admin !== true);
+
+  // Bonne clé
+  boss.socket.emit('admin:claim', { key: process.env.ADMIN_KEY || 'test-admin-key' });
+  await until(() => boss.profile.admin === true, 5000, 'droits obtenus');
+  check('la bonne clé donne les droits', boss.profile.admin === true);
+  await until(() => boss.admin, 5000, 'état admin');
+  check('le panel s’ouvre', Boolean(boss.admin.stats));
+  check('les statistiques sont là', boss.admin.stats.players > 0, boss.admin.stats.players + ' joueurs');
+  check('la liste des joueurs est là', boss.admin.players.length > 0);
+
+  // La recherche : on filtre sur l'identifiant exact de la cible. Plusieurs
+  // profils peuvent porter le même pseudo si les tests ont déjà tourné.
+  boss.admin = null;
+  boss.socket.emit('admin:open', { query: cible.me });
+  await until(() => boss.admin, 5000, 'recherche');
+  check('la recherche filtre la liste', boss.admin.players.length === 1, boss.admin.players.length + ' résultat(s)');
+  const target = boss.admin.players.find((p) => p.id === cible.me);
+  check('la cible est trouvée', Boolean(target));
+
+  // Créditer de l'XP
+  const xpBefore = cible.profile.xp;
+  boss.socket.emit('admin:action', { action: 'grant-xp', payload: { id: target.id, amount: 500 } });
+  await until(() => cible.profile.xp === xpBefore + 500, 5000, 'XP créditée');
+  check('l’admin peut créditer de l’XP', cible.profile.xp === xpBefore + 500, `${xpBefore} → ${cible.profile.xp}`);
+
+  // Créditer des pièces
+  const coinsBefore = cible.profile.coins;
+  boss.socket.emit('admin:action', { action: 'grant-coins', payload: { id: target.id, amount: -100 } });
+  await until(() => cible.profile.coins === coinsBefore - 100, 5000, 'pièces retirées');
+  check('un montant négatif retire bien', cible.profile.coins === coinsBefore - 100);
+
+  // Fermeture d'un salon
+  cible.socket.emit('room:create');
+  await until(() => cible.state, 5000, 'salon créé');
+  const roomCode = cible.state.code;
+  boss.admin = null;
+  boss.socket.emit('admin:open', {});
+  await until(() => boss.admin && boss.admin.rooms.some((r) => r.code === roomCode), 5000, 'salon visible');
+  check('les salons actifs sont listés', true, roomCode);
+  boss.socket.emit('admin:action', { action: 'close-room', payload: { code: roomCode } });
+  await until(() => boss.admin && !boss.admin.rooms.some((r) => r.code === roomCode), 5000, 'salon fermé');
+  check('l’admin peut fermer un salon', true);
+
+  // Annonce
+  cible.lastToast = null;
+  boss.socket.emit('admin:action', { action: 'announce', payload: { text: 'Test annonce' } });
+  await until(() => cible.lastToast && /Test annonce/.test(cible.lastToast.message), 5000, 'annonce reçue');
+  check('l’annonce arrive chez tout le monde', true);
+
+  // Bannissement
+  boss.socket.emit('admin:action', { action: 'ban', payload: { id: target.id, reason: 'Test' } });
+  await until(() => cible.kicked, 6000, 'exclusion');
+  check('le joueur banni est éjecté', /Test/.test(cible.kicked.reason), cible.kicked.reason);
+
+  // Reconnexion refusée
+  const revenant = io(BASE, { extraHeaders: { Cookie: cible.cookie }, transports: ['websocket'] });
+  let refused = null;
+  revenant.on('kicked', (p) => { refused = p; });
+  await new Promise((r) => revenant.on('connect', r));
+  await until(() => refused, 6000, 'reconnexion refusée');
+  check('un banni ne peut pas revenir', Boolean(refused), refused.reason);
+  revenant.close();
+
+  // Débannissement
+  boss.socket.emit('admin:action', { action: 'unban', payload: { id: target.id } });
+  await wait(700);
+  const retour = io(BASE, { extraHeaders: { Cookie: cible.cookie }, transports: ['websocket'] });
+  let kickedAgain = false;
+  retour.on('kicked', () => { kickedAgain = true; });
+  await new Promise((r) => retour.on('connect', r));
+  await wait(900);
+  check('après débannissement, il peut revenir', !kickedAgain);
+  retour.close();
+
+  // On ne bannit pas un admin
+  boss.lastToast = null;
+  boss.socket.emit('admin:action', { action: 'ban', payload: { id: boss.me } });
+  await until(() => boss.lastToast, 4000, 'refus de bannir un admin');
+  check('impossible de bannir un administrateur', /administrateur/i.test(boss.lastToast.message), boss.lastToast.message);
+
+  // Le journal garde une trace
+  check('le journal enregistre les actions', boss.admin.log.length >= 3, boss.admin.log.length + ' entrées');
+
+  boss.socket.close();
+  cible.socket.close();
+}
+
+/* ══════════════ 5 — Classement ══════════════ */
 
 async function testLeaderboard() {
   section('Classement général');
@@ -382,6 +498,7 @@ function testChoiceGeneration() {
     await testVault();
     await testPresence();
     await testUndercover();
+    await testAdmin();
     await testLeaderboard();
   } catch (err) {
     console.error('\n💥 ' + err.message);

@@ -74,6 +74,9 @@ function blankProfile(user, now = Date.now()) {
       correct: 0,
     },
     vault: blankVault(now),
+    admin: false,
+    banned: false,
+    banReason: '',
     createdAt: now,
     updatedAt: now,
     seenAt: now,
@@ -141,6 +144,10 @@ class FileBackend {
   async all() {
     return [...this.map.values()];
   }
+  async remove(id) {
+    this.map.delete(id);
+    this.dirty = true;
+  }
   async close() {
     this.flush();
   }
@@ -195,8 +202,13 @@ class PostgresBackend {
   }
 
   async all() {
-    const { rows } = await this.pool.query('SELECT data FROM profiles ORDER BY xp DESC LIMIT 500');
+    const { rows } = await this.pool.query('SELECT data FROM profiles ORDER BY xp DESC LIMIT 1000');
     return rows.map((r) => migrate(r.data));
+  }
+
+  async remove(id) {
+    this.cache.delete(id);
+    await this.pool.query('DELETE FROM profiles WHERE id = $1', [id]);
   }
 
   async close() {
@@ -252,6 +264,7 @@ function publicProfile(profile) {
     need: lvl.need,
     ratio: lvl.ratio,
     title: rankTitle(lvl.level),
+    admin: Boolean(profile.admin),
     stats: profile.stats,
     coins: profile.vault.coins,
     collected: Object.values(profile.vault.items || {}).filter((n) => n > 0).length,
@@ -277,6 +290,23 @@ function grantXp(profile, amount) {
   return { gained: Math.round(amount), levelUp: after > before, level: after };
 }
 
+/** Tous les profils enregistrés — réservé au panel d'administration. */
+async function allProfiles() {
+  await backend.ready();
+  return backend.all();
+}
+
+/** Lit un profil par son identifiant, sans le créer s'il n'existe pas. */
+async function findProfile(id) {
+  await backend.ready();
+  return backend.get(id);
+}
+
+async function deleteProfile(id) {
+  await backend.ready();
+  return backend.remove(id);
+}
+
 async function close() {
   await backend.close();
 }
@@ -287,6 +317,9 @@ module.exports = {
   publicProfile,
   leaderboard,
   grantXp,
+  allProfiles,
+  findProfile,
+  deleteProfile,
   levelFromXp,
   rankTitle,
   close,

@@ -243,4 +243,15 @@ function startJanitor() {
   }, 60 * 1000).unref();
 }
 
-module.exports = { Room, createRoom, getRoom, rooms, startJanitor, DEFAULT_SETTINGS };
+/** Ferme un salon : la partie s'arrête, tout le monde est renvoyé à l'accueil. */
+function closeRoom(code, reason = 'Salon fermé par un administrateur.') {
+  const room = getRoom(code);
+  if (!room) return false;
+  room.stopGame(false);
+  room.emit('room:closed', { reason });
+  room.io.in('room:' + room.code).socketsLeave('room:' + room.code);
+  rooms.delete(room.code);
+  return true;
+}
+
+module.exports = { Room, createRoom, getRoom, closeRoom, rooms, startJanitor, DEFAULT_SETTINGS };

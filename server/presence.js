@@ -13,6 +13,7 @@ const STATUS_LABEL = {
   room: 'Dans un salon',
   game: 'En partie',
   vault: 'Au MemeVault',
+  admin: 'Au panel admin',
 };
 
 class Presence {

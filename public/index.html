@@ -61,6 +61,7 @@
       <button class="rail-btn" data-go="vault" data-tip="MemeVault">🎁</button>
       <button class="rail-btn" data-jump="#board" data-tip="Classement">🏆</button>
       <button class="rail-btn" data-jump="#games" data-tip="Les jeux">🎮</button>
+      <button class="rail-btn hidden" id="rail-admin" data-go="admin" data-tip="Panel admin">🛡️</button>
     </div>
     <div class="rail-foot">
       <button class="rail-btn" id="btn-mute" data-tip="Couper le son">🔊</button>
@@ -85,7 +86,10 @@
       <div class="topbar-right">
         <button class="pill pill-coins" data-go="vault" title="Tes pièces">🪙 <b id="top-coins">0</b></button>
         <button class="icon-btn" id="btn-bell" title="Notifications">🔔<span id="bell-dot" class="bell-dot hidden"></span></button>
-        <button class="avatar-btn" id="user-chip" title="Ton profil"></button>
+        <div class="menu-wrap">
+          <button class="avatar-btn" id="user-chip" data-tip="Ton profil" aria-haspopup="true" aria-expanded="false"></button>
+          <div id="user-menu" class="menu hidden" role="menu"></div>
+        </div>
       </div>
     </header>
 
@@ -175,6 +179,11 @@
         </div>
       </section>
 
+      <!-- ══════ VUE ADMIN ══════ -->
+      <section id="view-admin" class="view">
+        <div id="admin-root"></div>
+      </section>
+
       <!-- ══════ VUE MEMEVAULT ══════ -->
       <section id="view-vault" class="view">
         <div id="vault-root"></div>
@@ -198,6 +207,7 @@
 <script src="/js/sfx.js"></script>
 <script src="/js/yt.js"></script>
 <script src="/js/vault.js"></script>
+<script src="/js/admin.js"></script>
 <script src="/js/games/blindtest.js"></script>
 <script src="/js/games/quiz.js"></script>
 <script src="/js/games/undercover.js"></script>

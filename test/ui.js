@@ -155,6 +155,76 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
   await host.click('#btn-abort');
   await host.waitForSelector('#lobby:not(.hidden)');
 
+  /* ── Correctifs d'affichage ── */
+  await host.click('#btn-abort').catch(() => {});
+  await host.waitForSelector('#lobby:not(.hidden)', { timeout: 8000 }).catch(() => {});
+  await host.click('#btn-leave');
+  await host.waitForSelector('#view-home.active');
+
+  const ringFits = await host.evaluate(() => {
+    const center = document.querySelector('.ring-center');
+    const svg = document.querySelector('.ring');
+    if (!center || !svg) return false;
+    const c = center.getBoundingClientRect();
+    const s = svg.getBoundingClientRect();
+    // le texte doit tenir dans le trou de l'anneau (rayon 62, trait 14)
+    const inner = (62 - 7) * 2;
+    return c.width <= inner + 2 && c.height <= inner + 2 && c.left >= s.left && c.right <= s.right;
+  });
+  check('le texte tient dans l’anneau', ringFits);
+  check('niveau et progression sont sous l’anneau', await host.isVisible('.ring-meta .lvl'));
+
+  await host.hover('.rail-btn[data-jump="#board"]');
+  await host.waitForTimeout(350);
+  const tipOk = await host.evaluate(() => {
+    const tip = document.querySelector('.tip');
+    if (!tip || !tip.classList.contains('on')) return { ok: false, why: 'invisible' };
+    const r = tip.getBoundingClientRect();
+    const inView = r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+    // elementFromPoint traverse la bulle (pointer-events:none) : on vérifie
+    // plutôt qu'elle est bien le dernier calque du document.
+    const last = document.body.lastElementChild;
+    return { ok: inView && r.width > 10, why: `${Math.round(r.width)}x${Math.round(r.height)} inView=${inView} last=${last.className}`, text: tip.textContent };
+  });
+  check('l’infobulle du rail s’affiche en entier', tipOk.ok, `${tipOk.text || ''} ${tipOk.why}`);
+
+  /* ── Panel administrateur ── */
+  await host.click('#user-chip');
+  await host.waitForSelector('#user-menu:not(.hidden)');
+  check('le menu du profil s’ouvre', await host.isVisible('[data-menu="logout"]'));
+  check('l’entrée « clé admin » est proposée', await host.isVisible('[data-menu="claim"]'));
+
+  host.once('dialog', (d) => d.accept('test-admin-key'));
+  await host.click('[data-menu="claim"]');
+  await host.waitForSelector('#rail-admin:not(.hidden)', { timeout: 8000 });
+  check('le bouton admin apparaît après la clé', true);
+
+  await host.click('#rail-admin');
+  await host.waitForSelector('#admin-root .admin-tile', { timeout: 8000 });
+  check('tuiles de statistiques affichées', (await host.$$('#admin-root .admin-tile')).length === 8);
+  check('tableau des joueurs affiché', (await host.$$('#admin-root [data-player]')).length > 0);
+
+  await host.click('#admin-root [data-player]');
+  await host.waitForSelector('#admin-root .player-card', { timeout: 5000 });
+  check('la fiche joueur s’ouvre au clic', await host.isVisible('#admin-root .player-card .kv'));
+  await host.screenshot({ path: path.join(SHOTS, '8-admin.png'), fullPage: true });
+
+  const xpBefore = await host.evaluate(() => document.querySelector('#admin-root .player-card .kv b').textContent);
+  await host.fill('#pc-amount', '250');
+  await host.click('#admin-root [data-act="grant-xp"]');
+  await host.waitForFunction((before) => {
+    const el = document.querySelector('#admin-root .player-card .kv b');
+    return el && el.textContent !== before;
+  }, xpBefore, { timeout: 8000 });
+  check('créditer de l’XP depuis la fiche', true);
+
+  await host.fill('#adm-search', 'Lea');
+  await host.waitForFunction(() => document.querySelectorAll('#admin-root [data-player]').length <= 3, null, { timeout: 8000 });
+  check('la recherche filtre le tableau', true);
+
+  await host.click('.rail-btn[data-go="home"]');
+  await host.waitForSelector('#view-home.active');
+
   /* ── Mobile ── */
   const mobile = await newPlayer(browser, 'Mobile', { width: 390, height: 844 });
   await mobile.waitForTimeout(1000);
@@ -171,13 +241,13 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
     [...document.querySelectorAll('#online-list .status')].map((s) => s.className.replace('status ', ''))
   );
   check('les statuts sont différenciés', true, statuses.join(' | '));
-  await mobile.screenshot({ path: path.join(SHOTS, '8-mobile.png'), fullPage: true });
+  await mobile.screenshot({ path: path.join(SHOTS, '9-mobile.png'), fullPage: true });
   check('accueil sans débordement horizontal',
     !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
 
   await mobile.click('.rail-btn[data-go="vault"]');
   await mobile.waitForSelector('#vault-root .case', { timeout: 8000 });
-  await mobile.screenshot({ path: path.join(SHOTS, '9-mobile-vault.png'), fullPage: true });
+  await mobile.screenshot({ path: path.join(SHOTS, '10-mobile-vault.png'), fullPage: true });
   check('MemeVault sans débordement horizontal',
     !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
 

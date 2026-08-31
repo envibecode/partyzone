@@ -11,6 +11,7 @@ const auth = require('./auth');
 const store = require('./store');
 const vault = require('./vault');
 const { Presence } = require('./presence');
+const admin = require('./admin');
 const difficulty = require('./difficulty');
 const { createRoom, getRoom, startJanitor } = require('./room');
 const yt = require('./youtube');
@@ -35,6 +36,8 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', ext
 auth.register(app);
 
 app.get('/api/categories', (req, res) => res.json({ categories: CATEGORIES }));
+
+app.get('/api/admin-config', (req, res) => res.json({ keyConfigured: admin.adminKeyConfigured() }));
 
 app.get('/api/difficulties', (req, res) =>
   res.json({ blindtest: difficulty.list('blindtest'), quiz: difficulty.list('quiz') })
@@ -77,6 +80,11 @@ io.on('connection', async (socket) => {
     socket.emit('toast', { message: 'Progression indisponible pour le moment.', kind: 'error' });
     return;
   }
+  if (profile.banned) {
+    socket.emit('kicked', { reason: profile.banReason || 'Ce compte est banni.' });
+    return socket.disconnect(true);
+  }
+
   socket.data.profile = profile;
   presence.join(socket, user, profile);
 
@@ -283,11 +291,52 @@ io.on('connection', async (socket) => {
     if (result.ok) socket.emit('profile:update', store.publicProfile(profile));
   });
 
+  /* ── Administration ────────────────────────────────── */
+
+  /** Toute action admin repasse par ce garde-fou, jamais par l'interface. */
+  function requireAdmin() {
+    if (admin.isAdmin(profile)) return true;
+    socket.emit('toast', { message: 'Réservé aux administrateurs.', kind: 'error' });
+    return false;
+  }
+
+  socket.on('admin:claim', async ({ key } = {}) => {
+    const result = await admin.claim(profile, key);
+    socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
+    if (result.ok) {
+      sendMe();
+      socket.emit('admin:state', await adminState());
+    }
+  });
+
+  async function adminState(query = {}) {
+    const [snap, list] = await Promise.all([admin.snapshot(presence), admin.players(query)]);
+    return { ...snap, ...list, query };
+  }
+
+  socket.on('admin:open', async (query = {}) => {
+    if (!requireAdmin()) return;
+    presence.setStatus(user.id, 'admin');
+    socket.emit('admin:state', await adminState(query));
+  });
+
+  socket.on('admin:action', async ({ action, payload, query } = {}) => {
+    if (!requireAdmin()) return;
+    let result;
+    try {
+      result = await admin.act(profile, action, payload || {}, { io, presence });
+    } catch (err) {
+      result = { ok: false, message: err.message };
+    }
+    socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
+    socket.emit('admin:state', { ...(await adminState(query || {})), result });
+  });
+
   /* ── Divers ────────────────────────────────────────── */
 
   socket.on('me:refresh', () => sendMe());
   socket.on('presence:status', ({ status } = {}) => {
-    if (['home', 'room', 'game', 'vault'].includes(status)) presence.setStatus(user.id, status);
+    if (['home', 'room', 'game', 'vault', 'admin'].includes(status)) presence.setStatus(user.id, status);
   });
   socket.emit('online:list', { online: presence.list() });
 

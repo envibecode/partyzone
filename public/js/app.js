@@ -18,6 +18,7 @@
     difficulties: { blindtest: [], quiz: [] },
     importing: false,
     view: 'home',
+    adminKeyConfigured: false,
   };
 
   let socket = null;
@@ -171,6 +172,56 @@
 
   window.PZ = { util };
 
+  /* ═══════════ Infobulles ═══════════
+     Une seule bulle en position fixe, attachée au <body> : elle ne peut donc
+     être ni rognée par une colonne qui défile, ni passer derrière une carte. */
+
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  document.body.appendChild(tip);
+  let tipTarget = null;
+
+  function showTip(el) {
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    tipTarget = el;
+    tip.textContent = text;
+    tip.classList.add('on');
+    placeTip(el);
+  }
+
+  function placeTip(el) {
+    const r = el.getBoundingClientRect();
+    const t = tip.getBoundingClientRect();
+    const gap = 10;
+    // à droite si la place le permet, sinon à gauche, sinon au-dessus
+    let left = r.right + gap;
+    if (left + t.width > window.innerWidth - 8) left = r.left - t.width - gap;
+    if (left < 8) left = Math.max(8, Math.min(window.innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2));
+    let top = r.top + r.height / 2 - t.height / 2;
+    top = Math.max(8, Math.min(window.innerHeight - t.height - 8, top));
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function hideTip() {
+    tipTarget = null;
+    tip.classList.remove('on');
+  }
+
+  document.addEventListener('pointerover', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (el && el !== tipTarget) showTip(el);
+    else if (!el && tipTarget) hideTip();
+  });
+  document.addEventListener('pointerdown', hideTip);
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (el) showTip(el);
+  });
+  document.addEventListener('focusout', hideTip);
+  window.addEventListener('scroll', hideTip, true);
+
   /* ═══════════ Toasts ═══════════ */
 
   function toast(message, kind = 'info') {
@@ -192,6 +243,8 @@
     $$('.rail-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === view));
     if (view === 'vault') window.PZVault.open();
     else window.PZVault.close();
+    if (view === 'admin') window.PZAdmin.open();
+    else window.PZAdmin.close();
     if (view === 'home') {
       refreshLeaderboard();
       if (socket) socket.emit('presence:status', { status: 'home' });
@@ -248,6 +301,7 @@
 
     fetch('/api/categories').then((r) => r.json()).then((d) => { state.categories = d.categories || []; }).catch(() => {});
     fetch('/api/difficulties').then((r) => r.json()).then((d) => { state.difficulties = d; }).catch(() => {});
+    fetch('/api/admin-config').then((r) => r.json()).then((d) => { state.adminKeyConfigured = Boolean(d.keyConfigured); }).catch(() => {});
 
     updateMuteButton();
 
@@ -294,8 +348,11 @@
   /* ═══════════ Profil ═══════════ */
 
   function setProfile(profile) {
+    const wasAdmin = state.profile && state.profile.admin;
     state.profile = profile;
     $('#user-chip').innerHTML = util.avatar(profile);
+    $('#rail-admin').classList.toggle('hidden', !profile.admin);
+    if (profile.admin && !wasAdmin) toast('Droits administrateur actifs 🛡️', 'success');
     $('#top-coins').textContent = (profile.coins || 0).toLocaleString('fr-FR');
     const h = new Date().getHours();
     $('#greeting').textContent = h < 6 ? 'Bonne nuit,' : h < 12 ? 'Bonjour,' : h < 18 ? 'Bon après-midi,' : 'Bonsoir,';
@@ -325,8 +382,10 @@
       <div class="ring-center">
         <span>XP totale</span>
         <b>${p.xp.toLocaleString('fr-FR')}</b>
+      </div>
+      <div class="ring-meta">
         <span class="lvl">Niveau ${p.level} · ${util.esc(p.title)}</span>
-        <span>${p.need ? `${p.into} / ${p.need} avant le niveau ${p.level + 1}` : 'Niveau maximum'}</span>
+        <span class="next">${p.need ? `${p.into} / ${p.need} avant le niveau ${p.level + 1}` : 'Niveau maximum'}</span>
       </div>`;
 
     const s = p.stats || {};
@@ -335,6 +394,60 @@
       <div class="stat-tile"><i>🎮</i><b>${s.games || 0}</b><span>Parties</span></div>
       <div class="stat-tile"><i>📚</i><b>${p.collected || 0}</b><span>Memes</span></div>`;
   }
+
+  /* ═══════════ Menu du profil ═══════════ */
+
+  const menu = $('#user-menu');
+
+  function renderMenu() {
+    const p = state.profile;
+    if (!p) return;
+    menu.innerHTML = `
+      <div class="menu-head">
+        ${util.avatar(p, 'sm')}
+        <span><b>${util.esc(p.name)}</b><span class="fine">Niveau ${p.level} · ${util.esc(p.title)}</span></span>
+      </div>
+      ${p.admin ? '<button class="menu-item" data-menu="admin">🛡️ Panel administrateur</button>' : ''}
+      ${!p.admin && state.adminKeyConfigured ? '<button class="menu-item" data-menu="claim">🔑 Entrer la clé admin</button>' : ''}
+      <button class="menu-item" data-menu="logout">↩ Se déconnecter</button>`;
+
+    menu.querySelectorAll('[data-menu]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        closeMenu();
+        const what = btn.dataset.menu;
+        if (what === 'admin') return show('admin');
+        if (what === 'claim') {
+          const key = window.prompt('Clé administrateur :');
+          if (key) socket.emit('admin:claim', { key });
+          return;
+        }
+        if (what === 'logout') {
+          fetch('/auth/logout', { method: 'POST' }).then(() => location.reload());
+        }
+      });
+    });
+  }
+
+  function openMenu() {
+    renderMenu();
+    menu.classList.remove('hidden');
+    $('#user-chip').setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu() {
+    menu.classList.add('hidden');
+    $('#user-chip').setAttribute('aria-expanded', 'false');
+  }
+
+  $('#user-chip').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.contains('hidden') ? openMenu() : closeMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target)) closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
 
   /* ═══════════ Accueil ═══════════ */
 
@@ -531,7 +644,24 @@
       if (mod.feedback) mod.feedback($('#game-root'), data);
     });
 
+    socket.on('kicked', ({ reason }) => {
+      document.body.innerHTML = `<div class="kicked">
+        <h1>Accès refusé</h1>
+        <p>${util.esc(reason || 'Ton compte a été suspendu.')}</p>
+        <p class="fine">Si tu penses que c’est une erreur, parles-en à l’administrateur du site.</p>
+      </div>`;
+    });
+
+    socket.on('room:closed', ({ reason }) => {
+      state.room = null;
+      state.game = null;
+      location.hash = '';
+      show('home');
+      toast(reason || 'Le salon a été fermé.', 'error');
+    });
+
     window.PZVault.init(socket);
+    window.PZAdmin.init(socket);
   }
 
   function flashPlayer(name) {

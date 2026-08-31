@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════
-   PARTYZONE — logique client
+   PartyZone — logique client
    ══════════════════════════════════════════════════════════ */
 (() => {
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -11,15 +11,43 @@
     room: null,
     game: null,
     meId: null,
+    online: [],
     selectedGame: 'blindtest',
     playlist: null,
     categories: [],
     difficulties: { blindtest: [], quiz: [] },
     importing: false,
-    screen: 'auth',
+    view: 'home',
   };
 
   let socket = null;
+
+  const GAME_INFO = {
+    blindtest: {
+      icon: '🎧',
+      name: 'Blind Test',
+      tagline: 'Ta playlist YouTube, quatre propositions, et le premier qui reconnaît rafle la mise.',
+      sub: 'Depuis YouTube',
+      emoji: '🎵',
+      gradient: 'linear-gradient(120deg, #ff4d6d, #c8264d 55%, #7a1b3a)',
+    },
+    quiz: {
+      icon: '🧠',
+      name: 'Culture G',
+      tagline: '150 questions, 12 catégories. Réponds vite : les points fondent à chaque seconde.',
+      sub: '150 questions',
+      emoji: '💡',
+      gradient: 'linear-gradient(120deg, #f59e0b, #d9432c 55%, #7a2020)',
+    },
+    undercover: {
+      icon: '🕵️',
+      name: 'Undercover',
+      tagline: 'Un mot presque pareil, un imposteur, et beaucoup de mauvaise foi.',
+      sub: '3 joueurs min.',
+      emoji: '🎭',
+      gradient: 'linear-gradient(120deg, #8b5cf6, #6d28d9 55%, #3f1d63)',
+    },
+  };
 
   /* ═══════════ Utilitaires partagés ═══════════ */
 
@@ -42,18 +70,22 @@
 
     avatar(user, size = '') {
       if (!user) return '';
-      const cls = `avatar ${size}`;
+      const cls = `avatar ${size}`.trim();
       if (user.avatar) return `<img class="${cls}" src="${util.esc(user.avatar)}" alt="">`;
       return `<span class="${cls}">${util.esc(util.initials(user.name))}</span>`;
     },
 
+    ordinal(i) {
+      return i === 0 ? '1er' : `${i + 1}e`;
+    },
+
     scoreboard(list) {
-      if (!list || !list.length) return '<p class="c-dim">PAS ENCORE DE SCORE</p>';
+      if (!list || !list.length) return '<p class="muted">Pas encore de score.</p>';
       return list
         .map(
           (p, i) => `<div class="sb-row">
-            <span class="sb-rank">${i === 0 ? '1ST' : i === 1 ? '2ND' : i === 2 ? '3RD' : i + 1 + 'TH'}</span>
-            ${util.avatar(p)}
+            <span class="sb-rank">${util.ordinal(i)}</span>
+            ${util.avatar(p, 'sm')}
             <span class="sb-name">${util.esc(p.name)}</span>
             <span class="sb-score">${p.score}</span>
           </div>`
@@ -61,7 +93,27 @@
         .join('');
     },
 
-    /** Barre de temps synchronisée sur l'horloge du serveur. */
+    /** Podium des trois premiers, avec les avatars Discord. */
+    podium(list) {
+      const top = (list || []).slice(0, 3);
+      if (!top.length) return '';
+      const order = [1, 0, 2]; // 2e, 1er, 3e — comme un vrai podium
+      return `<div class="podium">${order
+        .map((idx) => {
+          const p = top[idx];
+          if (!p) return '';
+          const place = idx + 1;
+          return `<div class="step p${place}">
+            ${place === 1 ? '<span class="crown">👑</span>' : ''}
+            ${util.avatar(p, place === 1 ? 'lg' : '')}
+            <span class="step-name">${util.esc(p.name)}</span>
+            <span class="step-score">${p.score} pts</span>
+            <div class="step-block">${place}</div>
+          </div>`;
+        })
+        .join('')}</div>`;
+    },
+
     tickTimer(bar, deadline, serverNow) {
       if (!bar || !deadline) return;
       const offset = Date.now() - (serverNow || Date.now());
@@ -72,9 +124,9 @@
         const left = deadline - (Date.now() - offset);
         const ratio = Math.max(0, Math.min(1, left / total));
         bar.style.width = ratio * 100 + '%';
-        bar.classList.toggle('warn', ratio < 0.5 && ratio >= 0.25);
-        bar.classList.toggle('crit', ratio < 0.25);
-        if (clock) clock.textContent = Math.max(0, Math.ceil(left / 1000)) + 'S';
+        bar.classList.toggle('warn', ratio < 0.5 && ratio >= 0.22);
+        bar.classList.toggle('crit', ratio < 0.22);
+        if (clock) clock.textContent = Math.max(0, Math.ceil(left / 1000)) + 's';
         if (left > 0) loops.add(requestAnimationFrame(step));
       };
       step();
@@ -83,16 +135,20 @@
     tickCountdown(el, deadline, serverNow) {
       if (!el || !deadline) return;
       const offset = Date.now() - (serverNow || Date.now());
+      let lastSecond = null;
       const step = () => {
         const left = deadline - (Date.now() - offset);
         const s = Math.ceil(left / 1000);
-        el.textContent = s > 0 ? s : 'GO!';
+        el.textContent = s > 0 ? s : 'GO !';
+        if (s !== lastSecond && s >= 0 && s <= 3) {
+          lastSecond = s;
+          window.PZSfx.tick(s === 0);
+        }
         if (left > -500) loops.add(requestAnimationFrame(step));
       };
       step();
     },
 
-    /** Grille de propositions du mode QCM, partagée par le blind test et le quiz. */
     choices(list, { picked, correct, disabled }) {
       const keys = ['A', 'B', 'C', 'D', 'E', 'F'];
       return `<div class="choices">${list
@@ -125,31 +181,41 @@
     setTimeout(() => {
       el.classList.add('out');
       setTimeout(() => el.remove(), 260);
-    }, 3600);
+    }, 3800);
   }
 
-  /* ═══════════ Écrans ═══════════ */
+  /* ═══════════ Navigation ═══════════ */
 
-  function show(name) {
-    state.screen = name;
-    $$('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + name));
-    if (name === 'farm') window.PZFarm.open();
-    else window.PZFarm.close();
-    if (name === 'home') refreshLeaderboard();
+  function show(view) {
+    state.view = view;
+    $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
+    $$('.rail-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === view));
+    if (view === 'vault') window.PZVault.open();
+    else window.PZVault.close();
+    if (view === 'home') {
+      refreshLeaderboard();
+      if (socket) socket.emit('presence:status', { status: 'home' });
+    }
+    $('.content').scrollTop = 0;
     window.scrollTo(0, 0);
   }
 
   document.addEventListener('click', (e) => {
     const go = e.target.closest('[data-go]');
     if (go) {
-      const target = go.dataset.go;
-      if (target === 'home' && state.room) return; // on ne quitte pas un salon par mégarde
-      show(target);
+      if (go.dataset.go === 'home' && state.room && state.view === 'room') {
+        return toast('Quitte le salon d’abord (bouton « Quitter »).', 'info');
+      }
+      window.PZSfx.click();
+      return show(go.dataset.go);
     }
     const jump = e.target.closest('[data-jump]');
     if (jump) {
-      const el = $(jump.dataset.jump);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (state.view !== 'home') show('home');
+      setTimeout(() => {
+        const el = $(jump.dataset.jump);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
     }
   });
 
@@ -183,10 +249,15 @@
     fetch('/api/categories').then((r) => r.json()).then((d) => { state.categories = d.categories || []; }).catch(() => {});
     fetch('/api/difficulties').then((r) => r.json()).then((d) => { state.difficulties = d; }).catch(() => {});
 
-    if (!me.user) return show('auth');
+    updateMuteButton();
+
+    if (!me.user) return;
 
     state.user = me.user;
+    $('#screen-auth').classList.remove('active');
+    $('#app').classList.add('active');
     connect();
+    renderHome();
     show('home');
 
     const joinCode = params.get('join') || location.hash.replace('#', '');
@@ -207,50 +278,106 @@
     location.reload();
   });
 
+  /* ═══════════ Son ═══════════ */
+
+  function updateMuteButton() {
+    const muted = window.PZSfx.isMuted();
+    $('#btn-mute').textContent = muted ? '🔇' : '🔊';
+    $('#btn-mute').dataset.tip = muted ? 'Remettre le son' : 'Couper le son';
+  }
+  $('#btn-mute').addEventListener('click', () => {
+    window.PZSfx.setMuted(!window.PZSfx.isMuted());
+    updateMuteButton();
+    if (!window.PZSfx.isMuted()) window.PZSfx.correct();
+  });
+
   /* ═══════════ Profil ═══════════ */
 
   function setProfile(profile) {
     state.profile = profile;
-    renderUserChips();
-    renderProfileCard();
+    $('#user-chip').innerHTML = util.avatar(profile);
+    $('#top-coins').textContent = (profile.coins || 0).toLocaleString('fr-FR');
+    const h = new Date().getHours();
+    $('#greeting').textContent = h < 6 ? 'Bonne nuit,' : h < 12 ? 'Bonjour,' : h < 18 ? 'Bon après-midi,' : 'Bonsoir,';
+    $('#greet-name').textContent = profile.name;
+    renderProgress();
   }
 
-  function renderUserChips() {
-    if (!state.user) return;
-    const lvl = state.profile ? `<span class="chip-lvl">LV${state.profile.level}</span>` : '';
-    const html = `${util.avatar(state.user)}<span class="uname">${util.esc(state.user.name)}</span>${lvl}`;
-    ['#user-chip', '#user-chip-2', '#user-chip-3'].forEach((sel) => {
-      const el = $(sel);
-      if (el) el.innerHTML = html;
-    });
-  }
-
-  function renderProfileCard() {
+  function renderProgress() {
     const p = state.profile;
     if (!p) return;
-    const s = p.stats || {};
-    $('#profile-card').innerHTML = `
-      <div class="profile-head">
-        ${util.avatar(p, 'lg')}
-        <div>
-          <div class="profile-name">${util.esc(p.name)}</div>
-          <div class="c-dim tiny">${p.provider === 'discord' ? 'Compte Discord' : 'Invité — connecte-toi avec Discord pour garder ta progression'}</div>
-        </div>
-        <span class="profile-rank">${util.esc(p.title)}</span>
-        <div class="profile-stats">
-          <span class="mini-stat"><b>${p.level}</b><span>NIVEAU</span></span>
-          <span class="mini-stat"><b>${p.xp}</b><span>XP</span></span>
-          <span class="mini-stat"><b>${s.wins || 0}</b><span>VICTOIRES</span></span>
-          <span class="mini-stat"><b>${p.coins || 0}</b><span>PIÈCES</span></span>
-        </div>
-      </div>
-      <div>
-        <div class="xp-bar"><div class="xp-fill" style="width:${Math.round((p.ratio || 0) * 100)}%"></div></div>
-        <div class="xp-text">
-          <span>LVL ${p.level}</span>
-          <span>${p.need ? `${p.into} / ${p.need} XP` : 'NIVEAU MAX'}</span>
-        </div>
+    const R = 62;
+    const C = 2 * Math.PI * R;
+    const pct = p.need ? p.ratio : 1;
+
+    $('#progress-ring').innerHTML = `
+      <svg class="ring" width="160" height="160" viewBox="0 0 160 160" role="img"
+           aria-label="Niveau ${p.level}, ${p.into} XP sur ${p.need || 0} pour le niveau suivant">
+        <defs>
+          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ff8a5c"/><stop offset="100%" stop-color="#ff4d6d"/>
+          </linearGradient>
+        </defs>
+        <circle class="ring-track" cx="80" cy="80" r="${R}"/>
+        <circle class="ring-fill" cx="80" cy="80" r="${R}"
+                stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/>
+      </svg>
+      <div class="ring-center">
+        <span>XP totale</span>
+        <b>${p.xp.toLocaleString('fr-FR')}</b>
+        <span class="lvl">Niveau ${p.level} · ${util.esc(p.title)}</span>
+        <span>${p.need ? `${p.into} / ${p.need} avant le niveau ${p.level + 1}` : 'Niveau maximum'}</span>
       </div>`;
+
+    const s = p.stats || {};
+    $('#stat-row').innerHTML = `
+      <div class="stat-tile"><i>🏆</i><b>${s.wins || 0}</b><span>Victoires</span></div>
+      <div class="stat-tile"><i>🎮</i><b>${s.games || 0}</b><span>Parties</span></div>
+      <div class="stat-tile"><i>📚</i><b>${p.collected || 0}</b><span>Memes</span></div>`;
+  }
+
+  /* ═══════════ Accueil ═══════════ */
+
+  function renderHome() {
+    const featured = GAME_INFO[state.selectedGame] || GAME_INFO.blindtest;
+    const hero = $('#hero');
+    hero.style.background = featured.gradient;
+    hero.dataset.emoji = featured.emoji;
+    hero.innerHTML = `
+      <div class="hero-badges">
+        <span class="badge solid">★ À l’affiche</span>
+        <span class="badge">${featured.icon} ${util.esc(featured.name)}</span>
+      </div>
+      <h1>${util.esc(featured.name)}</h1>
+      <p>${util.esc(featured.tagline)}</p>
+      <div class="hero-actions">
+        <button class="btn btn-primary" data-play="${state.selectedGame}">Créer un salon</button>
+        <button class="btn btn-soft" data-go="vault">Ouvrir des caisses</button>
+      </div>`;
+
+    $('#quick-games').innerHTML = Object.entries(GAME_INFO)
+      .map(
+        ([key, g]) => `<button class="qcard" data-feature="${key}">
+          <i>${g.icon}</i>
+          <span><b>${util.esc(g.name)}</b><span>${util.esc(g.sub)}</span></span>
+          <span class="arrow">›</span>
+        </button>`
+      )
+      .join('');
+
+    $$('#quick-games [data-feature]').forEach((el) =>
+      el.addEventListener('click', () => {
+        state.selectedGame = el.dataset.feature;
+        window.PZSfx.click();
+        renderHome();
+      })
+    );
+    $$('#hero [data-play]').forEach((el) =>
+      el.addEventListener('click', () => {
+        state.selectedGame = el.dataset.play;
+        socket.emit('room:create');
+      })
+    );
   }
 
   /* ═══════════ Classement ═══════════ */
@@ -260,25 +387,39 @@
     clearTimeout(boardTimer);
     boardTimer = setTimeout(refreshLeaderboard, 30000);
     try {
-      const { leaderboard } = await fetch('/api/leaderboard?limit=15').then((r) => r.json());
+      const { leaderboard } = await fetch('/api/leaderboard?limit=12').then((r) => r.json());
       const body = $('#board-body');
       if (!leaderboard.length) {
-        body.innerHTML = '<tr><td colspan="4" class="c-dim center">AUCUN SCORE — SOIS LE PREMIER</td></tr>';
+        body.innerHTML = '<tr><td colspan="4" class="ta-c muted">Personne n’a encore marqué. Sois le premier.</td></tr>';
         return;
       }
       body.innerHTML = leaderboard
         .map(
           (p) => `<tr class="${p.id === state.meId ? 'me' : ''}">
-            <td class="rank-cell rank-${p.rank}">${p.rank === 1 ? '1ST' : p.rank === 2 ? '2ND' : p.rank === 3 ? '3RD' : p.rank + 'TH'}</td>
-            <td><span class="player-cell">${util.avatar(p)}<span>${util.esc(p.name)}<br><span class="tiny c-dim">${util.esc(p.title)}</span></span></span></td>
-            <td class="lvl-cell">${p.level}</td>
-            <td class="xp-cell">${p.xp.toLocaleString('fr-FR')}</td>
+            <td class="rank r${p.rank}">${p.rank}</td>
+            <td><span class="who">${util.avatar(p, 'sm')}<span><b>${util.esc(p.name)}</b><span>${util.esc(p.title)}</span></span></span></td>
+            <td class="ta-c lvl-cell">${p.level}</td>
+            <td class="ta-r xp-cell">${p.xp.toLocaleString('fr-FR')}</td>
           </tr>`
         )
         .join('');
     } catch {
-      $('#board-body').innerHTML = '<tr><td colspan="4" class="c-dim center">CLASSEMENT INDISPONIBLE</td></tr>';
+      $('#board-body').innerHTML = '<tr><td colspan="4" class="ta-c muted">Classement indisponible.</td></tr>';
     }
+  }
+
+  /* ═══════════ Présence ═══════════ */
+
+  function renderOnline() {
+    $('#online-count').textContent = state.online.length;
+    $('#online-list').innerHTML = state.online
+      .map(
+        (p) => `<li class="on-user" data-tip="${util.esc(p.name)} · ${util.esc(p.statusLabel)}">
+          ${util.avatar(p)}
+          <span class="status s-${p.status}"></span>
+        </li>`
+      )
+      .join('');
   }
 
   /* ═══════════ Socket ═══════════ */
@@ -301,11 +442,17 @@
 
     socket.on('profile:update', (profile) => setProfile(profile));
 
+    socket.on('online:list', ({ online }) => {
+      state.online = online;
+      renderOnline();
+    });
+
     socket.on('toast', ({ message, kind }) => toast(message, kind));
 
     socket.on('room:joined', ({ code, chat }) => {
       show('room');
       $('#room-code').textContent = code;
+      $('#room-title').textContent = 'Salon ' + code;
       $('#chat').innerHTML = '';
       (chat || []).forEach(appendChat);
       location.hash = code;
@@ -322,7 +469,17 @@
 
     socket.on('xp:awarded', ({ results }) => {
       const mine = results.find((r) => r.id === state.meId);
-      if (mine) toast(`+${mine.xp} XP${mine.levelUp ? ` — NIVEAU ${mine.level} !` : ''}`, 'success');
+      if (!mine) return;
+      toast(`+${mine.xp} XP · +${mine.coins} 🪙${mine.levelUp ? ` — niveau ${mine.level} !` : ''}`, 'success');
+      if (mine.levelUp) {
+        window.PZSfx.levelUp();
+        window.PZConfetti.fire({ count: 90, origin: { x: 0.5, y: 0.3 } });
+      }
+    });
+
+    socket.on('vault:showcase', ({ name, item }) => {
+      if (name === (state.profile && state.profile.name)) return;
+      toast(`${name} vient de sortir ${item.emoji} ${item.name} (${item.rarity}) !`, 'success');
     });
 
     socket.on('blindtest:playlist', (info) => {
@@ -346,13 +503,15 @@
       }
     });
 
-    socket.on('blindtest:hit', ({ name, hits, points }) => {
+    socket.on('blindtest:hit', ({ playerId, name, hits, points }) => {
       appendChat({ system: true, hit: true, text: `${name} a trouvé ${hits.join(' et ')} (+${points})` });
       flashPlayer(name);
+      if (playerId !== state.meId) window.PZSfx.ping();
     });
-    socket.on('quiz:hit', ({ name, rank, points }) => {
-      appendChat({ system: true, hit: true, text: `${rank === 1 ? '1ST' : 'OK'} — ${name} (+${points})` });
+    socket.on('quiz:hit', ({ playerId, name, rank, points }) => {
+      appendChat({ system: true, hit: true, text: `${name} — ${util.ordinal(rank - 1)} (+${points})` });
       flashPlayer(name);
+      if (playerId !== state.meId) window.PZSfx.ping();
     });
     socket.on('blindtest:reveal', ({ track }) => {
       appendChat({ system: true, text: `♪ ${track.artist} — ${track.title}` });
@@ -362,15 +521,17 @@
     });
 
     socket.on('blindtest:feedback', (data) => {
+      data.ok ? window.PZSfx.correct() : window.PZSfx.wrong();
       const mod = window.PZGames.blindtest;
       if (mod.feedback) mod.feedback($('#game-root'), data);
     });
     socket.on('quiz:feedback', (data) => {
+      data.ok ? window.PZSfx.correct() : window.PZSfx.wrong();
       const mod = window.PZGames.quiz;
       if (mod.feedback) mod.feedback($('#game-root'), data);
     });
 
-    window.PZFarm.init(socket, { onProfile: setProfile });
+    window.PZVault.init(socket);
   }
 
   function flashPlayer(name) {
@@ -394,7 +555,7 @@
       el.innerHTML = `<div class="bubble">${util.esc(msg.text)}</div>`;
     } else {
       el.className = 'msg';
-      el.innerHTML = `${util.avatar(msg)}<div class="bubble"><span class="who">${util.esc(msg.name)}</span>${util.esc(msg.text)}</div>`;
+      el.innerHTML = `${util.avatar(msg, 'sm')}<div class="bubble"><span class="who-n">${util.esc(msg.name)}</span>${util.esc(msg.text)}</div>`;
     }
     box.appendChild(el);
     while (box.children.length > 120) box.firstChild.remove();
@@ -410,9 +571,9 @@
     input.value = '';
   });
 
-  /* ═══════════ Accueil ═══════════ */
+  /* ═══════════ Salon ═══════════ */
 
-  $('#btn-create').addEventListener('click', () => socket.emit('room:create'));
+  $('#rail-create').addEventListener('click', () => socket.emit('room:create'));
 
   $('#form-join').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -437,13 +598,11 @@
     const url = `${location.origin}/?join=${$('#room-code').textContent}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast('LIEN D’INVITATION COPIÉ', 'success');
+      toast('Lien d’invitation copié 📋', 'success');
     } catch {
-      toast('CODE : ' + $('#room-code').textContent, 'info');
+      toast('Code : ' + $('#room-code').textContent, 'info');
     }
   });
-
-  /* ═══════════ Salon ═══════════ */
 
   function isHost() {
     return state.room && state.room.hostId === state.meId;
@@ -465,8 +624,8 @@
     }
     const typing = state.game && state.game.answerMode === 'type';
     $('#chat-title').innerHTML = typing
-      ? 'CHAT <span class="chat-hint">· TAPE ICI POUR RÉPONDRE</span>'
-      : 'CHAT';
+      ? 'Chat <span class="chat-hint">· tape ici pour répondre</span>'
+      : 'Chat';
   }
 
   function renderPlayers() {
@@ -476,9 +635,9 @@
     $('#players').innerHTML = room.players
       .map(
         (p) => `<li class="player ${p.id === state.meId ? 'me' : ''} ${p.connected ? '' : 'off'}" data-name="${util.esc(p.name)}">
-          ${util.avatar(p)}
-          <span class="pname">${util.esc(p.name)}${p.id === room.hostId ? ' ♛' : ''}<br><span class="plvl">LV${p.level}</span></span>
-          <span class="pscore">${state.game ? p.score : p.totalScore}</span>
+          ${util.avatar(p, 'sm')}
+          <span class="pn"><b>${util.esc(p.name)}${p.id === room.hostId ? ' 👑' : ''}</b><span>Niv. ${p.level} · ${util.esc(p.title)}</span></span>
+          <span class="ps">${state.game ? p.score : p.totalScore}</span>
         </li>`
       )
       .join('');
@@ -498,6 +657,7 @@
   $$('#game-picker .pick').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.selectedGame = btn.dataset.game;
+      window.PZSfx.click();
       renderLobby();
     });
   });
@@ -506,14 +666,14 @@
     const list = state.difficulties[game] || [];
     if (!list.length) return '';
     return `<div class="field">
-      <label>DIFFICULTÉ</label>
+      <label>Difficulté</label>
       <div class="diff-row">
         ${list
           .map(
             (d) => `<button class="diff d-${d.color} ${d.id === current ? 'on' : ''}" data-diff="${game}:${d.id}" ${isHost() ? '' : 'disabled'}>
-              <b>${d.name}</b>
-              <span class="tiny">${util.esc(d.blurb)}</span>
-              <span class="mult c-dim">${d.seconds}s / manche · POINTS x${d.mult}</span>
+              <b>${util.esc(d.name)}</b>
+              <small>${util.esc(d.blurb)}</small>
+              <span class="mult">${d.seconds}s · points ×${d.mult}</span>
             </button>`
           )
           .join('')}
@@ -523,12 +683,12 @@
 
   function answerModePicker(game, current) {
     return `<div class="field">
-      <label>MODE DE RÉPONSE</label>
-      <div class="seg seg-green">
-        <button class="${current === 'choice' ? 'on' : ''}" data-seg="${game}.answerMode" data-val="choice" ${isHost() ? '' : 'disabled'}>QCM · 4 CHOIX</button>
-        <button class="${current === 'type' ? 'on' : ''}" data-seg="${game}.answerMode" data-val="type" ${isHost() ? '' : 'disabled'}>SAISIE LIBRE</button>
+      <label>Mode de réponse</label>
+      <div class="seg">
+        <button class="${current === 'choice' ? 'on' : ''}" data-seg="${game}.answerMode" data-val="choice" ${isHost() ? '' : 'disabled'}>QCM · 4 choix</button>
+        <button class="${current === 'type' ? 'on' : ''}" data-seg="${game}.answerMode" data-val="type" ${isHost() ? '' : 'disabled'}>Saisie libre</button>
       </div>
-      <p class="tiny c-dim">${current === 'choice'
+      <p class="fine">${current === 'choice'
         ? 'Version allégée : quatre propositions, un seul essai, aucune orthographe à deviner.'
         : 'Version classique : tu tapes la réponse, dans le jeu ou dans le chat.'}</p>
     </div>`;
@@ -542,18 +702,18 @@
     if (state.selectedGame === 'blindtest') {
       const st = s.blindtest;
       return `
-        <h3>🎧 BLIND TEST</h3>
-        <p class="tiny c-dim">Colle le lien d’une playlist YouTube <b>publique</b> (ou d’une vidéo). Tout le monde entend le même extrait, au même moment.</p>
+        <h3>🎧 Blind Test</h3>
+        <p class="fine">Colle le lien d’une playlist YouTube <b>publique</b> (ou d’une vidéo). Tout le monde entend le même extrait au même moment.</p>
         <div class="field">
-          <label>PLAYLIST YOUTUBE</label>
+          <label>Playlist YouTube</label>
           <div class="row">
             <input id="pl-url" class="input" style="flex:3" placeholder="https://www.youtube.com/playlist?list=…" value="${util.esc(st.playlistUrl || '')}" ${dis}>
-            <button class="btn btn-ghost" id="btn-import" ${dis} style="flex:0 0 auto">${state.importing ? '⏳ IMPORT…' : '↓ IMPORTER'}</button>
+            <button class="btn btn-soft" id="btn-import" ${dis} style="flex:0 0 auto">${state.importing ? '⏳ Import…' : 'Importer'}</button>
           </div>
         </div>
         ${state.playlist ? `
           <div class="playlist-preview">
-            <span class="c-green tiny">✔ ${state.playlist.count} TITRES CHARGÉS</span>
+            <span style="color:var(--good);font-size:13px">✔ ${state.playlist.count} titres chargés</span>
             ${state.playlist.sample.map((t) => `
               <div class="pp-item">
                 ${t.thumbnail ? `<img src="${util.esc(t.thumbnail)}" alt="">` : ''}
@@ -566,14 +726,14 @@
 
         <div class="row">
           <div class="field">
-            <label>MANCHES : <b class="c-green">${st.rounds}</b></label>
+            <label>Manches : <b style="color:var(--accent)">${st.rounds}</b></label>
             <input type="range" min="3" max="30" value="${st.rounds}" data-set="blindtest.rounds" ${dis}>
           </div>
           ${st.answerMode === 'type' ? `
           <div class="field">
-            <label>À DEVINER</label>
+            <label>À deviner</label>
             <div class="seg">
-              ${[['both', 'TITRE + ARTISTE'], ['title', 'TITRE'], ['artist', 'ARTISTE']]
+              ${[['both', 'Titre + artiste'], ['title', 'Titre'], ['artist', 'Artiste']]
                 .map(([v, l]) => `<button class="${st.mode === v ? 'on' : ''}" data-seg="blindtest.mode" data-val="${v}" ${dis}>${l}</button>`)
                 .join('')}
             </div>
@@ -585,16 +745,16 @@
     if (state.selectedGame === 'quiz') {
       const st = s.quiz;
       return `
-        <h3>🧠 CULTURE G</h3>
-        <p class="tiny c-dim">150 questions, 12 catégories. Le plus rapide marque le plus de points.</p>
+        <h3>🧠 Culture G</h3>
+        <p class="fine">150 questions, 12 catégories. Le plus rapide marque le plus de points.</p>
         ${answerModePicker('quiz', st.answerMode)}
         ${difficultyPicker('quiz', st.difficulty)}
         <div class="field">
-          <label>QUESTIONS : <b class="c-green">${st.rounds}</b></label>
+          <label>Questions : <b style="color:var(--accent)">${st.rounds}</b></label>
           <input type="range" min="5" max="30" value="${st.rounds}" data-set="quiz.rounds" ${dis}>
         </div>
         <div class="field">
-          <label>CATÉGORIES (aucune = toutes)</label>
+          <label>Catégories (aucune = toutes)</label>
           <div class="chips">
             ${state.categories.map((c) => `<button class="chip ${(st.categories || []).includes(c) ? 'on' : ''}" data-cat="${util.esc(c)}" ${dis}>${util.esc(c)}</button>`).join('')}
           </div>
@@ -605,35 +765,35 @@
     const st = s.undercover;
     const n = state.room.players.filter((p) => p.connected).length;
     return `
-      <h3>🕵 UNDERCOVER</h3>
-      <p class="tiny c-dim">Les civils partagent un mot. L’undercover en a un presque identique. Mr White n’a rien. Un mot chacun par tour, puis on vote.</p>
+      <h3>🕵️ Undercover</h3>
+      <p class="fine">Les civils partagent un mot. L’undercover en a un presque identique. Mr White n’a rien. Un mot chacun par tour, puis on vote.</p>
       <div class="row">
         <div class="field">
-          <label>UNDERCOVER : <b class="c-green">${st.undercoverCount}</b></label>
+          <label>Undercover : <b style="color:var(--accent)">${st.undercoverCount}</b></label>
           <input type="range" min="1" max="3" value="${st.undercoverCount}" data-set="undercover.undercoverCount" ${dis}>
         </div>
         <div class="field">
-          <label>MR WHITE : <b class="c-green">${st.mrWhite}</b></label>
+          <label>Mr White : <b style="color:var(--accent)">${st.mrWhite}</b></label>
           <input type="range" min="0" max="2" value="${st.mrWhite}" data-set="undercover.mrWhite" ${dis}>
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>DESCRIPTION : <b class="c-green">${st.descriptionSeconds}s</b></label>
+          <label>Description : <b style="color:var(--accent)">${st.descriptionSeconds}s</b></label>
           <input type="range" min="15" max="90" step="5" value="${st.descriptionSeconds}" data-set="undercover.descriptionSeconds" ${dis}>
         </div>
         <div class="field">
-          <label>VOTE : <b class="c-green">${st.voteSeconds}s</b></label>
+          <label>Vote : <b style="color:var(--accent)">${st.voteSeconds}s</b></label>
           <input type="range" min="20" max="90" step="5" value="${st.voteSeconds}" data-set="undercover.voteSeconds" ${dis}>
         </div>
       </div>
-      <p class="tiny ${n < 3 ? 'c-pink' : 'c-dim'}">${n < 3 ? '⚠ IL FAUT AU MOINS 3 JOUEURS' : n + ' JOUEURS PRÊTS'}</p>
+      <p class="fine" ${n < 3 ? 'style="color:var(--accent)"' : ''}>${n < 3 ? '⚠ Il faut au moins 3 joueurs connectés.' : n + ' joueurs prêts.'}</p>
       ${startButton('undercover', n < 3)}`;
   }
 
   function startButton(key, disabled) {
-    if (!isHost()) return '<p class="tiny c-dim">⏳ EN ATTENTE DE L’HÔTE…</p>';
-    return `<button class="btn btn-pink btn-block" id="btn-start" data-game="${key}" ${disabled ? 'disabled' : ''}>▶ LANCER LA PARTIE</button>`;
+    if (!isHost()) return '<p class="fine">⏳ En attente que l’hôte lance la partie…</p>';
+    return `<button class="btn btn-primary btn-block" id="btn-start" data-game="${key}" ${disabled ? 'disabled' : ''}>▶ Lancer la partie</button>`;
   }
 
   function wireSettings() {
@@ -677,7 +837,7 @@
         const url = $('#pl-url').value.trim();
         if (!url) return toast('Colle un lien de playlist YouTube.', 'error');
         state.importing = true;
-        imp.textContent = '⏳ IMPORT…';
+        imp.textContent = '⏳ Import…';
         socket.emit('blindtest:import', { url });
       });
     }
@@ -685,6 +845,7 @@
     const start = $('#btn-start');
     if (start) {
       start.addEventListener('click', () => {
+        window.PZSfx.unlock();
         window.PZYouTube.ensurePlayer().catch(() => {});
         socket.emit('game:start', { key: start.dataset.game });
       });
@@ -724,15 +885,15 @@
       const bar = document.createElement('div');
       bar.className = 'hud';
       bar.style.justifyContent = 'center';
-      bar.innerHTML = '<button class="btn btn-mini btn-ghost" id="btn-abort">✕ ARRÊTER LA PARTIE</button>';
+      bar.innerHTML = '<button class="btn btn-soft btn-sm" id="btn-abort">✕ Arrêter la partie</button>';
       root.appendChild(bar);
       $('#btn-abort').addEventListener('click', () => socket.emit('game:stop'));
     }
   }
 
-  /* Raccourcis clavier A/B/C/D pour le QCM. */
+  /* Raccourcis A/B/C/D pour le QCM. */
   document.addEventListener('keydown', (e) => {
-    if (state.screen !== 'room' || !state.game || state.game.answerMode !== 'choice') return;
+    if (state.view !== 'room' || !state.game || state.game.answerMode !== 'choice') return;
     if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     const index = ['a', 'b', 'c', 'd'].indexOf(e.key.toLowerCase());
     if (index < 0) return;

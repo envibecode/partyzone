@@ -3,226 +3,201 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#12091f">
-<title>PARTYZONE — Arcade entre potes</title>
-<meta name="description" content="Blind test YouTube, quiz culture G, Undercover et une ferme à faire pousser. Mini-jeux multijoueur en salon privé, connexion Discord.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2312091f'/><rect x='3' y='3' width='4' height='4' fill='%23ff2e63'/><rect x='9' y='3' width='4' height='4' fill='%2333e07a'/><rect x='3' y='9' width='4' height='4' fill='%23ffc93c'/><rect x='9' y='9' width='4' height='4' fill='%234d7cff'/></svg>">
+<meta name="theme-color" content="#2a0d16">
+<title>PartyZone — Mini-jeux entre potes</title>
+<meta name="description" content="Blind test YouTube, quiz culture G, Undercover et MemeVault. Mini-jeux multijoueur en salon privé, connexion Discord.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%23411520'/><circle cx='16' cy='16' r='7' fill='%23ff4d6d'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-<div class="bg" aria-hidden="true"><div class="scan"></div></div>
+<!-- ══════════════ CONNEXION ══════════════ -->
+<section id="screen-auth" class="screen active auth-screen">
+  <div class="auth-art" aria-hidden="true">
+    <span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span>
+  </div>
+  <div class="auth-box">
+    <div class="auth-logo"><span class="dot"></span> PartyZone</div>
+    <h1>Les soirées jeux,<br><em>sans installer quoi que ce soit.</em></h1>
+    <p class="auth-lede">
+      Blind test sur ta playlist YouTube, quiz de culture G, Undercover, et une collection
+      de memes à faire tomber des caisses. Un code à 4 lettres, et tes potes sont dedans.
+    </p>
 
-<!-- ══════════════ ÉCRAN 1 — INSERT COIN ══════════════ -->
-<section id="screen-auth" class="screen active">
-  <div class="arcade-wrap">
-    <div class="logo-mark xl" aria-hidden="true">
-      <i class="px p1"></i><i class="px p2"></i><i class="px p3"></i><i class="px p4"></i>
-    </div>
-    <h1 class="title-xl">PARTY<span class="c-pink">ZONE</span></h1>
-    <p class="blink-slow sub">■ ARCADE MULTIJOUEUR ■</p>
-
-    <div class="frame auth-card">
-      <div class="frame-title">PLAYER SELECT</div>
-      <button id="btn-discord" class="btn btn-discord">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369A19.8 19.8 0 0 0 15.43 3.1a.07.07 0 0 0-.074.035c-.211.375-.445.865-.609 1.25a18.3 18.3 0 0 0-5.487 0 12 12 0 0 0-.617-1.25.07.07 0 0 0-.075-.035 19.7 19.7 0 0 0-4.885 1.27.06.06 0 0 0-.03.025C.533 9.046-.32 13.58.099 18.057a.08.08 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.08.08 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13 13 0 0 1-1.872-.892.077.077 0 0 1-.008-.128q.19-.141.365-.291a.07.07 0 0 1 .078-.01c3.927 1.793 8.18 1.793 12.061 0a.07.07 0 0 1 .079.009q.176.15.366.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.891a.077.077 0 0 0-.041.107c.36.698.772 1.363 1.225 1.993a.08.08 0 0 0 .084.028 19.8 19.8 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.663a.06.06 0 0 0-.031-.028M8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419s.956-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418m7.975 0c-1.183 0-2.157-1.085-2.157-2.419s.955-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418"/></svg>
-        LOGIN DISCORD
+    <div class="auth-card">
+      <button id="btn-discord" class="btn btn-discord btn-block">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369A19.8 19.8 0 0 0 15.43 3.1a.07.07 0 0 0-.074.035c-.211.375-.445.865-.609 1.25a18.3 18.3 0 0 0-5.487 0 12 12 0 0 0-.617-1.25.07.07 0 0 0-.075-.035 19.7 19.7 0 0 0-4.885 1.27.06.06 0 0 0-.03.025C.533 9.046-.32 13.58.099 18.057a.08.08 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.08.08 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13 13 0 0 1-1.872-.892.077.077 0 0 1-.008-.128q.19-.141.365-.291a.07.07 0 0 1 .078-.01c3.927 1.793 8.18 1.793 12.061 0a.07.07 0 0 1 .079.009q.176.15.366.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.891a.077.077 0 0 0-.041.107c.36.698.772 1.363 1.225 1.993a.08.08 0 0 0 .084.028 19.8 19.8 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.663a.06.06 0 0 0-.031-.028M8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419s.956-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418m7.975 0c-1.183 0-2.157-1.085-2.157-2.419s.955-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418"/></svg>
+        Continuer avec Discord
       </button>
-      <p id="discord-off" class="tiny c-dim hidden">Discord pas encore configuré sur ce serveur.</p>
-
-      <div class="or">— OU —</div>
-
-      <form id="form-guest" class="stack">
-        <input id="guest-name" class="input" type="text" maxlength="18" placeholder="ENTER NAME" autocomplete="nickname" required>
-        <button class="btn btn-ghost" type="submit">CONTINUE</button>
+      <p id="discord-off" class="fine hidden">Discord n’est pas encore configuré sur ce serveur.</p>
+      <div class="rule"><span>ou</span></div>
+      <form id="form-guest" class="auth-guest">
+        <input id="guest-name" class="input" type="text" maxlength="18" placeholder="Ton pseudo" autocomplete="nickname" required>
+        <button class="btn btn-soft" type="submit">Jouer en invité</button>
       </form>
-      <p class="tiny c-dim">Avec Discord, ta progression est gardée pour toujours.<br>En invité, elle tient tant que tu ne vides pas ton navigateur.</p>
+      <p class="fine">Avec Discord, ta progression et ta collection sont gardées pour toujours.</p>
     </div>
 
-    <ul class="badge-row">
-      <li class="badge b-green">🎧 BLIND TEST</li>
-      <li class="badge b-yellow">🧠 CULTURE G</li>
-      <li class="badge b-pink">🕵 UNDERCOVER</li>
-      <li class="badge b-blue">🌾 PIXEL FARM</li>
+    <ul class="auth-tags">
+      <li><i>🎧</i> Blind Test</li>
+      <li><i>🧠</i> Culture G</li>
+      <li><i>🕵️</i> Undercover</li>
+      <li><i>🎁</i> MemeVault</li>
     </ul>
   </div>
 </section>
 
-<!-- ══════════════ ÉCRAN 2 — ACCUEIL ══════════════ -->
-<section id="screen-home" class="screen">
-  <header class="nav">
-    <div class="brand" data-go="home">
-      <span class="logo-mark sm" aria-hidden="true"><i class="px p1"></i><i class="px p2"></i><i class="px p3"></i><i class="px p4"></i></span>
-      PARTY<span class="c-pink">ZONE</span>
+<!-- ══════════════ APPLICATION ══════════════ -->
+<div id="app" class="screen app">
+
+  <!-- Rail de gauche -->
+  <nav class="rail" aria-label="Navigation">
+    <div class="rail-logo" data-go="home" title="Accueil"><span class="dot"></span></div>
+    <div class="rail-nav">
+      <button class="rail-btn active" data-go="home" data-tip="Accueil">🏠</button>
+      <button class="rail-btn" data-go="vault" data-tip="MemeVault">🎁</button>
+      <button class="rail-btn" data-jump="#board" data-tip="Classement">🏆</button>
+      <button class="rail-btn" data-jump="#games" data-tip="Les jeux">🎮</button>
     </div>
-    <nav class="nav-links">
-      <button class="nav-link" data-go="farm">FARM</button>
-      <button class="nav-link" data-jump="#board">RANKING</button>
-    </nav>
-    <div id="user-chip" class="user-chip"></div>
-  </header>
-
-  <div class="page">
-
-    <section class="hero">
-      <h1 class="title-lg">L’ARCADE<br><span class="c-green">ENTRE POTES</span></h1>
-      <p class="sub">Un salon, un code à 4 lettres, et que le meilleur gagne. <span class="blink">■</span></p>
-      <div class="cta-row">
-        <button id="btn-create" class="btn btn-pink big">▶ INSERT COIN</button>
-        <form id="form-join" class="join-form">
-          <input id="join-code" class="input code" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" required>
-          <button class="btn btn-ghost" type="submit">JOIN</button>
-        </form>
-      </div>
-    </section>
-
-    <!-- Carte du joueur -->
-    <section id="profile-card" class="frame profile"></section>
-
-    <!-- Classement -->
-    <section id="board" class="block">
-      <h2 class="section-title c-green">HIGH SCORE TABLE</h2>
-      <p class="section-sub">Classement général de tous les joueurs — XP gagnée en partie et à la ferme.</p>
-      <div class="frame frame-pink board-frame">
-        <table class="board-table">
-          <thead>
-            <tr><th class="c-pink">RANK</th><th class="c-pink">PLAYER</th><th class="c-pink">LVL</th><th class="c-pink num">XP</th></tr>
-          </thead>
-          <tbody id="board-body"><tr><td colspan="4" class="c-dim center">CHARGEMENT…</td></tr></tbody>
-        </table>
-        <div class="board-foot blink-slow">INSERT COIN TO CHALLENGE</div>
-      </div>
-    </section>
-
-    <!-- Jeux -->
-    <section class="block">
-      <h2 class="section-title">SELECT YOUR GAME</h2>
-      <div class="grid-3">
-        <article class="frame item">
-          <div class="item-top"><span class="item-icon b-green">🎧</span><span class="tag t-green">MULTI</span></div>
-          <h3>BLIND TEST</h3>
-          <p class="tiny c-dim">Ta playlist YouTube, 4 propositions ou saisie libre. Le plus rapide rafle tout.</p>
-          <div class="stat-box"><div class="stat-head">ITEM STATS</div>
-            <div class="stat"><span>SOURCE</span><b>YOUTUBE</b></div>
-            <div class="stat"><span>JOUEURS</span><b>1-24</b></div>
-            <div class="stat"><span>MODES</span><b>QCM / TYPE</b></div>
-          </div>
-        </article>
-        <article class="frame item">
-          <div class="item-top"><span class="item-icon b-yellow">🧠</span><span class="tag t-yellow">MULTI</span></div>
-          <h3>CULTURE G</h3>
-          <p class="tiny c-dim">150 questions, 12 catégories. QCM à 4 choix ou réponse à taper.</p>
-          <div class="stat-box"><div class="stat-head">ITEM STATS</div>
-            <div class="stat"><span>QUESTIONS</span><b>150</b></div>
-            <div class="stat"><span>JOUEURS</span><b>1-24</b></div>
-            <div class="stat"><span>MODES</span><b>QCM / TYPE</b></div>
-          </div>
-        </article>
-        <article class="frame item">
-          <div class="item-top"><span class="item-icon b-pink">🕵</span><span class="tag t-pink">MULTI</span></div>
-          <h3>UNDERCOVER</h3>
-          <p class="tiny c-dim">Un mot presque pareil, un imposteur, et beaucoup de mauvaise foi.</p>
-          <div class="stat-box"><div class="stat-head">ITEM STATS</div>
-            <div class="stat"><span>PAIRES</span><b>80</b></div>
-            <div class="stat"><span>JOUEURS</span><b>3-24</b></div>
-            <div class="stat"><span>ROLES</span><b>3</b></div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <!-- Ferme -->
-    <section class="block">
-      <h2 class="section-title c-yellow">SIDE QUEST</h2>
-      <div class="frame farm-promo">
-        <div class="farm-promo-art" aria-hidden="true">🌾🥕🎃💎</div>
-        <div>
-          <h3 class="c-yellow">PIXEL FARM</h3>
-          <p class="tiny c-dim">Plante, arrose, récolte. Ça pousse même quand tu n’es pas là, et chaque récolte
-            te rapporte de l’XP qui compte dans le classement général.</p>
-          <button class="btn btn-yellow" data-go="farm">▶ OUVRIR LA FERME</button>
-        </div>
-      </div>
-    </section>
-
-  </div>
-
-  <footer class="foot">
-    <div class="c-pink title-sm">GAME OVER</div>
-    <p class="tiny c-dim">PARTYZONE — fait pour jouer entre potes. Aucune pub, aucun tracking.</p>
-  </footer>
-</section>
-
-<!-- ══════════════ ÉCRAN 3 — SALON ══════════════ -->
-<section id="screen-room" class="screen">
-  <header class="nav">
-    <div class="brand" data-go="home">
-      <span class="logo-mark sm" aria-hidden="true"><i class="px p1"></i><i class="px p2"></i><i class="px p3"></i><i class="px p4"></i></span>
-      PARTY<span class="c-pink">ZONE</span>
+    <div class="rail-foot">
+      <button class="rail-btn" id="btn-mute" data-tip="Couper le son">🔊</button>
+      <button class="rail-btn rail-cta" id="rail-create" data-tip="Créer un salon">+</button>
     </div>
-    <button id="room-code-chip" class="code-chip" title="Copier le lien d’invitation">
-      <span class="tiny c-dim">CODE</span><strong id="room-code">----</strong><span class="tiny">⧉</span>
-    </button>
-    <div class="nav-right">
-      <div id="user-chip-2" class="user-chip"></div>
-      <button id="btn-leave" class="btn btn-mini btn-ghost">QUIT</button>
-    </div>
-  </header>
+  </nav>
 
-  <div class="room-layout">
-    <aside class="frame col-players">
-      <div class="frame-title">PLAYERS <span id="player-count" class="tag t-green">0</span></div>
-      <ul id="players" class="players"></ul>
-      <div id="host-note" class="tiny c-dim"></div>
-    </aside>
-
-    <main class="col-main">
-      <div id="lobby">
-        <h2 class="section-title">CHOOSE A GAME</h2>
-        <div class="game-picker" id="game-picker">
-          <button class="pick" data-game="blindtest"><span class="pick-icon">🎧</span><span class="pick-name">BLIND TEST</span></button>
-          <button class="pick" data-game="quiz"><span class="pick-icon">🧠</span><span class="pick-name">CULTURE G</span></button>
-          <button class="pick" data-game="undercover"><span class="pick-icon">🕵</span><span class="pick-name">UNDERCOVER</span></button>
-        </div>
-        <div id="game-settings" class="frame settings"></div>
+  <!-- Colonne centrale -->
+  <div class="shell">
+    <header class="topbar">
+      <div class="greet">
+        <span id="greeting">Bonsoir,</span>
+        <strong id="greet-name">—</strong>
       </div>
-      <div id="game-root" class="hidden"></div>
-    </main>
 
-    <aside class="frame col-chat">
-      <div class="frame-title" id="chat-title">CHAT</div>
-      <div id="chat" class="chat"></div>
-      <form id="form-chat" class="chat-form">
-        <input id="chat-input" class="input" maxlength="200" placeholder="MESSAGE…" autocomplete="off">
-        <button class="btn btn-pink btn-mini" type="submit" aria-label="Envoyer">▶</button>
+      <form id="form-join" class="joinbar">
+        <span class="joinbar-icon">🔑</span>
+        <input id="join-code" class="joinbar-input" maxlength="4" placeholder="Code du salon (4 lettres)" autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary btn-sm" type="submit">Rejoindre</button>
       </form>
-    </aside>
-  </div>
-</section>
 
-<!-- ══════════════ ÉCRAN 4 — PIXEL FARM ══════════════ -->
-<section id="screen-farm" class="screen">
-  <header class="nav">
-    <div class="brand" data-go="home">
-      <span class="logo-mark sm" aria-hidden="true"><i class="px p1"></i><i class="px p2"></i><i class="px p3"></i><i class="px p4"></i></span>
-      PARTY<span class="c-pink">ZONE</span>
-    </div>
-    <nav class="nav-links"><button class="nav-link" data-go="home">◀ RETOUR</button></nav>
-    <div id="user-chip-3" class="user-chip"></div>
-  </header>
-  <div class="page" id="farm-root"></div>
-</section>
+      <div class="topbar-right">
+        <button class="pill pill-coins" data-go="vault" title="Tes pièces">🪙 <b id="top-coins">0</b></button>
+        <button class="icon-btn" id="btn-bell" title="Notifications">🔔<span id="bell-dot" class="bell-dot hidden"></span></button>
+        <button class="avatar-btn" id="user-chip" title="Ton profil"></button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ══════ VUE ACCUEIL ══════ -->
+      <section id="view-home" class="view active">
+        <div class="home-top">
+          <article class="hero" id="hero"></article>
+          <div class="quick" id="quick-games"></div>
+        </div>
+
+        <div class="home-mid">
+          <section class="panel" id="board">
+            <header class="panel-head">
+              <h2>Classement général</h2>
+              <span class="panel-note">XP gagnée en partie et au MemeVault</span>
+            </header>
+            <div class="table-scroll">
+              <table class="board">
+                <thead><tr><th>#</th><th>Joueur</th><th class="ta-c">Niv.</th><th class="ta-r">XP</th></tr></thead>
+                <tbody id="board-body"><tr><td colspan="4" class="ta-c muted">Chargement…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel stats-panel">
+            <header class="panel-head"><h2>Ta progression</h2></header>
+            <div id="progress-ring" class="ring-wrap"></div>
+            <div class="stat-row" id="stat-row"></div>
+          </section>
+        </div>
+
+        <section class="panel vault-promo" id="games">
+          <div class="vp-art" aria-hidden="true">
+            <span>🎁</span><span>🗿</span><span>🐸</span><span>👑</span>
+          </div>
+          <div class="vp-text">
+            <h2>MemeVault</h2>
+            <p>Des caisses à ouvrir à l’infini, 60 memes à collectionner du Commun au Maudit,
+               et un combo qui grimpe tant que tu enchaînes. Chaque ouverture rapporte de l’XP.</p>
+            <button class="btn btn-primary" data-go="vault">Ouvrir des caisses</button>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══════ VUE SALON ══════ -->
+      <section id="view-room" class="view">
+        <header class="room-head">
+          <div>
+            <span class="eyebrow">Salon privé</span>
+            <h2 id="room-title">—</h2>
+          </div>
+          <button id="room-code-chip" class="code-chip" title="Copier le lien d’invitation">
+            <span>CODE</span><strong id="room-code">----</strong><i>⧉</i>
+          </button>
+          <button id="btn-leave" class="btn btn-soft btn-sm">Quitter</button>
+        </header>
+
+        <div class="room-grid">
+          <aside class="panel room-players">
+            <header class="panel-head"><h2>Joueurs <span class="count" id="player-count">0</span></h2></header>
+            <ul id="players" class="players"></ul>
+            <p id="host-note" class="fine"></p>
+          </aside>
+
+          <div class="room-main">
+            <div id="lobby" class="lobby">
+              <div class="game-picker" id="game-picker">
+                <button class="pick" data-game="blindtest"><i>🎧</i><b>Blind Test</b><span>YouTube</span></button>
+                <button class="pick" data-game="quiz"><i>🧠</i><b>Culture G</b><span>150 questions</span></button>
+                <button class="pick" data-game="undercover"><i>🕵️</i><b>Undercover</b><span>3 joueurs min.</span></button>
+              </div>
+              <div id="game-settings" class="panel settings"></div>
+            </div>
+            <div id="game-root" class="hidden"></div>
+          </div>
+
+          <aside class="panel room-chat">
+            <header class="panel-head"><h2 id="chat-title">Chat</h2></header>
+            <div id="chat" class="chat"></div>
+            <form id="form-chat" class="chat-form">
+              <input id="chat-input" class="input" maxlength="200" placeholder="Écris un message…" autocomplete="off">
+              <button class="btn btn-primary btn-sm" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ══════ VUE MEMEVAULT ══════ -->
+      <section id="view-vault" class="view">
+        <div id="vault-root"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Rail de droite : qui est en ligne -->
+  <aside class="online" aria-label="Joueurs en ligne">
+    <div class="online-head" title="Joueurs en ligne"><span id="online-count">0</span></div>
+    <ul id="online-list" class="online-list"></ul>
+  </aside>
+</div>
 
 <div id="yt-host" aria-hidden="true"><div id="yt-player"></div></div>
 <div id="yt-scan" aria-hidden="true"><div id="yt-scanner"></div></div>
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/js/sfx.js"></script>
 <script src="/js/yt.js"></script>
-<script src="/js/farm.js"></script>
+<script src="/js/vault.js"></script>
 <script src="/js/games/blindtest.js"></script>
 <script src="/js/games/quiz.js"></script>
 <script src="/js/games/undercover.js"></script>

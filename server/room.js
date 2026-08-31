@@ -188,6 +188,10 @@ class Room {
       store.grantXp(profile, xp);
       const after = store.levelFromXp(profile.xp).level;
 
+      // Les points se convertissent aussi en pièces : jouer alimente le MemeVault.
+      const coins = Math.round(entry.score / 2) + (won ? 100 : 0);
+      profile.vault.coins += coins;
+
       profile.stats.games++;
       if (profile.stats[gameKey] !== undefined) profile.stats[gameKey]++;
       if (won) profile.stats.wins++;
@@ -199,7 +203,7 @@ class Room {
         this.io.to(entry.player.socketId).emit('profile:update', store.publicProfile(profile));
       }
 
-      results.push({ id: entry.player.id, name: entry.player.name, xp, level: after, levelUp: after > before });
+      results.push({ id: entry.player.id, name: entry.player.name, xp, coins, level: after, levelUp: after > before });
     }
 
     if (results.length) {

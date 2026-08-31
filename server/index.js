@@ -9,7 +9,8 @@ const { Server } = require('socket.io');
 
 const auth = require('./auth');
 const store = require('./store');
-const farm = require('./farm');
+const vault = require('./vault');
+const { Presence } = require('./presence');
 const difficulty = require('./difficulty');
 const { createRoom, getRoom, startJanitor } = require('./room');
 const yt = require('./youtube');
@@ -24,6 +25,7 @@ const GAMES = { blindtest: BlindTest, quiz: Quiz, undercover: Undercover };
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: false } });
+const presence = new Presence(io);
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '256kb' }));
@@ -76,6 +78,7 @@ io.on('connection', async (socket) => {
     return;
   }
   socket.data.profile = profile;
+  presence.join(socket, user, profile);
 
   /** Renvoie au joueur son profil à jour (niveau, XP, pièces). */
   const sendMe = () => socket.emit('me', { user, profile: store.publicProfile(profile) });
@@ -87,6 +90,7 @@ io.on('connection', async (socket) => {
     socket.join('room:' + room.code);
     socket.data.roomCode = room.code;
     room.addPlayer(user, socket.id, profile);
+    presence.setStatus(user.id, 'room');
     socket.emit('room:joined', { code: room.code, chat: room.chat });
     room.pushChat({ system: true, text: `${user.name} a rejoint le salon.` });
     room.broadcast();
@@ -97,6 +101,7 @@ io.on('connection', async (socket) => {
     if (!room) return;
     socket.leave('room:' + room.code);
     socket.data.roomCode = null;
+    presence.setStatus(user.id, 'home');
     room.removePlayer(user.id);
     room.pushChat({ system: true, text: `${user.name} a quitté le salon.` });
     room.broadcast();
@@ -200,6 +205,11 @@ io.on('connection', async (socket) => {
 
   /* ── Lancement / arrêt d'un jeu ────────────────────── */
 
+  /** Tout le salon bascule en « En partie » (ou revient au salon). */
+  function markRoomStatus(room, status) {
+    for (const p of room.connectedPlayers()) presence.setStatus(p.id, status);
+  }
+
   socket.on('game:start', ({ key } = {}) => {
     const room = currentRoom(socket);
     if (!room || !room.isHost(user.id)) return;
@@ -210,18 +220,21 @@ io.on('connection', async (socket) => {
       if (!room.playlist || !room.playlist.tracks.length) {
         return socket.emit('toast', { message: 'Importe d’abord une playlist YouTube.', kind: 'error' });
       }
-      return room.startGame(GameClass, key, { ...room.settings.blindtest, tracks: room.playlist.tracks });
+      room.startGame(GameClass, key, { ...room.settings.blindtest, tracks: room.playlist.tracks });
+      return markRoomStatus(room, 'game');
     }
     if (key === 'undercover' && room.connectedPlayers().length < 3) {
       return socket.emit('toast', { message: 'Undercover demande au moins 3 joueurs.', kind: 'error' });
     }
     room.startGame(GameClass, key, room.settings[key]);
+    markRoomStatus(room, 'game');
   });
 
   socket.on('game:stop', () => {
     const room = currentRoom(socket);
     if (!room || !room.isHost(user.id)) return;
     room.stopGame();
+    markRoomStatus(room, 'room');
     room.toast('Partie terminée par l’hôte.', 'info');
   });
 
@@ -231,49 +244,56 @@ io.on('connection', async (socket) => {
     room.game.handle(user.id, action, payload || {});
   });
 
-  /* ── PIXEL FARM ────────────────────────────────────── */
+  /* ── MEMEVAULT ─────────────────────────────────────── */
 
-  function farmState(extra = {}) {
-    const level = store.levelFromXp(profile.xp).level;
-    return { farm: farm.view(profile, level), me: store.publicProfile(profile), ...extra };
+  function vaultPayload(extra = {}) {
+    return { vault: vault.view(profile), me: store.publicProfile(profile), ...extra };
   }
 
-  socket.on('farm:open', async () => {
-    const gains = farm.tick(profile);
-    if (gains.xp > 0) store.grantXp(profile, gains.xp);
-    if (gains.harvested) await store.saveProfile(profile);
-    socket.emit(
-      'farm:state',
-      farmState(gains.harvested ? { offline: gains } : {})
-    );
+  socket.on('vault:open', () => {
+    presence.setStatus(user.id, 'vault');
+    socket.emit('vault:state', vaultPayload());
   });
 
-  socket.on('farm:action', async ({ action, payload } = {}) => {
-    farm.tick(profile);
-    const level = store.levelFromXp(profile.xp).level;
-    const result = farm.act(profile, action, payload || {}, level);
-
-    if (result.ok && result.xp) store.grantXp(profile, result.xp);
-    if (result.ok) {
-      // L'arrosage part en rafale : on n'écrit sur le disque qu'une fois par seconde.
-      if (result.quiet) {
-        clearTimeout(socket.data.saveTimer);
-        socket.data.saveTimer = setTimeout(() => store.saveProfile(profile).catch(() => {}), 1000);
-      } else {
-        await store.saveProfile(profile);
-      }
+  socket.on('vault:pull', async ({ caseId, count } = {}) => {
+    const result = vault.open(profile, caseId, count);
+    if (!result.ok) {
+      return socket.emit('vault:state', vaultPayload({ result }));
     }
+    store.grantXp(profile, result.xp);
+    await store.saveProfile(profile);
+    socket.emit('vault:state', vaultPayload({ result }));
+    socket.emit('profile:update', store.publicProfile(profile));
 
-    socket.emit('farm:state', farmState({ result }));
-    if (result.ok && !result.quiet) sendMe();
+    // Un tirage exceptionnel, ça se partage : tout le site le voit passer.
+    const showcase = result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r));
+    for (const pull of showcase) {
+      io.emit('vault:showcase', {
+        name: user.name,
+        avatar: user.avatar,
+        item: { emoji: pull.emoji, name: pull.name, rarity: pull.rarity, color: pull.color },
+      });
+    }
+  });
+
+  socket.on('vault:sell', async () => {
+    const result = vault.sellDuplicates(profile);
+    if (result.ok) await store.saveProfile(profile);
+    socket.emit('vault:state', vaultPayload({ result }));
+    if (result.ok) socket.emit('profile:update', store.publicProfile(profile));
   });
 
   /* ── Divers ────────────────────────────────────────── */
 
   socket.on('me:refresh', () => sendMe());
+  socket.on('presence:status', ({ status } = {}) => {
+    if (['home', 'room', 'game', 'vault'].includes(status)) presence.setStatus(user.id, status);
+  });
+  socket.emit('online:list', { online: presence.list() });
 
   socket.on('disconnect', () => {
     clearTimeout(socket.data.saveTimer);
+    presence.leave(socket, user.id);
     store.saveProfile(profile).catch(() => {});
     const room = currentRoom(socket);
     if (!room) return;

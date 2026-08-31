@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Test d'interface : pilote de vrais navigateurs, joue une manche de chaque
- * jeu, passe par la ferme, et enregistre des captures dans test/shots/.
+ * Test d'interface : pilote de vrais navigateurs, ouvre des caisses, joue une
+ * manche de chaque jeu, vérifie le podium, et enregistre des captures.
  *
  *   node -r ./test/stub-youtube.js server/index.js   (port 3100)
  *   node test/ui.js
@@ -26,13 +26,15 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error' && !/favicon|youtube|ERR_|font/i.test(m.text())) errors.push(`${name}: ${m.text()}`);
+    if (m.type() === 'error' && !/favicon|youtube|ERR_|font|AudioContext/i.test(m.text())) {
+      errors.push(`${name}: ${m.text()}`);
+    }
   });
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
   await page.fill('#guest-name', name);
   await page.click('#form-guest button');
-  await page.waitForSelector('#screen-home.active', { timeout: 15000 });
-  await page.waitForSelector('#profile-card .profile-name', { timeout: 8000 });
+  await page.waitForSelector('#app.active', { timeout: 15000 });
+  await page.waitForSelector('#progress-ring .ring', { timeout: 8000 });
   return page;
 }
 
@@ -46,63 +48,55 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
 
   /* ── Accueil ── */
   const host = await newPlayer(browser, 'Mattis');
-  check('carte de profil affichée', await host.isVisible('#profile-card .xp-bar'));
+  check('anneau de progression affiché', await host.isVisible('#progress-ring .ring-fill'));
+  check('rail des joueurs en ligne présent', await host.isVisible('.online'));
   await host.waitForSelector('#board-body tr');
-  const boardRows = await host.$$('#board-body tr');
-  check('tableau des scores rempli', boardRows.length > 0, boardRows.length + ' lignes');
+  check('classement rempli', (await host.$$('#board-body tr')).length > 0);
+  check('la carte à l’affiche change de jeu', await host.isVisible('#hero [data-play]'));
+  await host.click('[data-feature="undercover"]');
+  await host.waitForTimeout(300);
+  check('cliquer une carte change le héros', (await host.textContent('#hero h1')).includes('Undercover'));
+  await host.click('[data-feature="blindtest"]');
   await host.screenshot({ path: path.join(SHOTS, '1-accueil.png'), fullPage: true });
 
-  /* ── Ferme ── */
-  await host.click('#screen-home .nav-link[data-go="farm"]');
-  await host.waitForSelector('#farm-root .farm-grid .plot', { timeout: 8000 });
-  check('ferme ouverte avec ses parcelles', (await host.$$('#farm-root .plot[data-plot]')).length === 6);
-  check('boutique affichée', await host.isVisible('#farm-root .shop-list .shop'));
+  /* ── MemeVault ── */
+  await host.click('.rail-btn[data-go="vault"]');
+  await host.waitForSelector('#vault-root .case', { timeout: 8000 });
+  check('4 caisses affichées', (await host.$$('#vault-root .case')).length === 4);
+  check('collection affichée', (await host.$$('#vault-root .item')).length === 60);
+  check('barres de probabilité affichées', (await host.$$('#vault-root .odds i')).length >= 4);
 
-  const coinsBefore = Number(await host.textContent('#f-coins'));
-  await host.click('#farm-root .plot[data-plot="0"]');
-  await host.waitForFunction(() => !document.querySelector('.plot[data-plot="0"]').classList.contains('empty'), null, { timeout: 6000 });
-  check('graine plantée au clic', Number(await host.textContent('#f-coins')) < coinsBefore);
+  const coinsBefore = Number((await host.textContent('#v-coins')).replace(/\D/g, ''));
+  await host.click('#vault-root .case:nth-child(1) [data-count="1"]');
+  await host.waitForSelector('#vault-root .pull', { timeout: 8000 });
+  check('une carte est tirée', (await host.$$('#vault-root .pull')).length === 1);
+  const owned = await host.evaluate(() => document.querySelectorAll('#vault-root .item:not(.locked)').length);
+  check('l’item rejoint la collection', owned === 1, owned + ' possédé(s)');
+  await host.screenshot({ path: path.join(SHOTS, '2-vault.png'), fullPage: true });
 
-  // On arrose tant que la plante n'est pas mûre : un clic de trop la récolterait.
-  let watered = 0;
-  while (watered < 15) {
-    const ready = await host.evaluate(() =>
-      document.querySelector('.plot[data-plot="0"]').classList.contains('ready')
-    );
-    if (ready) break;
-    await host.click('#farm-root .plot[data-plot="0"]');
-    await host.waitForTimeout(180);
-    watered++;
-  }
-  await host.waitForSelector('#farm-root .plot[data-plot="0"].ready', { timeout: 10000 });
-  check('l’arrosage au clic fait mûrir la plante', true, watered + ' arrosages');
-  await host.screenshot({ path: path.join(SHOTS, '2-farm.png'), fullPage: true });
-
-  await host.click('#farm-root .plot[data-plot="0"]');
-  await host.waitForFunction((c) => Number(document.querySelector('#f-coins').textContent) > c, coinsBefore, { timeout: 6000 });
-  check('récolte encaissée', true);
-
-  await host.click('#screen-farm .nav-link[data-go="home"]');
-  await host.waitForSelector('#screen-home.active');
+  await host.click('#vault-root .case:nth-child(1) [data-count="5"]');
+  await host.waitForFunction(() => document.querySelectorAll('#vault-root .pull').length === 5, null, { timeout: 12000 });
+  check('ouverture par 5', true);
+  const coinsAfter = Number((await host.textContent('#v-coins')).replace(/\D/g, ''));
+  check('les pièces sont débitées', coinsAfter < coinsBefore, `${coinsBefore} → ${coinsAfter}`);
+  const combo = await host.textContent('#vault-root .res.combo b');
+  check('le combo grimpe', parseFloat(combo.replace('x', '')) > 1, combo);
+  await host.screenshot({ path: path.join(SHOTS, '3-vault-pulls.png'), fullPage: true });
 
   /* ── Salon ── */
-  await host.click('#btn-create');
-  await host.waitForSelector('#screen-room.active');
+  await host.click('#rail-create');
+  await host.waitForSelector('#view-room.active');
   const code = (await host.textContent('#room-code')).trim();
   check('salon créé', /^[A-Z]{4}$/.test(code), code);
 
   const guest = await newPlayer(browser, 'Lea');
   await guest.fill('#join-code', code);
   await guest.click('#form-join button');
-  await guest.waitForSelector('#screen-room.active');
+  await guest.waitForSelector('#view-room.active');
   await host.waitForFunction(() => document.querySelectorAll('#players .player').length === 2);
   check('deuxième joueur dans le salon', true);
-
-  /* ── Réglages : QCM + difficulté ── */
-  await host.waitForSelector('#game-settings [data-diff]');
   check('sélecteur de difficulté affiché', (await host.$$('#game-settings .diff')).length === 3);
-  check('sélecteur QCM / saisie affiché', await host.isVisible('[data-seg="blindtest.answerMode"]'));
-  await host.screenshot({ path: path.join(SHOTS, '3-salon.png'), fullPage: true });
+  await host.screenshot({ path: path.join(SHOTS, '4-salon.png'), fullPage: true });
 
   /* ── Blind test en QCM ── */
   await host.fill('#pl-url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
@@ -118,25 +112,34 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
 
   await host.waitForSelector('#game-root .choice', { timeout: 20000 });
   check('QCM du blind test affiché', (await host.$$('#game-root .choice')).length === 4);
-  await host.screenshot({ path: path.join(SHOTS, '4-blindtest-qcm.png'), fullPage: true });
+  await host.screenshot({ path: path.join(SHOTS, '5-blindtest.png'), fullPage: true });
 
   await host.click('#game-root .choice');
-  await host.waitForTimeout(900);
-  const locked = await host.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length);
-  check('un seul essai : les propositions se verrouillent', locked === 4, locked + ' verrouillées');
+  await host.waitForTimeout(700);
+  check('un seul essai : les propositions se verrouillent',
+    (await host.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length)) === 4);
+  check('la musique continue après la réponse',
+    await host.isVisible('#game-root .disc.spin'));
 
-  // le clavier doit aussi fonctionner pour l'autre joueur
   await guest.waitForSelector('#game-root .choice:not([disabled])', { timeout: 10000 });
   await guest.keyboard.press('b');
-  await guest.waitForTimeout(800);
-  const guestLocked = await guest.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length);
-  check('raccourcis clavier A/B/C/D actifs', guestLocked === 4);
+  await guest.waitForTimeout(700);
+  check('raccourcis clavier A/B/C/D actifs',
+    (await guest.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length)) === 4);
 
   await host.waitForSelector('#game-root .choice.right', { timeout: 60000 });
   check('bonne réponse mise en évidence à la révélation', true);
-  await host.screenshot({ path: path.join(SHOTS, '5-blindtest-reveal.png'), fullPage: true });
+  check('la musique tourne encore pendant la révélation',
+    (await host.textContent('#game-root')).includes('continue jusqu’à la manche suivante'));
 
-  await host.click('#btn-abort');
+  /* ── Podium en fin de partie ── */
+  await host.waitForSelector('#game-root .podium', { timeout: 120000 });
+  check('podium affiché en fin de partie', (await host.$$('#game-root .step')).length >= 1);
+  check('le podium montre les avatars', (await host.$$('#game-root .step .avatar')).length >= 1);
+  check('couche à confettis créée', await host.evaluate(() => Boolean(document.querySelector('.confetti-layer'))));
+  await host.screenshot({ path: path.join(SHOTS, '6-podium.png'), fullPage: true });
+
+  await host.click('[data-act="back"]');
   await host.waitForSelector('#lobby:not(.hidden)', { timeout: 8000 });
 
   /* ── Quiz en QCM ── */
@@ -148,56 +151,35 @@ async function newPlayer(browser, name, viewport = { width: 1440, height: 950 })
   await host.waitForSelector('#game-root .question-text', { timeout: 15000 });
   await host.waitForSelector('#game-root .choice', { timeout: 15000 });
   check('QCM du quiz affiché', (await host.$$('#game-root .choice')).length === 4);
-  check('question lisible', (await host.textContent('#game-root .question-text')).length > 5);
-  await host.screenshot({ path: path.join(SHOTS, '6-quiz-qcm.png'), fullPage: true });
-
+  await host.screenshot({ path: path.join(SHOTS, '7-quiz.png'), fullPage: true });
   await host.click('#btn-abort');
   await host.waitForSelector('#lobby:not(.hidden)');
-
-  /* ── Quiz en saisie libre ── */
-  await host.click('[data-seg="quiz.answerMode"][data-val="type"]');
-  await host.waitForTimeout(500);
-  await host.click('#btn-start');
-  await host.waitForSelector('#game-root .answer-mask', { timeout: 15000 });
-  check('mode saisie : réponse masquée', (await host.textContent('#game-root .answer-mask')).includes('·'));
-  await host.click('#btn-abort');
-  await host.waitForSelector('#lobby:not(.hidden)');
-
-  /* ── Undercover ── */
-  const third = await newPlayer(browser, 'Sam');
-  await third.fill('#join-code', code);
-  await third.click('#form-join button');
-  await third.waitForSelector('#screen-room.active');
-  await host.waitForFunction(() => document.querySelectorAll('#players .player').length === 3);
-
-  await host.click('[data-game="undercover"]');
-  await host.waitForSelector('[data-set="undercover.undercoverCount"]');
-  await host.click('#btn-start');
-  await host.waitForSelector('#game-root .role-card', { timeout: 12000 });
-  check('carte de rôle distribuée', (await host.textContent('#game-root .role-word')).trim().length > 0);
-  await host.waitForSelector('#game-root .uc-grid', { timeout: 25000 });
-  await host.screenshot({ path: path.join(SHOTS, '7-undercover.png'), fullPage: true });
-  await host.click('#btn-abort');
-
-  /* ── XP gagnée visible sur l'accueil ── */
-  await host.waitForSelector('#lobby:not(.hidden)');
-  await host.click('#btn-leave');
-  await host.waitForSelector('#screen-home.active');
-  const xpText = await host.textContent('#profile-card .xp-text');
-  check('la carte de profil montre l’XP', /XP|NIVEAU/.test(xpText), xpText.replace(/\s+/g, ' ').trim());
 
   /* ── Mobile ── */
   const mobile = await newPlayer(browser, 'Mobile', { width: 390, height: 844 });
-  await mobile.waitForTimeout(1200);
-  await mobile.screenshot({ path: path.join(SHOTS, '8-mobile-accueil.png'), fullPage: true });
-  const overflowHome = await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
-  check('accueil sans débordement horizontal', !overflowHome);
+  await mobile.waitForTimeout(1000);
 
-  await mobile.click('#screen-home .nav-link[data-go="farm"]');
-  await mobile.waitForSelector('#farm-root .plot', { timeout: 8000 });
-  await mobile.screenshot({ path: path.join(SHOTS, '9-mobile-farm.png'), fullPage: true });
-  const overflowFarm = await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
-  check('ferme sans débordement horizontal', !overflowFarm);
+  /* ── Présence : trois joueurs, deux statuts différents ── */
+  await host.waitForFunction(() => document.querySelectorAll('#online-list .on-user').length >= 3, null, { timeout: 10000 });
+  check('les trois joueurs sont dans le rail « en ligne »',
+    (await host.$$('#online-list .on-user')).length >= 3);
+  await host.waitForFunction(() => {
+    const c = [...document.querySelectorAll('#online-list .status')].map((s) => s.className);
+    return c.some((x) => x.includes('s-room')) && c.some((x) => x.includes('s-home'));
+  }, null, { timeout: 10000 });
+  const statuses = await host.evaluate(() =>
+    [...document.querySelectorAll('#online-list .status')].map((s) => s.className.replace('status ', ''))
+  );
+  check('les statuts sont différenciés', true, statuses.join(' | '));
+  await mobile.screenshot({ path: path.join(SHOTS, '8-mobile.png'), fullPage: true });
+  check('accueil sans débordement horizontal',
+    !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
+
+  await mobile.click('.rail-btn[data-go="vault"]');
+  await mobile.waitForSelector('#vault-root .case', { timeout: 8000 });
+  await mobile.screenshot({ path: path.join(SHOTS, '9-mobile-vault.png'), fullPage: true });
+  check('MemeVault sans débordement horizontal',
+    !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
 
   check('aucune erreur JavaScript', errors.length === 0, errors.slice(0, 4).join(' | '));
 

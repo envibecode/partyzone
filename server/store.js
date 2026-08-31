@@ -12,6 +12,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { blankVault } = require('./vault');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'profiles.json');
@@ -56,19 +57,6 @@ function rankTitle(level) {
 
 /* ─── Forme d'un profil ────────────────────────────────── */
 
-function blankFarm(now) {
-  return {
-    coins: 40,
-    water: 60,
-    waterAt: now,
-    plotCount: 6,
-    plots: Array.from({ length: 12 }, () => ({ seed: null, plantedAt: 0, boost: 0 })),
-    upgrades: { can: 0, fert: 0, scare: 0, barn: 0 },
-    harvested: 0,
-    clicks: 0,
-  };
-}
-
 function blankProfile(user, now = Date.now()) {
   return {
     id: user.id,
@@ -85,7 +73,7 @@ function blankProfile(user, now = Date.now()) {
       bestScore: 0,
       correct: 0,
     },
-    farm: blankFarm(now),
+    vault: blankVault(now),
     createdAt: now,
     updatedAt: now,
     seenAt: now,
@@ -99,13 +87,14 @@ function migrate(profile, now = Date.now()) {
     ...fresh,
     ...profile,
     stats: { ...fresh.stats, ...(profile.stats || {}) },
-    farm: { ...fresh.farm, ...(profile.farm || {}) },
+    vault: { ...fresh.vault, ...(profile.vault || {}) },
   };
-  merged.farm.upgrades = { ...fresh.farm.upgrades, ...(merged.farm.upgrades || {}) };
-  if (!Array.isArray(merged.farm.plots) || merged.farm.plots.length !== 12) {
-    const old = Array.isArray(merged.farm.plots) ? merged.farm.plots : [];
-    merged.farm.plots = Array.from({ length: 12 }, (_, i) => old[i] || { seed: null, plantedAt: 0, boost: 0 });
+  merged.vault.items = { ...(merged.vault.items || {}) };
+  // Les profils créés à l'époque de la ferme gardent leurs pièces.
+  if (profile.farm && typeof profile.farm.coins === 'number' && !profile.vault) {
+    merged.vault.coins = Math.max(merged.vault.coins, profile.farm.coins);
   }
+  delete merged.farm;
   return merged;
 }
 
@@ -264,7 +253,8 @@ function publicProfile(profile) {
     ratio: lvl.ratio,
     title: rankTitle(lvl.level),
     stats: profile.stats,
-    coins: profile.farm.coins,
+    coins: profile.vault.coins,
+    collected: Object.values(profile.vault.items || {}).filter((n) => n > 0).length,
   };
 }
 
@@ -299,7 +289,6 @@ module.exports = {
   grantXp,
   levelFromXp,
   rankTitle,
-  blankFarm,
   close,
   MAX_LEVEL,
 };

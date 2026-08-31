@@ -3,51 +3,54 @@ window.PZGames = window.PZGames || {};
 
 window.PZGames.quiz = (() => {
   let lastPhase = null;
+  let celebrated = false;
 
   function hud(state) {
+    const d = state.difficulty;
     return `<div class="hud">
-      <span class="badge2">? ${state.round}/${state.totalRounds}</span>
-      <span class="badge2 c-${state.difficulty.color}">${state.difficulty.name} x${state.difficulty.mult}</span>
+      <span class="tag">Question ${state.round}/${state.totalRounds}</span>
+      <span class="tag t-${d.color}">${d.name} ×${d.mult}</span>
       <div class="timer-wrap"><div class="timer-bar" data-timer></div></div>
-      <span class="badge2" data-clock>—</span>
+      <span class="tag" data-clock>—</span>
     </div>`;
-  }
-
-  function medal(rank) {
-    return rank === 1 ? '1ST' : rank === 2 ? '2ND' : rank === 3 ? '3RD' : rank + 'TH';
   }
 
   function render(root, state, ctx) {
     const u = ctx.util;
 
-    /* ── Résultats ── */
+    /* ── Résultats : podium, confettis, fanfare ── */
     if (state.phase === 'results') {
+      if (!celebrated) {
+        celebrated = true;
+        window.PZSfx.victory();
+        window.PZConfetti.celebrate();
+      }
       root.innerHTML = `
-        ${hud(state)}
         <div class="stage">
-          <h2 class="reveal-title c-yellow">HIGH SCORES</h2>
+          <h2 class="reveal-title">🏆 Fin de la partie</h2>
+          ${u.podium(state.ranking)}
           <div class="scoreboard">${u.scoreboard(state.ranking)}</div>
           ${state.history && state.history.length ? `
             <details style="width:min(560px,100%);text-align:left">
-              <summary class="c-dim tiny" style="cursor:pointer;padding:6px 0">▸ REVOIR LES RÉPONSES</summary>
+              <summary class="fine" style="padding:6px 0">▸ Revoir les réponses</summary>
               <div class="desc-list">
                 ${state.history.map((h) => `<div class="desc-item"><span style="flex:1">${u.esc(h.question)}</span><span class="desc-word">${u.esc(h.answer)}</span></div>`).join('')}
               </div>
             </details>` : ''}
-          ${ctx.isHost ? '<button class="btn btn-pink" data-act="back">RETOUR AU SALON</button>' : '<p class="c-dim tiny">EN ATTENTE DE L’HÔTE…</p>'}
+          ${ctx.isHost ? '<button class="btn btn-primary" data-act="back">Retour au salon</button>' : '<p class="fine">En attente de l’hôte…</p>'}
         </div>`;
       wire(root, ctx);
       lastPhase = state.phase;
       return;
     }
+    celebrated = false;
 
-    /* ── Compte à rebours ── */
     if (state.phase === 'countdown') {
       root.innerHTML = `
         ${hud(state)}
         <div class="stage">
-          <div class="countdown c-green" id="cd">…</div>
-          <p class="c-dim">QUESTION ${state.round} — PRÊT ?</p>
+          <div class="countdown" id="cd">…</div>
+          <p class="muted">Question ${state.round} — prêt ?</p>
         </div>`;
       u.tickCountdown(root.querySelector('#cd'), state.deadline, state.serverNow);
       lastPhase = state.phase;
@@ -62,7 +65,7 @@ window.PZGames.quiz = (() => {
       root.innerHTML = `
         ${hud(state)}
         <div class="stage">
-          <span class="badge2 c-yellow">${u.esc(state.category || '')}</span>
+          <span class="tag t-yellow">${u.esc(state.category || '')}</span>
           <p class="question-text">${u.esc(state.question || '')}</p>
           ${u.choices(state.choices || [], {
             picked: state.yourPick,
@@ -70,11 +73,11 @@ window.PZGames.quiz = (() => {
             disabled: answered || revealing,
           })}
           ${answered && !revealing
-            ? `<p class="${state.yourResult.correct ? 'c-green' : 'c-pink'}">${state.yourResult.correct ? `✔ +${state.yourResult.points} POINTS` : '✘ RATÉ'}</p>`
+            ? `<p style="color:${state.yourResult.correct ? 'var(--good)' : 'var(--accent)'}">${state.yourResult.correct ? `✔ +${state.yourResult.points} points` : '✘ Raté'}</p>`
             : ''}
-          ${revealing ? `<p class="reveal-sub">RÉPONSE : <b class="c-green">${u.esc(state.revealed || '')}</b></p>` : ''}
-          ${boardHtml(state, u)}
-          <p class="c-dim tiny">${state.answeredCount}/${state.playerCount} ONT RÉPONDU · touches A · B · C · D</p>
+          ${revealing ? `<p class="reveal-sub">Réponse : <b style="color:var(--good)">${u.esc(state.revealed || '')}</b></p>` : ''}
+          ${board(state, u)}
+          <p class="fine">${state.answeredCount}/${state.playerCount} ont répondu · touches A · B · C · D</p>
         </div>`;
       u.tickTimer(root.querySelector('[data-timer]'), state.deadline, state.serverNow);
       wire(root, ctx);
@@ -87,19 +90,19 @@ window.PZGames.quiz = (() => {
     root.innerHTML = `
       ${hud(state)}
       <div class="stage">
-        <span class="badge2 c-yellow">${u.esc(state.category || '')}</span>
+        <span class="tag t-yellow">${u.esc(state.category || '')}</span>
         <p class="question-text">${u.esc(state.question || '')}</p>
         <div class="answer-mask">${u.esc(state.hint || '')}</div>
         ${revealing
-          ? `<p class="reveal-sub">RÉPONSE : <b class="c-green">${u.esc(state.revealed || '')}</b></p>`
+          ? `<p class="reveal-sub">Réponse : <b style="color:var(--good)">${u.esc(state.revealed || '')}</b></p>`
           : solved
-            ? `<p class="c-green">✔ TROUVÉ EN ${(state.you.ms / 1000).toFixed(1)}s — +${state.you.points}</p>`
+            ? `<p style="color:var(--good)">✔ Trouvé en ${(state.you.ms / 1000).toFixed(1)}s — +${state.you.points}</p>`
             : `<form class="guess-form" data-form="guess">
-                 <input class="input" id="qz-guess" placeholder="TA RÉPONSE…" autocomplete="off" spellcheck="false">
-                 <button class="btn btn-pink" type="submit">OK</button>
+                 <input class="input" id="qz-guess" placeholder="Ta réponse…" autocomplete="off" spellcheck="false">
+                 <button class="btn btn-primary" type="submit">OK</button>
                </form>`}
-        ${boardHtml(state, u)}
-        <p class="c-dim tiny">${state.answeredCount}/${state.playerCount} ONT RÉPONDU</p>
+        ${board(state, u)}
+        <p class="fine">${state.answeredCount}/${state.playerCount} ont répondu</p>
       </div>`;
 
     u.tickTimer(root.querySelector('[data-timer]'), state.deadline, state.serverNow);
@@ -109,14 +112,14 @@ window.PZGames.quiz = (() => {
     lastPhase = state.phase;
   }
 
-  function boardHtml(state, u) {
-    if (!state.board || !state.board.length) return '<p class="c-dim tiny">PERSONNE N’A ENCORE TROUVÉ…</p>';
+  function board(state, u) {
+    if (!state.board || !state.board.length) return '<p class="fine">Personne n’a encore trouvé…</p>';
     return `<div class="scoreboard">${state.board
       .map(
         (b) => `<div class="sb-row">
-          <span class="sb-rank">${medal(b.rank)}</span><span></span>
+          <span class="sb-rank">${u.ordinal(b.rank - 1)}</span><span></span>
           <span class="sb-name">${u.esc(b.name)}</span>
-          <span class="sb-score">${(b.ms / 1000).toFixed(1)}s +${b.points}</span>
+          <span class="sb-score">${(b.ms / 1000).toFixed(1)}s · +${b.points}</span>
         </div>`
       )
       .join('')}</div>`;
@@ -150,7 +153,10 @@ window.PZGames.quiz = (() => {
     setTimeout(() => input.classList.remove('wrong', 'right'), 500);
   }
 
-  function leave() { lastPhase = null; }
+  function leave() {
+    lastPhase = null;
+    celebrated = false;
+  }
 
   return { render, feedback, leave };
 })();

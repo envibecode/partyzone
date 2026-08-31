@@ -29,7 +29,7 @@ async function makeGuest(name) {
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
   const cookie = raw.map((c) => c.split(';')[0]).join('; ');
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
-  const player = { name, socket, cookie, state: null, game: null, farm: null, profile: null, events: [] };
+  const player = { name, socket, cookie, state: null, game: null, vault: null, online: null, profile: null, events: [] };
 
   socket.on('room:state', ({ room, you, game }) => {
     player.state = room;
@@ -44,13 +44,16 @@ async function makeGuest(name) {
   socket.on('profile:update', (profile) => {
     player.profile = profile;
   });
-  socket.on('farm:state', (payload) => {
-    player.farm = payload.farm;
+  socket.on('vault:state', (payload) => {
+    player.vault = payload.vault;
     player.lastResult = payload.result;
     if (payload.me) player.profile = payload.me;
   });
+  socket.on('online:list', ({ online }) => {
+    player.online = online;
+  });
   socket.onAny((ev, payload) => {
-    if (!['room:state', 'farm:state'].includes(ev)) player.events.push([ev, payload]);
+    if (!['room:state', 'vault:state', 'online:list'].includes(ev)) player.events.push([ev, payload]);
   });
 
   await new Promise((resolve, reject) => {
@@ -179,70 +182,98 @@ async function testBlindtestChoice() {
   host.socket.close();
 }
 
-/* ══════════════ 3 — PIXEL FARM ══════════════ */
+/* ══════════════ 3 — MEMEVAULT ══════════════ */
 
-async function testFarm() {
-  section('PIXEL FARM');
-  const p = await makeGuest('Fermier');
+async function testVault() {
+  section('MEMEVAULT');
+  const p = await makeGuest('Collectionneur');
 
-  p.socket.emit('farm:open');
-  await until(() => p.farm, 5000, 'ferme ouverte');
-  check('6 parcelles au départ', p.farm.plots.length === 6, String(p.farm.plots.length));
-  check('pièces de départ', p.farm.coins === 40, String(p.farm.coins));
-  check('réservoir plein', p.farm.water === p.farm.waterMax);
-  check('graines avancées verrouillées', p.farm.seeds.find((s) => s.id === 'crystal').locked === true);
+  p.socket.emit('vault:open');
+  await until(() => p.vault, 5000, 'vault ouvert');
+  check('4 caisses proposées', p.vault.cases.length === 4, p.vault.cases.map((c) => c.name).join(', '));
+  check('60 memes au catalogue', p.vault.items.length === 60, String(p.vault.items.length));
+  check('chaque meme a un emoji distinct', new Set(p.vault.items.map((i) => i.emoji)).size === p.vault.items.length);
+  check('collection vide au départ', p.vault.collection.have === 0);
+  check('pièces de départ', p.vault.coins === 300, String(p.vault.coins));
+  check('la première caisse est offerte', p.vault.freeReady === true);
 
-  // planter
-  p.socket.emit('farm:action', { action: 'plant', payload: { plot: 0, seed: 'wheat' } });
-  await until(() => p.farm.plots[0].seed === 'wheat', 4000, 'blé planté');
-  check('blé planté', p.farm.plots[0].seed === 'wheat');
-  check('coût débité', p.farm.coins === 38, String(p.farm.coins));
+  const totalOdds = p.vault.cases[0].odds.reduce((a, o) => a + o.percent, 0);
+  check('les probabilités affichées font 100 %', Math.abs(totalOdds - 100) < 0.5, totalOdds.toFixed(2) + ' %');
+  const cursedOdds = p.vault.cases.map((c) => c.odds.find((o) => o.rarity === 'cursed').percent);
+  check('le Maudit est plus probable dans la caisse maudite', cursedOdds[3] > cursedOdds[0] * 10, cursedOdds.join(' / '));
 
-  // planter sur une parcelle occupée doit échouer
-  p.socket.emit('farm:action', { action: 'plant', payload: { plot: 0, seed: 'wheat' } });
-  await wait(400);
-  check('parcelle occupée refusée', p.lastResult && p.lastResult.ok === false, p.lastResult && p.lastResult.message);
+  // première ouverture : gratuite
+  p.socket.emit('vault:pull', { caseId: 'starter', count: 1 });
+  await until(() => p.lastResult && p.lastResult.pulls, 5000, 'premier tirage');
+  check('un tirage retourne un item', p.lastResult.pulls.length === 1, p.lastResult.pulls[0].name);
+  check('la caisse offerte ne coûte rien', p.lastResult.free === true && p.lastResult.spent === 0);
+  check('l’item est ajouté à la collection', p.vault.collection.have === 1);
+  await until(() => p.profile.xp > 0, 4000, 'XP créditée');
+  check('le tirage rapporte de l’XP', p.profile.xp > 0, p.profile.xp + ' XP');
 
-  // récolter trop tôt doit échouer
-  p.socket.emit('farm:action', { action: 'harvest', payload: { plot: 0 } });
-  await wait(400);
-  check('récolte prématurée refusée', p.lastResult.ok === false, p.lastResult.message);
+  // ouvertures payantes : le combo doit grimper
+  const coinsBefore = p.vault.coins;
+  p.socket.emit('vault:pull', { caseId: 'starter', count: 5 });
+  await until(() => p.lastResult && p.lastResult.pulls && p.lastResult.pulls.length === 5, 5000, 'tirage x5');
+  check('ouverture par 5', p.lastResult.pulls.length === 5);
+  check('le coût est débité', p.vault.coins < coinsBefore + p.lastResult.dust, `${coinsBefore} → ${p.vault.coins}`);
+  check('le combo grimpe avec les ouvertures', p.vault.combo >= 6, 'combo ' + p.vault.combo);
+  check('le multiplicateur suit le combo', p.vault.comboMult > 1, '×' + p.vault.comboMult);
 
-  // arroser jusqu'à maturité (chaque clic avance de 4 s, il faut ~30 s)
-  const waterBefore = p.farm.water;
-  for (let i = 0; i < 9; i++) {
-    p.socket.emit('farm:action', { action: 'water', payload: { plot: 0 } });
-    await wait(120);
+  const rarities = new Set(p.lastResult.pulls.map((x) => x.r));
+  check('les raretés tirées sont valides', [...rarities].every((r) =>
+    ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'].includes(r)), [...rarities].join(', '));
+
+  // caisse trop chère
+  p.socket.emit('vault:pull', { caseId: 'cursed', count: 5 });
+  await until(() => p.lastResult && p.lastResult.ok === false, 4000, 'refus');
+  check('caisse trop chère refusée', /manque/.test(p.lastResult.message), p.lastResult.message);
+
+  // caisse inconnue
+  p.socket.emit('vault:pull', { caseId: 'triche', count: 1 });
+  await until(() => p.lastResult && /inconnue/.test(p.lastResult.message || ''), 4000, 'caisse inconnue');
+  check('caisse inconnue rejetée', true);
+
+  // revente des doublons
+  const before = p.vault.coins;
+  p.socket.emit('vault:sell');
+  await until(() => p.lastResult && p.lastResult.message && /doublon/.test(p.lastResult.message), 4000, 'revente');
+  if (p.lastResult.ok) {
+    check('les doublons rapportent des pièces', p.vault.coins > before, `${before} → ${p.vault.coins}`);
+    check('plus aucun doublon après revente', p.vault.duplicates === 0);
+  } else {
+    check('revente sans doublon correctement refusée', /Aucun doublon/.test(p.lastResult.message));
   }
-  check('l’eau est consommée par les clics', p.farm.water < waterBefore, `${waterBefore} → ${p.farm.water}`);
-  await until(() => p.farm.plots[0].progress >= 1, 6000, 'blé mûr');
-  check('l’arrosage accélère la pousse', p.farm.plots[0].progress >= 1);
-
-  const coinsBefore = p.farm.coins;
-  const xpBefore = p.profile.xp;
-  p.socket.emit('farm:action', { action: 'harvest', payload: { plot: 0 } });
-  await until(() => p.farm.coins > coinsBefore, 4000, 'récolte');
-  check('récolte créditée en pièces', p.farm.coins === coinsBefore + 8, String(p.farm.coins));
-  await until(() => p.profile.xp > xpBefore, 4000, 'XP de récolte');
-  check('récolte créditée en XP', p.profile.xp === xpBefore + 4, `${xpBefore} → ${p.profile.xp}`);
-  check('compteur de récoltes', p.farm.harvested === 1);
-
-  // améliorations : refusée sans pièces, acceptée avec
-  p.socket.emit('farm:action', { action: 'upgrade', payload: { id: 'can' } });
-  await wait(400);
-  check('amélioration refusée sans pièces', p.lastResult.ok === false, p.lastResult.message);
-
-  // parcelle supplémentaire hors budget
-  p.socket.emit('farm:action', { action: 'buy-plot', payload: {} });
-  await wait(400);
-  check('parcelle refusée sans pièces', p.lastResult.ok === false);
-
-  // action inconnue
-  p.socket.emit('farm:action', { action: 'triche', payload: {} });
-  await wait(400);
-  check('action inconnue rejetée', p.lastResult.ok === false);
 
   p.socket.close();
+}
+
+/* ══════════════ 3bis — Présence ══════════════ */
+
+async function testPresence() {
+  section('Joueurs en ligne');
+  const a = await makeGuest('Ariane');
+  await until(() => a.online, 5000, 'liste reçue');
+  check('la liste des joueurs en ligne arrive', Array.isArray(a.online));
+  check('je me vois dedans', a.online.some((o) => o.id === a.me));
+
+  const b = await makeGuest('Basile');
+  await until(() => a.online.some((o) => o.name === 'Basile'), 5000, 'nouvel arrivant');
+  check('un nouvel arrivant apparaît chez les autres', true);
+
+  b.socket.emit('room:create');
+  await until(() => a.online.some((o) => o.name === 'Basile' && o.status === 'room'), 6000, 'statut salon');
+  check('le statut passe à « salon » quand on crée un salon', true);
+
+  b.socket.emit('vault:open');
+  await until(() => a.online.some((o) => o.name === 'Basile' && o.status === 'vault'), 6000, 'statut vault');
+  check('le statut passe à « MemeVault »', true);
+
+  b.socket.close();
+  await until(() => !a.online.some((o) => o.name === 'Basile'), 6000, 'départ');
+  check('le joueur disparaît quand il se déconnecte', true);
+
+  a.socket.close();
 }
 
 /* ══════════════ 4 — Classement ══════════════ */
@@ -348,7 +379,8 @@ function testChoiceGeneration() {
     testChoiceGeneration();
     await testQuizChoice();
     await testBlindtestChoice();
-    await testFarm();
+    await testVault();
+    await testPresence();
     await testUndercover();
     await testLeaderboard();
   } catch (err) {

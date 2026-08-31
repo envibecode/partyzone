@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Persistance des profils joueurs (XP, niveau, statistiques, ferme).
+ * Persistance des profils joueurs : pièces, XP, statistiques de jeu,
+ * collection de caisses, mine, et graines d'équité vérifiable.
  *
  * Deux back-ends, choisis automatiquement :
  *   • DATABASE_URL défini  → PostgreSQL (les données survivent aux redéploiements)
@@ -13,6 +14,8 @@
 const fs = require('fs');
 const path = require('path');
 const { blankVault } = require('./vault');
+const { blankClicker } = require('./clicker');
+const fairness = require('./fair');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'profiles.json');
@@ -65,15 +68,15 @@ function blankProfile(user, now = Date.now()) {
     provider: user.provider || 'guest',
     xp: 0,
     stats: {
-      games: 0,
-      blindtest: 0,
-      quiz: 0,
-      undercover: 0,
-      wins: 0,
-      bestScore: 0,
-      correct: 0,
+      wagered: 0, // total misé, tous jeux confondus
+      returned: 0, // total récupéré
+      rounds: 0, // nombre de manches jouées
+      biggestWin: 0,
+      cases: 0,
     },
     vault: blankVault(now),
+    clicker: blankClicker(now),
+    fair: fairness.blankFair(),
     admin: false,
     banned: false,
     banReason: '',
@@ -91,12 +94,11 @@ function migrate(profile, now = Date.now()) {
     ...profile,
     stats: { ...fresh.stats, ...(profile.stats || {}) },
     vault: { ...fresh.vault, ...(profile.vault || {}) },
+    clicker: { ...fresh.clicker, ...(profile.clicker || {}) },
+    fair: profile.fair && profile.fair.serverSeed ? profile.fair : fresh.fair,
   };
   merged.vault.items = { ...(merged.vault.items || {}) };
-  // Les profils créés à l'époque de la ferme gardent leurs pièces.
-  if (profile.farm && typeof profile.farm.coins === 'number' && !profile.vault) {
-    merged.vault.coins = Math.max(merged.vault.coins, profile.farm.coins);
-  }
+  merged.clicker.upgrades = { ...fresh.clicker.upgrades, ...(merged.clicker.upgrades || {}) };
   delete merged.farm;
   return merged;
 }
@@ -268,18 +270,40 @@ function publicProfile(profile) {
     stats: profile.stats,
     coins: profile.vault.coins,
     collected: Object.values(profile.vault.items || {}).filter((n) => n > 0).length,
+    fair: fairness.publicFair(profile.fair),
   };
 }
 
-/** Classement général, du plus haut XP au plus bas. */
-async function leaderboard(limit = 20) {
+/**
+ * Classement général. Deux lectures possibles :
+ *   • « fortune » — qui a le plus de pièces, la mesure d'un casino ;
+ *   • « niveau »  — qui a le plus joué, indépendamment de la chance.
+ */
+async function leaderboard(limit = 20, sort = 'coins') {
   await backend.ready();
   const all = await backend.all();
+  const key = sort === 'xp' ? (p) => p.xp : (p) => p.vault.coins;
   return all
-    .filter((p) => p.xp > 0)
-    .sort((a, b) => b.xp - a.xp || a.createdAt - b.createdAt)
+    .filter((p) => key(p) > 0 && !p.banned)
+    .sort((a, b) => key(b) - key(a) || a.createdAt - b.createdAt)
     .slice(0, limit)
     .map((p, i) => ({ rank: i + 1, ...publicProfile(p) }));
+}
+
+/**
+ * Enregistre une manche jouée : mise, retour, et l'XP qui va avec.
+ * L'XP progresse avec le volume joué, pas avec la chance — c'est ce qui
+ * rend le classement « niveau » lisible.
+ */
+function recordPlay(profile, staked, returned) {
+  const s = profile.stats;
+  s.wagered += staked;
+  s.returned += returned;
+  s.rounds += 1;
+  s.biggestWin = Math.max(s.biggestWin, returned);
+  const xp = Math.max(1, Math.floor(staked / 20));
+  grantXp(profile, xp);
+  return xp;
 }
 
 /** Ajoute de l'XP et signale un éventuel passage de niveau. */
@@ -317,6 +341,7 @@ module.exports = {
   publicProfile,
   leaderboard,
   grantXp,
+  recordPlay,
   allProfiles,
   findProfile,
   deleteProfile,

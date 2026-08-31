@@ -21,5 +21,7 @@ services:
         sync: false
       - key: DISCORD_CLIENT_SECRET
         sync: false
-      - key: YOUTUBE_API_KEY
+      # Clé secrète pour réclamer les droits d'administrateur sur le site,
+      # en allant sur https://<ton-service>.onrender.com/#admin
+      - key: ADMIN_KEY
         sync: false

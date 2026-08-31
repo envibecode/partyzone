@@ -9,9 +9,11 @@
 const store = require('./store');
 
 const STATUS_LABEL = {
-  home: 'En ligne',
-  room: 'Dans un salon',
-  game: 'En partie',
+  home: 'Dans le hall',
+  mine: 'À la mine',
+  plinko: 'Au Plinko',
+  roulette: 'À la roulette',
+  blackjack: 'Au blackjack',
   vault: 'Au MemeVault',
   admin: 'Au panel admin',
 };
@@ -61,6 +63,7 @@ class Presence {
           provider: e.user.provider,
           level: lvl.level,
           title: store.rankTitle(lvl.level),
+          coins: (e.profile.vault && e.profile.vault.coins) || 0,
           status: e.status,
           statusLabel: STATUS_LABEL[e.status] || 'En ligne',
           since: e.since,

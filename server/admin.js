@@ -16,7 +16,7 @@
  * sur le fait que le bouton soit affiché ou non dans le navigateur.
  */
 const store = require('./store');
-const { rooms, closeRoom } = require('./room');
+const blackjack = require('./blackjack');
 const { MEMES } = require('./data/memes');
 
 const MAX_LOG = 60;
@@ -75,7 +75,10 @@ async function snapshot(presence) {
 
   const totalXp = profiles.reduce((sum, p) => sum + (p.xp || 0), 0);
   const totalOpened = profiles.reduce((sum, p) => sum + ((p.vault && p.vault.opened) || 0), 0);
-  const totalGames = profiles.reduce((sum, p) => sum + ((p.stats && p.stats.games) || 0), 0);
+  const totalCoins = profiles.reduce((sum, p) => sum + ((p.vault && p.vault.coins) || 0), 0);
+  const wagered = profiles.reduce((sum, p) => sum + ((p.stats && p.stats.wagered) || 0), 0);
+  const returned = profiles.reduce((sum, p) => sum + ((p.stats && p.stats.returned) || 0), 0);
+  const rounds = profiles.reduce((sum, p) => sum + ((p.stats && p.stats.rounds) || 0), 0);
   const banned = profiles.filter((p) => p.banned).length;
   const admins = profiles.filter((p) => isAdmin(p)).length;
 
@@ -83,10 +86,15 @@ async function snapshot(presence) {
     stats: {
       players: profiles.length,
       online: online.length,
-      rooms: rooms.size,
+      tables: blackjack.tables.size,
       totalXp,
-      totalGames,
+      totalCoins,
       totalOpened,
+      rounds,
+      wagered,
+      returned,
+      // Taux de redistribution réellement observé sur tout le site.
+      realRtp: wagered > 0 ? Math.round((returned / wagered) * 10000) / 100 : null,
       banned,
       admins,
       uptime: Math.round(process.uptime()),
@@ -95,17 +103,16 @@ async function snapshot(presence) {
       discord: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
       adminKey: adminKeyConfigured(),
     },
-    rooms: [...rooms.values()].map((room) => {
-      const host = room.players.get(room.hostId);
+    tables: [...blackjack.tables.values()].map((table) => {
+      const host = table.seats.find((s) => s.id === table.hostId);
       return {
-        code: room.code,
+        code: table.code,
         host: host ? host.name : '—',
-        players: room.playerList().length,
-        connected: room.connectedPlayers().length,
-        game: room.gameKey,
-        phase: room.game ? room.game.phase : null,
-        hasPlaylist: Boolean(room.playlist && room.playlist.tracks.length),
-        createdAt: room.createdAt,
+        seated: table.seats.length,
+        humans: table.seats.filter((s) => !s.isBot).length,
+        bots: table.seats.filter((s) => s.isBot).length,
+        phase: table.phase,
+        hand: table.hand,
       };
     }),
     online,
@@ -149,8 +156,10 @@ async function players({ query = '', sort = 'xp', limit = 40 } = {}) {
           opened: p.vault.opened,
           collected,
           collectionTotal: MEMES.length,
-          games: p.stats.games,
-          wins: p.stats.wins,
+          rounds: p.stats.rounds || 0,
+          wagered: p.stats.wagered || 0,
+          returned: p.stats.returned || 0,
+          biggestWin: p.stats.biggestWin || 0,
           admin: isAdmin(p),
           envAdmin: envAdminIds().includes(p.id),
           banned: Boolean(p.banned),
@@ -245,8 +254,9 @@ async function act(actor, action, payload = {}, ctx = {}) {
         return { ok: false, message: 'On ne réinitialise pas un autre administrateur.' };
       }
       target.xp = 0;
-      target.stats = { games: 0, blindtest: 0, quiz: 0, undercover: 0, wins: 0, bestScore: 0, correct: 0 };
+      target.stats = { wagered: 0, returned: 0, rounds: 0, biggestWin: 0, cases: 0 };
       target.vault = require('./vault').blankVault();
+      target.clicker = require('./clicker').blankClicker();
       await store.saveProfile(target);
       record(actor, 'réinitialisation', target.name);
       pushProfile(io, presence, target);
@@ -262,12 +272,14 @@ async function act(actor, action, payload = {}, ctx = {}) {
       return { ok: true, message: `Profil de ${target.name} supprimé.` };
     }
 
-    case 'close-room': {
+    case 'close-table': {
       const code = String(payload.code || '').toUpperCase();
-      const done = closeRoom(code);
-      if (!done) return { ok: false, message: 'Salon introuvable.' };
-      record(actor, 'salon fermé', code);
-      return { ok: true, message: `Salon ${code} fermé.` };
+      const table = blackjack.getTable(code);
+      if (!table) return { ok: false, message: 'Table introuvable.' };
+      if (io) io.to('bj:' + code).emit('toast', { message: 'Cette table a été fermée par un administrateur.', kind: 'warn' });
+      blackjack.closeTable(code);
+      record(actor, 'table fermée', code);
+      return { ok: true, message: `Table ${code} fermée.` };
     }
 
     case 'announce': {

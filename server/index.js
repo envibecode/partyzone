@@ -9,19 +9,14 @@ const { Server } = require('socket.io');
 
 const auth = require('./auth');
 const store = require('./store');
+const fairness = require('./fair');
 const vault = require('./vault');
+const clicker = require('./clicker');
+const plinko = require('./plinko');
+const blackjack = require('./blackjack');
+const { Roulette } = require('./roulette');
 const { Presence } = require('./presence');
 const admin = require('./admin');
-const difficulty = require('./difficulty');
-const { createRoom, getRoom, startJanitor } = require('./room');
-const yt = require('./youtube');
-const { CATEGORIES } = require('./data/questions');
-
-const BlindTest = require('./games/blindtest');
-const Quiz = require('./games/quiz');
-const Undercover = require('./games/undercover');
-
-const GAMES = { blindtest: BlindTest, quiz: Quiz, undercover: Undercover };
 
 const app = express();
 const server = http.createServer(app);
@@ -35,19 +30,15 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', ext
 
 auth.register(app);
 
-app.get('/api/categories', (req, res) => res.json({ categories: CATEGORIES }));
+/* ─── API ──────────────────────────────────────────────── */
 
 app.get('/api/admin-config', (req, res) => res.json({ keyConfigured: admin.adminKeyConfigured() }));
 
-app.get('/api/difficulties', (req, res) =>
-  res.json({ blindtest: difficulty.list('blindtest'), quiz: difficulty.list('quiz') })
-);
-
-/** Classement général — c'est ce qui s'affiche sur la page d'accueil. */
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const limit = Math.min(50, Math.max(3, Number(req.query.limit) || 15));
-    res.json({ leaderboard: await store.leaderboard(limit) });
+    const limit = Math.min(50, Math.max(3, Number(req.query.limit) || 12));
+    const sort = req.query.sort === 'xp' ? 'xp' : 'coins';
+    res.json({ leaderboard: await store.leaderboard(limit, sort), sort });
   } catch (err) {
     console.error('[leaderboard]', err.message);
     res.status(500).json({ leaderboard: [] });
@@ -55,6 +46,21 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 app.get('/healthz', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
+
+/* ─── Roulette partagée ────────────────────────────────── */
+
+const roulette = new Roulette(io, store);
+
+/** Pousse un profil mis à jour vers toutes les sessions du joueur. */
+function pushProfile(profile) {
+  const entry = presence.users.get(profile.id);
+  if (!entry) return;
+  entry.profile = profile;
+  for (const socketId of entry.sockets) {
+    io.to(socketId).emit('profile:update', store.publicProfile(profile));
+  }
+}
+roulette.onProfile = pushProfile;
 
 /* ─── Socket.IO ────────────────────────────────────────── */
 
@@ -64,10 +70,6 @@ io.use((socket, next) => {
   socket.data.user = user;
   next();
 });
-
-function currentRoom(socket) {
-  return socket.data.roomCode ? getRoom(socket.data.roomCode) : null;
-}
 
 io.on('connection', async (socket) => {
   const user = socket.data.user;
@@ -80,6 +82,7 @@ io.on('connection', async (socket) => {
     socket.emit('toast', { message: 'Progression indisponible pour le moment.', kind: 'error' });
     return;
   }
+
   if (profile.banned) {
     socket.emit('kicked', { reason: profile.banReason || 'Ce compte est banni.' });
     return socket.disconnect(true);
@@ -88,171 +91,195 @@ io.on('connection', async (socket) => {
   socket.data.profile = profile;
   presence.join(socket, user, profile);
 
-  /** Renvoie au joueur son profil à jour (niveau, XP, pièces). */
   const sendMe = () => socket.emit('me', { user, profile: store.publicProfile(profile) });
+  const save = () => store.saveProfile(profile).catch((e) => console.error('[store]', e.message));
+
   sendMe();
+  socket.emit('online:list', { online: presence.list() });
 
-  /* ── Salons ────────────────────────────────────────── */
+  /** Écriture différée : utile pour les rafales de clics. */
+  let saveTimer = null;
+  const saveSoon = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 900);
+  };
 
-  function joinRoom(room) {
-    socket.join('room:' + room.code);
-    socket.data.roomCode = room.code;
-    room.addPlayer(user, socket.id, profile);
-    presence.setStatus(user.id, 'room');
-    socket.emit('room:joined', { code: room.code, chat: room.chat });
-    room.pushChat({ system: true, text: `${user.name} a rejoint le salon.` });
-    room.broadcast();
+  /* ══════════ LA MINE ══════════ */
+
+  socket.on('mine:open', async () => {
+    presence.setStatus(user.id, 'mine');
+    const idle = clicker.collect(profile);
+    if (idle.coins > 0) await save();
+    socket.emit('mine:state', { mine: clicker.view(profile), me: store.publicProfile(profile), idle });
+  });
+
+  socket.on('mine:click', ({ count } = {}) => {
+    const result = clicker.click(profile, count);
+    saveSoon();
+    socket.emit('mine:hit', result);
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('mine:buy', async ({ id } = {}) => {
+    clicker.collect(profile);
+    const result = clicker.buy(profile, id);
+    if (result.ok) await save();
+    socket.emit('mine:state', { mine: clicker.view(profile), me: store.publicProfile(profile), result });
+    if (result.ok) socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /* ══════════ PLINKO ══════════ */
+
+  socket.on('plinko:open', () => {
+    presence.setStatus(user.id, 'plinko');
+    socket.emit('plinko:state', { config: plinko.view(), me: store.publicProfile(profile) });
+  });
+
+  socket.on('plinko:play', async (payload = {}) => {
+    const result = plinko.play(profile, payload);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.recordPlay(profile, result.staked, result.payout);
+    await save();
+
+    socket.emit('plinko:result', { ...result, me: store.publicProfile(profile) });
+    socket.emit('profile:update', store.publicProfile(profile));
+
+    const best = result.drops.reduce((m, d) => Math.max(m, d.multiplier), 0);
+    if (best >= 50) {
+      io.emit('feed', {
+        name: user.name,
+        avatar: user.avatar,
+        game: 'Plinko',
+        text: `×${best}`,
+        amount: result.payout,
+      });
+    }
+  });
+
+  /* ══════════ ROULETTE ══════════ */
+
+  socket.on('roulette:join', () => {
+    presence.setStatus(user.id, 'roulette');
+    socket.join(roulette.room);
+    socket.emit('roulette:state', roulette.publicState(user.id));
+  });
+
+  socket.on('roulette:leave', () => socket.leave(roulette.room));
+
+  socket.on('roulette:bet', async (payload = {}) => {
+    const result = await roulette.place(profile, payload);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('roulette:clear', async () => {
+    const result = await roulette.clear(profile);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /* ══════════ BLACKJACK ══════════ */
+
+  function currentTable() {
+    return socket.data.tableCode ? blackjack.getTable(socket.data.tableCode) : null;
   }
 
-  function leaveRoom() {
-    const room = currentRoom(socket);
-    if (!room) return;
-    socket.leave('room:' + room.code);
-    socket.data.roomCode = null;
+  function joinTable(table) {
+    const seat = table.addPlayer(user, profile, socket.id);
+    if (!seat) {
+      socket.emit('toast', { message: 'La table est pleine (5 sièges).', kind: 'error' });
+      return false;
+    }
+    socket.join('bj:' + table.code);
+    socket.data.tableCode = table.code;
+    table.profiles.set(user.id, profile);
+    presence.setStatus(user.id, 'blackjack');
+    table.say('Croupier', `${user.name} rejoint la table.`);
+    socket.emit('bj:joined', { code: table.code });
+    table.broadcast();
+    return true;
+  }
+
+  function leaveTable() {
+    const table = currentTable();
+    if (!table) return;
+    socket.leave('bj:' + table.code);
+    socket.data.tableCode = null;
+    table.profiles.delete(user.id);
+    table.removePlayer(user.id);
+    table.say('Croupier', `${user.name} quitte la table.`);
     presence.setStatus(user.id, 'home');
-    room.removePlayer(user.id);
-    room.pushChat({ system: true, text: `${user.name} a quitté le salon.` });
-    room.broadcast();
+    table.broadcast();
   }
 
-  socket.on('room:create', () => {
-    leaveRoom();
-    const room = createRoom(io);
-    room.hostId = user.id;
-    joinRoom(room);
+  socket.on('bj:create', () => {
+    leaveTable();
+    const table = blackjack.createTable(io, store);
+    table.hostId = user.id;
+    table.onProfile = pushProfile;
+    table.onSettle = async (t) => {
+      for (const seat of t.seats) {
+        if (seat.isBot || !seat.lastResult) continue;
+        const p = t.profiles.get(seat.id);
+        if (!p) continue;
+        store.recordPlay(p, seat.lastResult.staked, seat.lastResult.payout);
+        await store.saveProfile(p).catch(() => {});
+        pushProfile(p);
+      }
+    };
+    joinTable(table);
   });
 
-  socket.on('room:join', ({ code } = {}) => {
-    const room = getRoom(code);
-    if (!room) return socket.emit('toast', { message: 'Salon introuvable. Vérifie le code.', kind: 'error' });
-    if (room.players.size >= 24 && !room.players.has(user.id)) {
-      return socket.emit('toast', { message: 'Ce salon est complet (24 joueurs max).', kind: 'error' });
+  socket.on('bj:join', ({ code } = {}) => {
+    const table = blackjack.getTable(code);
+    if (!table) return socket.emit('toast', { message: 'Table introuvable. Vérifie le code.', kind: 'error' });
+    leaveTable();
+    joinTable(table);
+  });
+
+  socket.on('bj:leave', () => leaveTable());
+
+  socket.on('bj:bet', async ({ amount } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    const result = await table.setBet(profile, amount);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('bj:move', async ({ move } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    const result = table.act(user.id, move);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('bj:bot', ({ action } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    if (table.hostId !== user.id) {
+      return socket.emit('toast', { message: 'Seul l’hôte de la table gère les bots.', kind: 'error' });
     }
-    leaveRoom();
-    joinRoom(room);
+    const result = action === 'remove' ? table.removeBot() : table.addBot();
+    socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
   });
 
-  socket.on('room:leave', () => leaveRoom());
-
-  socket.on('chat:send', ({ text } = {}) => {
-    const room = currentRoom(socket);
-    if (!room) return;
-    const clean = String(text || '').trim().slice(0, 300);
+  socket.on('bj:say', ({ text } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    const clean = String(text || '').trim().slice(0, 160);
     if (!clean) return;
-    room.pushChat({ id: user.id, name: user.name, avatar: user.avatar, text: clean });
-    // En mode saisie, le chat sert aussi de zone de réponse.
-    if (room.game && room.game.answerMode === 'type') {
-      room.game.handle(user.id, 'guess', { text: clean });
-    }
+    table.say(user.name, clean);
+    table.broadcast();
   });
 
-  socket.on('settings:update', ({ game, patch } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-    if (!room.settings[game]) return;
-    Object.assign(room.settings[game], patch || {});
-    room.broadcast();
-  });
-
-  /* ── Import de playlist YouTube ────────────────────── */
-
-  function setPlaylist(room, tracks, source) {
-    room.playlist = { tracks, source, importedAt: Date.now() };
-    room.settings.blindtest.playlistUrl = source || '';
-    room.emit('blindtest:playlist', {
-      count: tracks.length,
-      sample: tracks.slice(0, 6).map((t) => ({ title: t.title, artist: t.artist, thumbnail: t.thumbnail })),
-    });
-    room.toast(`Playlist importée : ${tracks.length} titres prêts.`, 'success');
-    room.broadcast();
-  }
-
-  socket.on('blindtest:import', async ({ url } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-
-    const playlistId = yt.parsePlaylistId(url);
-    const videoId = yt.parseVideoId(url);
-    if (!playlistId && !videoId) {
-      return socket.emit('toast', { message: 'Lien YouTube non reconnu. Colle l’URL d’une playlist.', kind: 'error' });
-    }
-
-    socket.emit('blindtest:importing', { playlistId });
-
-    if (playlistId && process.env.YOUTUBE_API_KEY) {
-      try {
-        const tracks = await yt.fetchPlaylistWithApi(playlistId);
-        if (tracks && tracks.length) return setPlaylist(room, tracks, url);
-      } catch (err) {
-        console.warn('[youtube] API indisponible, repli navigateur :', err.message);
-      }
-    }
-
-    if (!playlistId && videoId) {
-      const tracks = await yt.buildTracksFromIds([videoId]);
-      if (tracks.length) return setPlaylist(room, tracks, url);
-      return socket.emit('toast', { message: 'Vidéo inaccessible.', kind: 'error' });
-    }
-
-    socket.emit('blindtest:extract', { playlistId });
-  });
-
-  socket.on('blindtest:videoIds', async ({ ids, source } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-    const list = (Array.isArray(ids) ? ids : []).filter((s) => /^[A-Za-z0-9_-]{11}$/.test(s));
-    if (!list.length) return socket.emit('toast', { message: 'Playlist vide ou privée.', kind: 'error' });
-    try {
-      const tracks = await yt.buildTracksFromIds(list);
-      if (!tracks.length) throw new Error('aucune piste');
-      setPlaylist(room, tracks, source);
-    } catch (err) {
-      socket.emit('toast', { message: 'Impossible de lire les titres de la playlist.', kind: 'error' });
-    }
-  });
-
-  /* ── Lancement / arrêt d'un jeu ────────────────────── */
-
-  /** Tout le salon bascule en « En partie » (ou revient au salon). */
-  function markRoomStatus(room, status) {
-    for (const p of room.connectedPlayers()) presence.setStatus(p.id, status);
-  }
-
-  socket.on('game:start', ({ key } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-    const GameClass = GAMES[key];
-    if (!GameClass) return;
-
-    if (key === 'blindtest') {
-      if (!room.playlist || !room.playlist.tracks.length) {
-        return socket.emit('toast', { message: 'Importe d’abord une playlist YouTube.', kind: 'error' });
-      }
-      room.startGame(GameClass, key, { ...room.settings.blindtest, tracks: room.playlist.tracks });
-      return markRoomStatus(room, 'game');
-    }
-    if (key === 'undercover' && room.connectedPlayers().length < 3) {
-      return socket.emit('toast', { message: 'Undercover demande au moins 3 joueurs.', kind: 'error' });
-    }
-    room.startGame(GameClass, key, room.settings[key]);
-    markRoomStatus(room, 'game');
-  });
-
-  socket.on('game:stop', () => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-    room.stopGame();
-    markRoomStatus(room, 'room');
-    room.toast('Partie terminée par l’hôte.', 'info');
-  });
-
-  socket.on('game:action', ({ action, payload } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.game) return;
-    room.game.handle(user.id, action, payload || {});
-  });
-
-  /* ── MEMEVAULT ─────────────────────────────────────── */
+  /* ══════════ MEMEVAULT ══════════ */
 
   function vaultPayload(extra = {}) {
     return { vault: vault.view(profile), me: store.publicProfile(profile), ...extra };
@@ -265,39 +292,54 @@ io.on('connection', async (socket) => {
 
   socket.on('vault:pull', async ({ caseId, count } = {}) => {
     const result = vault.open(profile, caseId, count);
-    if (!result.ok) {
-      return socket.emit('vault:state', vaultPayload({ result }));
-    }
+    if (!result.ok) return socket.emit('vault:state', vaultPayload({ result }));
+
     store.grantXp(profile, result.xp);
-    await store.saveProfile(profile);
+    profile.stats.cases += result.pulls.length;
+    await save();
+
     socket.emit('vault:state', vaultPayload({ result }));
     socket.emit('profile:update', store.publicProfile(profile));
 
-    // Un tirage exceptionnel, ça se partage : tout le site le voit passer.
-    const showcase = result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r));
-    for (const pull of showcase) {
-      io.emit('vault:showcase', {
+    for (const pull of result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r))) {
+      io.emit('feed', {
         name: user.name,
         avatar: user.avatar,
-        item: { emoji: pull.emoji, name: pull.name, rarity: pull.rarity, color: pull.color },
+        game: 'MemeVault',
+        text: `${pull.emoji} ${pull.name}`,
+        rarity: pull.rarity,
+        color: pull.color,
       });
     }
   });
 
   socket.on('vault:sell', async () => {
     const result = vault.sellDuplicates(profile);
-    if (result.ok) await store.saveProfile(profile);
+    if (result.ok) await save();
     socket.emit('vault:state', vaultPayload({ result }));
     if (result.ok) socket.emit('profile:update', store.publicProfile(profile));
   });
 
-  /* ── Administration ────────────────────────────────── */
+  /* ══════════ ÉQUITÉ VÉRIFIABLE ══════════ */
 
-  /** Toute action admin repasse par ce garde-fou, jamais par l'interface. */
+  socket.on('fair:rotate', async ({ clientSeed } = {}) => {
+    fairness.rotate(profile.fair, clientSeed);
+    await save();
+    sendMe();
+    socket.emit('toast', { message: 'Nouvelle graine. L’ancienne est révélée, tu peux tout vérifier.', kind: 'success' });
+  });
+
+  /* ══════════ ADMINISTRATION ══════════ */
+
   function requireAdmin() {
     if (admin.isAdmin(profile)) return true;
     socket.emit('toast', { message: 'Réservé aux administrateurs.', kind: 'error' });
     return false;
+  }
+
+  async function adminState(query = {}) {
+    const [snap, list] = await Promise.all([admin.snapshot(presence), admin.players(query)]);
+    return { ...snap, ...list, query };
   }
 
   socket.on('admin:claim', async ({ key } = {}) => {
@@ -308,11 +350,6 @@ io.on('connection', async (socket) => {
       socket.emit('admin:state', await adminState());
     }
   });
-
-  async function adminState(query = {}) {
-    const [snap, list] = await Promise.all([admin.snapshot(presence), admin.players(query)]);
-    return { ...snap, ...list, query };
-  }
 
   socket.on('admin:open', async (query = {}) => {
     if (!requireAdmin()) return;
@@ -332,40 +369,40 @@ io.on('connection', async (socket) => {
     socket.emit('admin:state', { ...(await adminState(query || {})), result });
   });
 
-  /* ── Divers ────────────────────────────────────────── */
+  /* ══════════ DIVERS ══════════ */
 
   socket.on('me:refresh', () => sendMe());
+
   socket.on('presence:status', ({ status } = {}) => {
-    if (['home', 'room', 'game', 'vault', 'admin'].includes(status)) presence.setStatus(user.id, status);
+    if (['home', 'mine', 'plinko', 'roulette', 'blackjack', 'vault', 'admin'].includes(status)) {
+      presence.setStatus(user.id, status);
+    }
   });
-  socket.emit('online:list', { online: presence.list() });
 
   socket.on('disconnect', () => {
-    clearTimeout(socket.data.saveTimer);
+    clearTimeout(saveTimer);
+    leaveTable();
     presence.leave(socket, user.id);
-    store.saveProfile(profile).catch(() => {});
-    const room = currentRoom(socket);
-    if (!room) return;
-    room.removePlayer(user.id);
-    room.broadcast();
+    clicker.collect(profile);
+    save();
   });
 });
 
-startJanitor();
+blackjack.startJanitor();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`\n  🎉 PartyZone démarré sur http://localhost:${PORT}`);
+  console.log(`\n  🎰 PartyZone démarré sur http://localhost:${PORT}`);
   console.log(`  Discord OAuth : ${auth.discordConfigured() ? 'activé' : 'non configuré (mode invité seulement)'}`);
-  console.log(`  YouTube API   : ${process.env.YOUTUBE_API_KEY ? 'clé détectée' : 'import via navigateur'}`);
-  console.log(`  Progression   : ${process.env.DATABASE_URL ? 'PostgreSQL' : 'fichier data/profiles.json'}\n`);
+  console.log(`  Progression   : ${process.env.DATABASE_URL ? 'PostgreSQL' : 'fichier data/profiles.json'}`);
+  console.log(`  Panel admin   : ${admin.adminKeyConfigured() ? 'clé configurée' : 'ADMIN_KEY absente'}\n`);
 });
 
-/* Arrêt propre : on vide le tampon d'écriture avant de mourir. */
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, async () => {
     console.log('\n[serveur] arrêt en cours…');
     try {
+      roulette.stop();
       await store.close();
     } catch {}
     process.exit(0);

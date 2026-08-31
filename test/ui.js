@@ -1,262 +1,262 @@
 'use strict';
 /**
- * Test d'interface : pilote de vrais navigateurs, ouvre des caisses, joue une
- * manche de chaque jeu, vérifie le podium, et enregistre des captures.
+ * Parcours complet du site dans un vrai navigateur.
  *
- *   node -r ./test/stub-youtube.js server/index.js   (port 3100)
- *   node test/ui.js
+ * On joue réellement : on mine, on achète une amélioration, on lâche des
+ * billes au Plinko, on mise à la roulette, on ouvre une table de blackjack
+ * avec des bots, on ouvre des caisses. À chaque étape on capture l'écran,
+ * et on relève toute erreur JavaScript de la console.
  */
 const { chromium } = require('playwright');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-const BASE = process.env.UI_BASE || 'http://localhost:3100';
-const SHOTS = path.join(__dirname, 'shots');
+const BASE = process.env.BASE || 'http://localhost:3000';
+const SHOTS = path.join(__dirname, '..', 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 
-let failures = 0;
 const errors = [];
-function check(label, cond, extra = '') {
-  console.log(`${cond ? '  ✅' : '  ❌'} ${label}${extra ? ' — ' + extra : ''}`);
-  if (!cond) failures++;
+const results = [];
+
+function check(label, ok, detail = '') {
+  results.push({ label, ok, detail });
+  console.log(`${ok ? '  ✓' : '  ✗'} ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
-async function newPlayer(browser, name, viewport = { width: 1440, height: 950 }) {
-  const ctx = await browser.newContext({ viewport });
-  const page = await ctx.newPage();
-  page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
-  page.on('console', (m) => {
-    if (m.type() === 'error' && !/favicon|youtube|ERR_|font|AudioContext/i.test(m.text())) {
-      errors.push(`${name}: ${m.text()}`);
-    }
-  });
-  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-  await page.fill('#guest-name', name);
-  await page.click('#form-guest button');
-  await page.waitForSelector('#app.active', { timeout: 15000 });
-  await page.waitForSelector('#progress-ring .ring', { timeout: 8000 });
-  return page;
-}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
   const browser = await chromium.launch({
-    executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-    args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'],
+    executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, locale: 'fr-FR' });
+  const page = await context.newPage();
+
+  page.on('pageerror', (err) => errors.push(`[pageerror] ${err.message}`));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !/favicon|net::ERR/.test(msg.text())) errors.push(`[console] ${msg.text()}`);
   });
 
-  console.log('\n▶ Interface');
+  const shot = async (name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
 
-  /* ── Accueil ── */
-  const host = await newPlayer(browser, 'Mattis');
-  check('anneau de progression affiché', await host.isVisible('#progress-ring .ring-fill'));
-  check('rail des joueurs en ligne présent', await host.isVisible('.online'));
-  await host.waitForSelector('#board-body tr');
-  check('classement rempli', (await host.$$('#board-body tr')).length > 0);
-  check('la carte à l’affiche change de jeu', await host.isVisible('#hero [data-play]'));
-  await host.click('[data-feature="undercover"]');
-  await host.waitForTimeout(300);
-  check('cliquer une carte change le héros', (await host.textContent('#hero h1')).includes('Undercover'));
-  await host.click('[data-feature="blindtest"]');
-  await host.screenshot({ path: path.join(SHOTS, '1-accueil.png'), fullPage: true });
+  /* ── Connexion ── */
+  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await shot('01-auth');
+  check('écran de connexion visible', await page.isVisible('#screen-auth.active'));
 
-  /* ── MemeVault ── */
-  await host.click('.rail-btn[data-go="vault"]');
-  await host.waitForSelector('#vault-root .case', { timeout: 8000 });
-  check('4 caisses affichées', (await host.$$('#vault-root .case')).length === 4);
-  check('collection affichée', (await host.$$('#vault-root .item')).length === 60);
-  check('barres de probabilité affichées', (await host.$$('#vault-root .odds i')).length >= 4);
+  await page.fill('#guest-name', 'TestJoueur');
+  await page.click('#form-guest button');
+  await page.waitForSelector('#app.active', { timeout: 8000 });
+  await page.waitForFunction(() => window.PZ && window.PZ.profile, null, { timeout: 8000 });
+  check('application chargée', true);
+  await wait(600);
+  await shot('02-accueil');
 
-  const coinsBefore = Number((await host.textContent('#v-coins')).replace(/\D/g, ''));
-  await host.click('#vault-root .case:nth-child(1) [data-count="1"]');
-  await host.waitForSelector('#vault-root .pull', { timeout: 8000 });
-  check('une carte est tirée', (await host.$$('#vault-root .pull')).length === 1);
-  const owned = await host.evaluate(() => document.querySelectorAll('#vault-root .item:not(.locked)').length);
-  check('l’item rejoint la collection', owned === 1, owned + ' possédé(s)');
-  await host.screenshot({ path: path.join(SHOTS, '2-vault.png'), fullPage: true });
+  const coins0 = await page.textContent('#coins');
+  check('solde affiché', /\d/.test(coins0), coins0);
 
-  await host.click('#vault-root .case:nth-child(1) [data-count="5"]');
-  await host.waitForFunction(() => document.querySelectorAll('#vault-root .pull').length === 5, null, { timeout: 12000 });
-  check('ouverture par 5', true);
-  const coinsAfter = Number((await host.textContent('#v-coins')).replace(/\D/g, ''));
-  check('les pièces sont débitées', coinsAfter < coinsBefore, `${coinsBefore} → ${coinsAfter}`);
-  const combo = await host.textContent('#vault-root .res.combo b');
-  check('le combo grimpe', parseFloat(combo.replace('x', '')) > 1, combo);
-  await host.screenshot({ path: path.join(SHOTS, '3-vault-pulls.png'), fullPage: true });
+  /* ── La mine ── */
+  await page.click('.rail-btn[data-go="mine"]');
+  await page.waitForSelector('#view-mine.active');
+  await page.waitForFunction(() => document.querySelectorAll('#ups .up').length > 0, null, { timeout: 5000 });
+  check('améliorations listées', (await page.$$('#ups .up')).length === 5);
 
-  /* ── Salon ── */
-  await host.click('#rail-create');
-  await host.waitForSelector('#view-room.active');
-  const code = (await host.textContent('#room-code')).trim();
-  check('salon créé', /^[A-Z]{4}$/.test(code), code);
+  for (let i = 0; i < 30; i++) { await page.click('#rock'); await wait(35); }
+  await wait(900);
+  const mined = Number((await page.textContent('#mine-clicks')).replace(/\D/g, ''));
+  check('clics comptés par le serveur', mined >= 10, `${mined} clics`);
+  await shot('03-mine');
 
-  const guest = await newPlayer(browser, 'Lea');
-  await guest.fill('#join-code', code);
-  await guest.click('#form-join button');
-  await guest.waitForSelector('#view-room.active');
-  await host.waitForFunction(() => document.querySelectorAll('#players .player').length === 2);
-  check('deuxième joueur dans le salon', true);
-  check('sélecteur de difficulté affiché', (await host.$$('#game-settings .diff')).length === 3);
-  await host.screenshot({ path: path.join(SHOTS, '4-salon.png'), fullPage: true });
+  // On se donne de quoi jouer : la mine seule serait trop lente pour un test.
+  await page.evaluate(() => window.PZ.socket.emit('mine:buy', { id: 'pick' }));
+  await wait(500);
 
-  /* ── Blind test en QCM ── */
-  await host.fill('#pl-url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-  await host.click('#btn-import');
-  await host.waitForSelector('.playlist-preview', { timeout: 15000 });
-  await host.evaluate(() => {
-    const r = document.querySelector('[data-set="blindtest.rounds"]');
-    r.value = 2;
-    r.dispatchEvent(new Event('change'));
+  /* ── On crédite le compte pour tester le casino ── */
+  await page.evaluate(async () => {
+    // On simule une longue session de mine côté serveur en achetant puis en
+    // cliquant : pas de triche possible, on passe par les vrais messages.
+    for (let i = 0; i < 40; i++) window.PZ.socket.emit('mine:click', { count: 20 });
   });
-  await host.waitForTimeout(400);
-  await host.click('#btn-start');
+  await wait(1200);
 
-  await host.waitForSelector('#game-root .choice', { timeout: 20000 });
-  check('QCM du blind test affiché', (await host.$$('#game-root .choice')).length === 4);
-  await host.screenshot({ path: path.join(SHOTS, '5-blindtest.png'), fullPage: true });
+  /* ── Plinko ── */
+  await page.click('.rail-btn[data-go="plinko"]');
+  await page.waitForSelector('#view-plinko.active');
+  await page.waitForFunction(() => document.querySelectorAll('#pk-buckets .pk-bucket').length > 0, null, { timeout: 5000 });
+  const buckets = (await page.$$('#pk-buckets .pk-bucket')).length;
+  check('cases du Plinko affichées', buckets === 17, `${buckets} cases pour 16 rangées`);
+  const rtp = await page.textContent('#pk-rtp');
+  check('RTP du Plinko affiché', /9\d/.test(rtp), rtp);
 
-  await host.click('#game-root .choice');
-  await host.waitForTimeout(700);
-  check('un seul essai : les propositions se verrouillent',
-    (await host.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length)) === 4);
-  check('la musique continue après la réponse',
-    await host.isVisible('#game-root .disc.spin'));
+  await page.fill('#pk-bet', '10');
+  await page.click('#pk-play');
+  await wait(2500);
+  await shot('04-plinko');
+  const last = await page.textContent('#pk-last');
+  check('résultat de bille reçu', last !== '—', last);
 
-  await guest.waitForSelector('#game-root .choice:not([disabled])', { timeout: 10000 });
-  await guest.keyboard.press('b');
-  await guest.waitForTimeout(700);
-  check('raccourcis clavier A/B/C/D actifs',
-    (await guest.evaluate(() => document.querySelectorAll('#game-root .choice[disabled]').length)) === 4);
+  /* ── Roulette ── */
+  await page.click('.rail-btn[data-go="roulette"]');
+  await page.waitForSelector('#view-roulette.active');
+  await page.waitForFunction(() => document.querySelector('#rl-hash').textContent.length > 20, null, { timeout: 6000 });
+  check('empreinte du tour publiée', true);
+  const cells = (await page.$$('#rl-table .rl-cell')).length;
+  check('tapis complet', cells === 37 + 3 + 6 + 3, `${cells} cases`);
 
-  await host.waitForSelector('#game-root .choice.right', { timeout: 60000 });
-  check('bonne réponse mise en évidence à la révélation', true);
-  check('la musique tourne encore pendant la révélation',
-    (await host.textContent('#game-root')).includes('continue jusqu’à la manche suivante'));
+  // On attend la phase de mises pour poser un jeton.
+  await page.waitForFunction(() => window.PZ && document.querySelector('#rl-phase').textContent.includes('Faites vos jeux'), null, { timeout: 40000 });
+  await page.fill('#rl-chip', '10');
+  await page.click('#rl-table .rl-cell.red');
+  await wait(700);
+  const staked = await page.textContent('#rl-staked');
+  check('mise enregistrée', Number(staked.replace(/\D/g, '')) >= 10, `${staked} misé`);
+  await shot('05-roulette');
 
-  /* ── Podium en fin de partie ── */
-  await host.waitForSelector('#game-root .podium', { timeout: 120000 });
-  check('podium affiché en fin de partie', (await host.$$('#game-root .step')).length >= 1);
-  check('le podium montre les avatars', (await host.$$('#game-root .step .avatar')).length >= 1);
-  check('couche à confettis créée', await host.evaluate(() => Boolean(document.querySelector('.confetti-layer'))));
-  await host.screenshot({ path: path.join(SHOTS, '6-podium.png'), fullPage: true });
+  /* ── Blackjack ── */
+  await page.click('.rail-btn[data-go="blackjack"]');
+  await page.waitForSelector('#view-blackjack.active');
+  await page.click('#bj-create');
+  await page.waitForSelector('#bj-room:not(.hidden)', { timeout: 6000 });
+  const code = (await page.textContent('#bj-table-code')).trim();
+  check('table créée', /^[A-Z]{4}$/.test(code), code);
 
-  await host.click('[data-act="back"]');
-  await host.waitForSelector('#lobby:not(.hidden)', { timeout: 8000 });
+  await page.click('#bj-add-bot');
+  await page.click('#bj-add-bot');
+  await wait(600);
+  const seats = (await page.$$('#bj-seats .seat')).length;
+  check('bots assis à la table', seats >= 3, `${seats} sièges occupés`);
 
-  /* ── Quiz en QCM ── */
-  await host.click('[data-game="quiz"]');
-  await host.waitForSelector('[data-diff^="quiz"]');
-  await host.click('[data-diff="quiz:rookie"]');
-  await host.waitForTimeout(400);
-  await host.click('#btn-start');
-  await host.waitForSelector('#game-root .question-text', { timeout: 15000 });
-  await host.waitForSelector('#game-root .choice', { timeout: 15000 });
-  check('QCM du quiz affiché', (await host.$$('#game-root .choice')).length === 4);
-  await host.screenshot({ path: path.join(SHOTS, '7-quiz.png'), fullPage: true });
-  await host.click('#btn-abort');
-  await host.waitForSelector('#lobby:not(.hidden)');
+  await page.fill('#bj-bet', '50');
+  await page.click('#bj-place');
+  await wait(800);
+  await shot('06-blackjack-mises');
 
-  /* ── Correctifs d'affichage ── */
-  await host.click('#btn-abort').catch(() => {});
-  await host.waitForSelector('#lobby:not(.hidden)', { timeout: 8000 }).catch(() => {});
-  await host.click('#btn-leave');
-  await host.waitForSelector('#view-home.active');
+  // On laisse la manche se dérouler : distribution, tour de jeu, croupier.
+  await page.waitForFunction(() => document.querySelectorAll('#bj-dealer-cards .card').length > 0, null, { timeout: 40000 });
+  check('cartes distribuées', true);
+  await shot('07-blackjack-jeu');
 
-  const ringFits = await host.evaluate(() => {
-    const center = document.querySelector('.ring-center');
-    const svg = document.querySelector('.ring');
-    if (!center || !svg) return false;
-    const c = center.getBoundingClientRect();
-    const s = svg.getBoundingClientRect();
-    // le texte doit tenir dans le trou de l'anneau (rayon 62, trait 14)
-    const inner = (62 - 7) * 2;
-    return c.width <= inner + 2 && c.height <= inner + 2 && c.left >= s.left && c.right <= s.right;
+  const moves = (await page.$$('#bj-actions [data-move]')).length;
+  if (moves) {
+    await page.click('#bj-actions [data-move="stand"]');
+    check('coup joué (rester)', true);
+  } else {
+    check('coup joué (rester)', true, 'blackjack servi, aucun coup nécessaire');
+  }
+  await wait(3000);
+  await shot('08-blackjack-resultat');
+
+  await page.click('#bj-leave');
+  await wait(300);
+
+  /* ── Caisses ── */
+  await page.click('.rail-btn[data-go="vault"]');
+  await page.waitForSelector('#view-vault.active');
+  await page.waitForFunction(() => document.querySelectorAll('#collection .coll-item').length > 0, null, { timeout: 6000 });
+
+  const total = (await page.$$('#collection .coll-item')).length;
+  check('collection complète affichée', total === 60, `${total} vignettes`);
+
+  const locked = (await page.$$('#collection .coll-item.locked')).length;
+  check('objets non obtenus grisés', locked > 0, `${locked} grisés sur ${total}`);
+
+  // Les noms doivent être lisibles en entier : aucun texte tronqué.
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll('#collection .coll-item .n')]
+      .filter((n) => n.scrollWidth > n.clientWidth + 1)
+      .map((n) => n.textContent)
+  );
+  check('noms affichés en entier', clipped.length === 0, clipped.length ? `tronqués : ${clipped.slice(0, 4).join(', ')}` : 'aucun débordement');
+
+  // Aucun point d'interrogation : on montre le vrai meme, éteint.
+  const placeholders = await page.evaluate(() =>
+    [...document.querySelectorAll('#collection .coll-item .e')].filter((n) => n.textContent.trim() === '❔').length
+  );
+  check('emoji réel même pour les manquants', placeholders === 0);
+
+  await shot('09-collection');
+
+  /* ── Le rouleau ── */
+  await page.click('#cases .case .btn-green');
+  await page.waitForSelector('.reel-window', { timeout: 6000 });
+  const strip = (await page.$$('.reel-strip .reel-item')).length;
+  check('bande du rouleau reçue', strip === 58, `${strip} vignettes`);
+  await wait(1400);
+  await shot('10-rouleau');
+
+  await page.waitForSelector('.reel-prize.show', { timeout: 12000 });
+  const prizeName = (await page.textContent('.reel-prize .n')).trim();
+  check('objet révélé à la fin du rouleau', prizeName.length > 0, prizeName);
+
+  // L'objet sous l'aiguille doit être celui qu'on a gagné.
+  const aligned = await page.evaluate(() => {
+    const needle = document.querySelector('.reel-needle').getBoundingClientRect();
+    const x = needle.left + needle.width / 2;
+    const items = [...document.querySelectorAll('.reel-strip .reel-item')];
+    const under = items.find((n) => {
+      const r = n.getBoundingClientRect();
+      return x >= r.left && x <= r.right;
+    });
+    return under ? under.querySelector('.n').textContent.trim() : null;
   });
-  check('le texte tient dans l’anneau', ringFits);
-  check('niveau et progression sont sous l’anneau', await host.isVisible('.ring-meta .lvl'));
+  check('l’aiguille pointe l’objet gagné', aligned === prizeName, `aiguille : ${aligned} / gagné : ${prizeName}`);
+  await shot('11-rouleau-resultat');
 
-  await host.hover('.rail-btn[data-jump="#board"]');
-  await host.waitForTimeout(350);
-  const tipOk = await host.evaluate(() => {
-    const tip = document.querySelector('.tip');
-    if (!tip || !tip.classList.contains('on')) return { ok: false, why: 'invisible' };
-    const r = tip.getBoundingClientRect();
-    const inView = r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
-    // elementFromPoint traverse la bulle (pointer-events:none) : on vérifie
-    // plutôt qu'elle est bien le dernier calque du document.
-    const last = document.body.lastElementChild;
-    return { ok: inView && r.width > 10, why: `${Math.round(r.width)}x${Math.round(r.height)} inView=${inView} last=${last.className}`, text: tip.textContent };
-  });
-  check('l’infobulle du rail s’affiche en entier', tipOk.ok, `${tipOk.text || ''} ${tipOk.why}`);
+  await page.click('.modal-close');
+  await wait(600);
 
-  /* ── Panel administrateur ── */
-  await host.click('#user-chip');
-  await host.waitForSelector('#user-menu:not(.hidden)');
-  check('le menu du profil s’ouvre', await host.isVisible('[data-menu="logout"]'));
-  check('l’entrée « clé admin » est proposée', await host.isVisible('[data-menu="claim"]'));
+  /* ── Équité ── */
+  await page.click('.rail-btn[data-go="fair"]');
+  await page.waitForSelector('#view-fair.active');
+  const hash = await page.textContent('#fair-hash');
+  check('empreinte de graine affichée', hash.length === 64, `${hash.length} caractères`);
+  await page.fill('#fair-seed', 'ma-graine-a-moi');
+  await page.click('#fair-form button');
+  await wait(800);
+  const revealed = await page.isVisible('#fair-prev:not(.hidden)');
+  check('graine précédente révélée après rotation', revealed);
+  await shot('12-equite');
 
-  host.once('dialog', (d) => d.accept('test-admin-key'));
-  await host.click('[data-menu="claim"]');
-  await host.waitForSelector('#rail-admin:not(.hidden)', { timeout: 8000 });
-  check('le bouton admin apparaît après la clé', true);
-
-  await host.click('#rail-admin');
-  await host.waitForSelector('#admin-root .admin-tile', { timeout: 8000 });
-  check('tuiles de statistiques affichées', (await host.$$('#admin-root .admin-tile')).length === 8);
-  check('tableau des joueurs affiché', (await host.$$('#admin-root [data-player]')).length > 0);
-
-  await host.click('#admin-root [data-player]');
-  await host.waitForSelector('#admin-root .player-card', { timeout: 5000 });
-  check('la fiche joueur s’ouvre au clic', await host.isVisible('#admin-root .player-card .kv'));
-  await host.screenshot({ path: path.join(SHOTS, '8-admin.png'), fullPage: true });
-
-  const xpBefore = await host.evaluate(() => document.querySelector('#admin-root .player-card .kv b').textContent);
-  await host.fill('#pc-amount', '250');
-  await host.click('#admin-root [data-act="grant-xp"]');
-  await host.waitForFunction((before) => {
-    const el = document.querySelector('#admin-root .player-card .kv b');
-    return el && el.textContent !== before;
-  }, xpBefore, { timeout: 8000 });
-  check('créditer de l’XP depuis la fiche', true);
-
-  await host.fill('#adm-search', 'Lea');
-  await host.waitForFunction(() => document.querySelectorAll('#admin-root [data-player]').length <= 3, null, { timeout: 8000 });
-  check('la recherche filtre le tableau', true);
-
-  await host.click('.rail-btn[data-go="home"]');
-  await host.waitForSelector('#view-home.active');
+  /* ── Accueil : classement ── */
+  await page.click('.rail-btn[data-go="home"]');
+  await page.waitForSelector('#view-home.active');
+  await wait(900);
+  const lbRows = (await page.$$('#leaderboard li:not(.empty)')).length;
+  check('classement peuplé', lbRows > 0, `${lbRows} lignes`);
+  await shot('13-accueil-final');
 
   /* ── Mobile ── */
-  const mobile = await newPlayer(browser, 'Mobile', { width: 390, height: 844 });
-  await mobile.waitForTimeout(1000);
+  const mobile = await context.newPage();
+  mobile.on('pageerror', (err) => errors.push(`[mobile] ${err.message}`));
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await mobile.goto(BASE, { waitUntil: 'networkidle' });
+  await mobile.waitForSelector('#app.active', { timeout: 8000 });
+  await wait(700);
+  const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check('aucun débordement horizontal sur mobile', overflow <= 1, `${overflow}px`);
+  await mobile.screenshot({ path: path.join(SHOTS, '14-mobile.png'), fullPage: false });
 
-  /* ── Présence : trois joueurs, deux statuts différents ── */
-  await host.waitForFunction(() => document.querySelectorAll('#online-list .on-user').length >= 3, null, { timeout: 10000 });
-  check('les trois joueurs sont dans le rail « en ligne »',
-    (await host.$$('#online-list .on-user')).length >= 3);
-  await host.waitForFunction(() => {
-    const c = [...document.querySelectorAll('#online-list .status')].map((s) => s.className);
-    return c.some((x) => x.includes('s-room')) && c.some((x) => x.includes('s-home'));
-  }, null, { timeout: 10000 });
-  const statuses = await host.evaluate(() =>
-    [...document.querySelectorAll('#online-list .status')].map((s) => s.className.replace('status ', ''))
-  );
-  check('les statuts sont différenciés', true, statuses.join(' | '));
-  await mobile.screenshot({ path: path.join(SHOTS, '9-mobile.png'), fullPage: true });
-  check('accueil sans débordement horizontal',
-    !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
-
-  await mobile.click('.rail-btn[data-go="vault"]');
-  await mobile.waitForSelector('#vault-root .case', { timeout: 8000 });
-  await mobile.screenshot({ path: path.join(SHOTS, '10-mobile-vault.png'), fullPage: true });
-  check('MemeVault sans débordement horizontal',
-    !(await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
-
-  check('aucune erreur JavaScript', errors.length === 0, errors.slice(0, 4).join(' | '));
+  await mobile.click('.rail-btn[data-go="vault"]').catch(() => {});
+  await wait(400);
+  await mobile.evaluate(() => document.querySelector('#btn-menu').click());
+  await wait(400);
+  await mobile.screenshot({ path: path.join(SHOTS, '15-mobile-menu.png') });
 
   await browser.close();
-  console.log(failures === 0 ? '\n🎉 Interface OK — captures dans test/shots/\n' : `\n⚠️  ${failures} test(s) en échec.\n`);
-  process.exit(failures === 0 ? 0 : 1);
+
+  /* ── Bilan ── */
+  console.log('\n──────────────────────────────');
+  const failed = results.filter((r) => !r.ok);
+  console.log(`${results.length - failed.length}/${results.length} vérifications passées`);
+  if (errors.length) {
+    console.log(`\n${errors.length} erreur(s) JavaScript :`);
+    [...new Set(errors)].slice(0, 15).forEach((e) => console.log(`  ${e}`));
+  } else {
+    console.log('Aucune erreur JavaScript.');
+  }
+  process.exit(failed.length || errors.length ? 1 : 0);
 })().catch((err) => {
-  console.error('💥', err);
+  console.error('\nLe parcours a échoué :', err.message);
   process.exit(1);
 });

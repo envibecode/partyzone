@@ -1,7 +1,11 @@
 'use strict';
 /**
- * Banc d'essai : simule plusieurs joueurs connectés en Socket.IO et joue
- * une partie complète de chaque mini-jeu, plus la ferme et le classement.
+ * Banc d'essai côté serveur.
+ *
+ * On branche de vrais clients Socket.IO et on joue : la mine, le Plinko, la
+ * roulette, une table de blackjack à plusieurs, les caisses. On vérifie que
+ * l'économie tient debout (aucune pièce créée ni perdue en route) et que les
+ * taux de redistribution annoncés sont bien ceux qu'on observe.
  *
  *   node server/index.js     (dans un terminal)
  *   node test/harness.js     (dans un autre)
@@ -20,6 +24,8 @@ function section(title) {
   console.log('\n▶ ' + title);
 }
 
+/* ─── Un joueur ────────────────────────────────────────── */
+
 async function makeGuest(name) {
   const res = await fetch(`${BASE}/auth/guest`, {
     method: 'POST',
@@ -29,481 +35,327 @@ async function makeGuest(name) {
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
   const cookie = raw.map((c) => c.split(';')[0]).join('; ');
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
-  const player = { name, socket, cookie, state: null, game: null, vault: null, online: null, admin: null, kicked: null, lastToast: null, profile: null, events: [] };
 
-  socket.on('room:state', ({ room, you, game }) => {
-    player.state = room;
-    player.me = you;
-    player.game = game;
-  });
-  socket.on('me', ({ user, profile }) => {
-    player.user = user;
-    player.profile = profile;
-    player.me = user.id;
-  });
-  socket.on('profile:update', (profile) => {
-    player.profile = profile;
-  });
-  socket.on('vault:state', (payload) => {
-    player.vault = payload.vault;
-    player.lastResult = payload.result;
-    if (payload.me) player.profile = payload.me;
-  });
-  socket.on('online:list', ({ online }) => {
-    player.online = online;
-  });
-  socket.on('admin:state', (payload) => {
-    player.admin = payload;
-  });
-  socket.on('kicked', (payload) => {
-    player.kicked = payload;
-  });
-  socket.on('toast', (payload) => {
-    player.lastToast = payload;
-  });
-  socket.onAny((ev, payload) => {
-    if (!['room:state', 'vault:state', 'online:list'].includes(ev)) player.events.push([ev, payload]);
-  });
+  const p = {
+    name, socket, cookie,
+    profile: null, user: null,
+    mine: null, plinko: null, roulette: null, table: null, vault: null,
+    lastPlinko: null, lastVault: null, toasts: [],
+  };
+
+  socket.on('me', ({ user, profile }) => { p.user = user; p.profile = profile; });
+  socket.on('profile:update', (profile) => { p.profile = profile; });
+  socket.on('toast', (t) => p.toasts.push(t));
+  socket.on('mine:state', ({ mine }) => { p.mine = mine; });
+  socket.on('plinko:state', ({ config }) => { p.plinko = config; });
+  socket.on('plinko:result', (r) => { p.lastPlinko = r; });
+  socket.on('roulette:state', (s) => { p.roulette = s; });
+  socket.on('bj:state', (s) => { p.table = s; });
+  socket.on('vault:state', ({ vault, result }) => { p.vault = vault; p.lastVault = result; });
 
   await new Promise((resolve, reject) => {
     socket.on('connect', resolve);
     socket.on('connect_error', reject);
+    setTimeout(() => reject(new Error('connexion trop lente')), 6000);
   });
-  await until(() => player.profile, 5000, 'profil chargé');
-  return player;
+  await waitFor(() => p.profile, 4000, `profil de ${name}`);
+  return p;
 }
 
-async function until(fn, timeout = 15000, label = '') {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (fn()) return true;
-    await wait(100);
-  }
-  throw new Error('délai dépassé : ' + label);
-}
-
-/* ══════════════ 1 — Quiz en QCM ══════════════ */
-
-async function testQuizChoice() {
-  section('Quiz culture G — mode QCM');
-  const host = await makeGuest('Hote');
-  const p2 = await makeGuest('Bob');
-
-  host.socket.emit('room:create');
-  await until(() => host.state, 5000, 'salon');
-  const code = host.state.code;
-  check('salon créé', /^[A-Z]{4}$/.test(code), code);
-
-  p2.socket.emit('room:join', { code });
-  await until(() => host.state.players.length === 2, 5000, '2 joueurs');
-
-  host.socket.emit('settings:update', {
-    game: 'quiz',
-    patch: { rounds: 3, answerMode: 'choice', difficulty: 'nightmare' },
+function waitFor(fn, ms = 5000, what = 'condition') {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const step = () => {
+      let value;
+      try { value = fn(); } catch { value = null; }
+      if (value) return resolve(value);
+      if (Date.now() - started > ms) return reject(new Error(`délai dépassé : ${what}`));
+      setTimeout(step, 60);
+    };
+    step();
   });
-  await wait(300);
-  host.socket.emit('game:start', { key: 'quiz' });
-
-  await until(() => host.game && host.game.phase === 'playing', 8000, 'phase de jeu');
-  check('mode QCM actif', host.game.answerMode === 'choice');
-  check('exactement 4 propositions', host.game.choices.length === 4, String(host.game.choices.length));
-  check('propositions toutes différentes', new Set(host.game.choices).size === 4);
-  check('la bonne réponse est cachée', host.game.correctIndex === null);
-  check('difficulté appliquée', host.game.difficulty.name === 'NIGHTMARE', host.game.difficulty.name);
-
-  const { QUESTIONS } = require('../server/data/questions');
-  const q = QUESTIONS.find((x) => x.q === host.game.question);
-  check('question issue de la banque', Boolean(q));
-  check('la bonne réponse est parmi les propositions', host.game.choices.includes(q.a[0]));
-
-  const good = host.game.choices.indexOf(q.a[0]);
-  const bad = (good + 1) % 4;
-
-  host.socket.emit('game:action', { action: 'pick', payload: { index: good } });
-  await until(() => host.game.yourResult, 4000, 'réponse enregistrée');
-  check('bonne réponse acceptée', host.game.yourResult.correct === true);
-  check('points multipliés par la difficulté', host.game.yourResult.points > 120, String(host.game.yourResult.points));
-
-  // second clic ignoré : un seul essai
-  const pointsBefore = host.state.players.find((p) => p.name === 'Hote').score;
-  host.socket.emit('game:action', { action: 'pick', payload: { index: good } });
-  await wait(400);
-  check('un seul essai autorisé', host.state.players.find((p) => p.name === 'Hote').score === pointsBefore);
-
-  p2.socket.emit('game:action', { action: 'pick', payload: { index: bad } });
-  await until(() => p2.game.yourResult, 4000, 'mauvaise réponse');
-  check('mauvaise réponse refusée', p2.game.yourResult.correct === false);
-  check('mauvaise réponse ne rapporte rien', p2.game.yourResult.points === 0);
-
-  await until(() => host.game.phase === 'results', 90000, 'fin de partie');
-  check('partie terminée', host.game.phase === 'results');
-
-  host.socket.emit('game:stop');
-  await until(() => !host.game, 5000, 'retour au salon');
-  await until(() => host.profile.xp > 0, 6000, 'XP versée');
-  check('XP créditée au profil', host.profile.xp > 0, host.profile.xp + ' XP');
-
-  [host, p2].forEach((p) => p.socket.close());
-  return host;
 }
 
-/* ══════════════ 2 — Blind test en QCM ══════════════ */
-
-async function testBlindtestChoice() {
-  section('Blind Test — mode QCM');
-  const host = await makeGuest('DJ');
-  host.socket.emit('room:create');
-  await until(() => host.state, 5000, 'salon');
-
-  // le serveur de test simule les métadonnées YouTube (voir test/stub-youtube.js)
-  host.socket.emit('blindtest:import', { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' });
-  const ok = await until(() => host.state.hasPlaylist, 12000, 'playlist importée').catch(() => false);
-  if (!ok) {
-    console.log('  ⏭  playlist indisponible (serveur sans stub YouTube) — test QCM du blind test ignoré');
-    host.socket.close();
-    return;
+/** Fait tourner la mine jusqu'à atteindre le solde voulu. */
+async function farm(player, target) {
+  player.socket.emit('mine:open');
+  await waitFor(() => player.mine, 4000, 'état de la mine');
+  let guard = 0;
+  while (player.profile.coins < target && guard++ < 400) {
+    player.socket.emit('mine:click', { count: 20 });
+    await wait(30);
   }
-
-  host.socket.emit('settings:update', {
-    game: 'blindtest',
-    patch: { rounds: 2, answerMode: 'choice', difficulty: 'rookie' },
-  });
-  await wait(300);
-  host.socket.emit('game:start', { key: 'blindtest' });
-
-  await until(() => host.game && host.game.phase === 'playing', 10000, 'manche en cours');
-  check('mode QCM actif', host.game.answerMode === 'choice');
-  check('4 propositions « Artiste — Titre »', host.game.choices.length === 4, host.game.choices[0]);
-  check('aucun doublon dans les propositions', new Set(host.game.choices).size === 4);
-  check('la bonne réponse reste cachée', host.game.correctIndex === null);
-  check('difficulté ROOKIE = 40 s', Math.round((host.game.deadline - host.game.serverNow) / 1000) === 40);
-
-  host.socket.emit('game:action', { action: 'pick', payload: { index: 0 } });
-  await until(() => host.game.yourResult, 4000, 'réponse');
-  check('réponse enregistrée', host.game.yourResult !== null);
-
-  await until(() => host.game.phase === 'reveal', 50000, 'révélation');
-  check('la bonne réponse est révélée', Number.isInteger(host.game.correctIndex));
-  check('titre révélé', Boolean(host.game.revealed && host.game.revealed.title));
-
-  host.socket.emit('game:stop');
-  await wait(500);
-  host.socket.close();
+  return player.profile.coins;
 }
 
-/* ══════════════ 3 — MEMEVAULT ══════════════ */
-
-async function testVault() {
-  section('MEMEVAULT');
-  const p = await makeGuest('Collectionneur');
-
-  p.socket.emit('vault:open');
-  await until(() => p.vault, 5000, 'vault ouvert');
-  check('4 caisses proposées', p.vault.cases.length === 4, p.vault.cases.map((c) => c.name).join(', '));
-  check('60 memes au catalogue', p.vault.items.length === 60, String(p.vault.items.length));
-  check('chaque meme a un emoji distinct', new Set(p.vault.items.map((i) => i.emoji)).size === p.vault.items.length);
-  check('collection vide au départ', p.vault.collection.have === 0);
-  check('pièces de départ', p.vault.coins === 300, String(p.vault.coins));
-  check('la première caisse est offerte', p.vault.freeReady === true);
-
-  const totalOdds = p.vault.cases[0].odds.reduce((a, o) => a + o.percent, 0);
-  check('les probabilités affichées font 100 %', Math.abs(totalOdds - 100) < 0.5, totalOdds.toFixed(2) + ' %');
-  const cursedOdds = p.vault.cases.map((c) => c.odds.find((o) => o.rarity === 'cursed').percent);
-  check('le Maudit est plus probable dans la caisse maudite', cursedOdds[3] > cursedOdds[0] * 10, cursedOdds.join(' / '));
-
-  // première ouverture : gratuite
-  p.socket.emit('vault:pull', { caseId: 'starter', count: 1 });
-  await until(() => p.lastResult && p.lastResult.pulls, 5000, 'premier tirage');
-  check('un tirage retourne un item', p.lastResult.pulls.length === 1, p.lastResult.pulls[0].name);
-  check('la caisse offerte ne coûte rien', p.lastResult.free === true && p.lastResult.spent === 0);
-  check('l’item est ajouté à la collection', p.vault.collection.have === 1);
-  await until(() => p.profile.xp > 0, 4000, 'XP créditée');
-  check('le tirage rapporte de l’XP', p.profile.xp > 0, p.profile.xp + ' XP');
-
-  // ouvertures payantes : le combo doit grimper
-  const coinsBefore = p.vault.coins;
-  p.socket.emit('vault:pull', { caseId: 'starter', count: 5 });
-  await until(() => p.lastResult && p.lastResult.pulls && p.lastResult.pulls.length === 5, 5000, 'tirage x5');
-  check('ouverture par 5', p.lastResult.pulls.length === 5);
-  check('le coût est débité', p.vault.coins < coinsBefore + p.lastResult.dust, `${coinsBefore} → ${p.vault.coins}`);
-  check('le combo grimpe avec les ouvertures', p.vault.combo >= 6, 'combo ' + p.vault.combo);
-  check('le multiplicateur suit le combo', p.vault.comboMult > 1, '×' + p.vault.comboMult);
-
-  const rarities = new Set(p.lastResult.pulls.map((x) => x.r));
-  check('les raretés tirées sont valides', [...rarities].every((r) =>
-    ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'].includes(r)), [...rarities].join(', '));
-
-  // caisse trop chère
-  p.socket.emit('vault:pull', { caseId: 'cursed', count: 5 });
-  await until(() => p.lastResult && p.lastResult.ok === false, 4000, 'refus');
-  check('caisse trop chère refusée', /manque/.test(p.lastResult.message), p.lastResult.message);
-
-  // caisse inconnue
-  p.socket.emit('vault:pull', { caseId: 'triche', count: 1 });
-  await until(() => p.lastResult && /inconnue/.test(p.lastResult.message || ''), 4000, 'caisse inconnue');
-  check('caisse inconnue rejetée', true);
-
-  // revente des doublons
-  const before = p.vault.coins;
-  p.socket.emit('vault:sell');
-  await until(() => p.lastResult && p.lastResult.message && /doublon/.test(p.lastResult.message), 4000, 'revente');
-  if (p.lastResult.ok) {
-    check('les doublons rapportent des pièces', p.vault.coins > before, `${before} → ${p.vault.coins}`);
-    check('plus aucun doublon après revente', p.vault.duplicates === 0);
-  } else {
-    check('revente sans doublon correctement refusée', /Aucun doublon/.test(p.lastResult.message));
-  }
-
-  p.socket.close();
-}
-
-/* ══════════════ 3bis — Présence ══════════════ */
-
-async function testPresence() {
-  section('Joueurs en ligne');
-  const a = await makeGuest('Ariane');
-  await until(() => a.online, 5000, 'liste reçue');
-  check('la liste des joueurs en ligne arrive', Array.isArray(a.online));
-  check('je me vois dedans', a.online.some((o) => o.id === a.me));
-
-  const b = await makeGuest('Basile');
-  await until(() => a.online.some((o) => o.name === 'Basile'), 5000, 'nouvel arrivant');
-  check('un nouvel arrivant apparaît chez les autres', true);
-
-  b.socket.emit('room:create');
-  await until(() => a.online.some((o) => o.name === 'Basile' && o.status === 'room'), 6000, 'statut salon');
-  check('le statut passe à « salon » quand on crée un salon', true);
-
-  b.socket.emit('vault:open');
-  await until(() => a.online.some((o) => o.name === 'Basile' && o.status === 'vault'), 6000, 'statut vault');
-  check('le statut passe à « MemeVault »', true);
-
-  b.socket.close();
-  await until(() => !a.online.some((o) => o.name === 'Basile'), 6000, 'départ');
-  check('le joueur disparaît quand il se déconnecte', true);
-
-  a.socket.close();
-}
-
-
-/* ══════════════ 4 — Panel d'administration ══════════════ */
-
-async function testAdmin() {
-  section('Panel administrateur');
-  const boss = await makeGuest('Patron');
-  const cible = await makeGuest('Cible');
-
-  // Sans droits, le panel est inaccessible
-  boss.socket.emit('admin:open', {});
-  await until(() => boss.lastToast, 4000, 'refus');
-  check('le panel refuse les non-admins', /administrateurs/i.test(boss.lastToast.message), boss.lastToast.message);
-  check('aucun état admin n’a fuité', boss.admin === null);
-
-  // Mauvaise clé
-  boss.lastToast = null;
-  boss.socket.emit('admin:claim', { key: 'pas-la-bonne' });
-  await until(() => boss.lastToast, 4000, 'clé invalide');
-  check('mauvaise clé refusée', /incorrecte/i.test(boss.lastToast.message), boss.lastToast.message);
-  check('toujours pas admin', boss.profile.admin !== true);
-
-  // Bonne clé
-  boss.socket.emit('admin:claim', { key: process.env.ADMIN_KEY || 'test-admin-key' });
-  await until(() => boss.profile.admin === true, 5000, 'droits obtenus');
-  check('la bonne clé donne les droits', boss.profile.admin === true);
-  await until(() => boss.admin, 5000, 'état admin');
-  check('le panel s’ouvre', Boolean(boss.admin.stats));
-  check('les statistiques sont là', boss.admin.stats.players > 0, boss.admin.stats.players + ' joueurs');
-  check('la liste des joueurs est là', boss.admin.players.length > 0);
-
-  // La recherche : on filtre sur l'identifiant exact de la cible. Plusieurs
-  // profils peuvent porter le même pseudo si les tests ont déjà tourné.
-  boss.admin = null;
-  boss.socket.emit('admin:open', { query: cible.me });
-  await until(() => boss.admin, 5000, 'recherche');
-  check('la recherche filtre la liste', boss.admin.players.length === 1, boss.admin.players.length + ' résultat(s)');
-  const target = boss.admin.players.find((p) => p.id === cible.me);
-  check('la cible est trouvée', Boolean(target));
-
-  // Créditer de l'XP
-  const xpBefore = cible.profile.xp;
-  boss.socket.emit('admin:action', { action: 'grant-xp', payload: { id: target.id, amount: 500 } });
-  await until(() => cible.profile.xp === xpBefore + 500, 5000, 'XP créditée');
-  check('l’admin peut créditer de l’XP', cible.profile.xp === xpBefore + 500, `${xpBefore} → ${cible.profile.xp}`);
-
-  // Créditer des pièces
-  const coinsBefore = cible.profile.coins;
-  boss.socket.emit('admin:action', { action: 'grant-coins', payload: { id: target.id, amount: -100 } });
-  await until(() => cible.profile.coins === coinsBefore - 100, 5000, 'pièces retirées');
-  check('un montant négatif retire bien', cible.profile.coins === coinsBefore - 100);
-
-  // Fermeture d'un salon
-  cible.socket.emit('room:create');
-  await until(() => cible.state, 5000, 'salon créé');
-  const roomCode = cible.state.code;
-  boss.admin = null;
-  boss.socket.emit('admin:open', {});
-  await until(() => boss.admin && boss.admin.rooms.some((r) => r.code === roomCode), 5000, 'salon visible');
-  check('les salons actifs sont listés', true, roomCode);
-  boss.socket.emit('admin:action', { action: 'close-room', payload: { code: roomCode } });
-  await until(() => boss.admin && !boss.admin.rooms.some((r) => r.code === roomCode), 5000, 'salon fermé');
-  check('l’admin peut fermer un salon', true);
-
-  // Annonce
-  cible.lastToast = null;
-  boss.socket.emit('admin:action', { action: 'announce', payload: { text: 'Test annonce' } });
-  await until(() => cible.lastToast && /Test annonce/.test(cible.lastToast.message), 5000, 'annonce reçue');
-  check('l’annonce arrive chez tout le monde', true);
-
-  // Bannissement
-  boss.socket.emit('admin:action', { action: 'ban', payload: { id: target.id, reason: 'Test' } });
-  await until(() => cible.kicked, 6000, 'exclusion');
-  check('le joueur banni est éjecté', /Test/.test(cible.kicked.reason), cible.kicked.reason);
-
-  // Reconnexion refusée
-  const revenant = io(BASE, { extraHeaders: { Cookie: cible.cookie }, transports: ['websocket'] });
-  let refused = null;
-  revenant.on('kicked', (p) => { refused = p; });
-  await new Promise((r) => revenant.on('connect', r));
-  await until(() => refused, 6000, 'reconnexion refusée');
-  check('un banni ne peut pas revenir', Boolean(refused), refused.reason);
-  revenant.close();
-
-  // Débannissement
-  boss.socket.emit('admin:action', { action: 'unban', payload: { id: target.id } });
-  await wait(700);
-  const retour = io(BASE, { extraHeaders: { Cookie: cible.cookie }, transports: ['websocket'] });
-  let kickedAgain = false;
-  retour.on('kicked', () => { kickedAgain = true; });
-  await new Promise((r) => retour.on('connect', r));
-  await wait(900);
-  check('après débannissement, il peut revenir', !kickedAgain);
-  retour.close();
-
-  // On ne bannit pas un admin
-  boss.lastToast = null;
-  boss.socket.emit('admin:action', { action: 'ban', payload: { id: boss.me } });
-  await until(() => boss.lastToast, 4000, 'refus de bannir un admin');
-  check('impossible de bannir un administrateur', /administrateur/i.test(boss.lastToast.message), boss.lastToast.message);
-
-  // Le journal garde une trace
-  check('le journal enregistre les actions', boss.admin.log.length >= 3, boss.admin.log.length + ' entrées');
-
-  boss.socket.close();
-  cible.socket.close();
-}
-
-/* ══════════════ 5 — Classement ══════════════ */
-
-async function testLeaderboard() {
-  section('Classement général');
-  const { leaderboard } = await fetch(`${BASE}/api/leaderboard?limit=10`).then((r) => r.json());
-  check('le classement répond', Array.isArray(leaderboard));
-  check('il contient les joueurs des tests', leaderboard.length > 0, leaderboard.length + ' joueurs');
-  if (leaderboard.length) {
-    const first = leaderboard[0];
-    check('chaque ligne a rang, niveau et titre', Boolean(first.rank && first.level && first.title), `${first.name} LV${first.level} ${first.title}`);
-    check('trié par XP décroissante', leaderboard.every((p, i) => i === 0 || leaderboard[i - 1].xp >= p.xp));
-  }
-}
-
-/* ══════════════ 5 — Undercover (inchangé) ══════════════ */
-
-async function testUndercover() {
-  section('Undercover');
-  const players = [];
-  for (const n of ['Alice', 'Bruno', 'Chloe', 'David']) players.push(await makeGuest(n));
-  const [host] = players;
-
-  host.socket.emit('room:create');
-  await until(() => host.state, 5000, 'salon');
-  const code = host.state.code;
-  for (const p of players.slice(1)) p.socket.emit('room:join', { code });
-  await until(() => host.state.players.length === 4, 5000, '4 joueurs');
-
-  host.socket.emit('settings:update', {
-    game: 'undercover',
-    patch: { undercoverCount: 1, mrWhite: 0, descriptionSeconds: 15, voteSeconds: 15 },
-  });
-  await wait(300);
-  host.socket.emit('game:start', { key: 'undercover' });
-
-  await until(() => host.game && host.game.phase === 'roles', 6000, 'rôles');
-  const roles = players.map((p) => p.game.you.role);
-  check('exactement 1 undercover', roles.filter((r) => r === 'undercover').length === 1);
-  const civilWords = players.filter((p) => p.game.you.role === 'civil').map((p) => p.game.you.word);
-  check('les civils partagent le même mot', new Set(civilWords).size === 1, civilWords[0]);
-  check('personne ne voit le rôle des autres', players[0].game.players.every((p) => p.role === null));
-
-  await until(() => host.game.phase === 'describe', 12000, 'description');
-  for (let i = 0; i < 4; i++) {
-    await until(() => players.some((p) => p.game && p.game.you.isSpeaker), 20000, 'tour ' + i);
-    const speaker = players.find((p) => p.game.you.isSpeaker);
-    speaker.socket.emit('game:action', { action: 'describe', payload: { word: 'mot' + i } });
-    await wait(900);
-  }
-
-  await until(() => host.game.phase === 'vote', 20000, 'vote');
-  check('4 descriptions enregistrées', host.game.descriptions.length === 4);
-
-  const target = players.find((p) => p.game.you.role === 'undercover');
-  for (const p of players) {
-    if (p !== target) p.socket.emit('game:action', { action: 'vote', payload: { targetId: target.me } });
-  }
-  target.socket.emit('game:action', { action: 'vote', payload: { targetId: players.find((p) => p !== target).me } });
-
-  await until(() => host.game.phase === 'over', 25000, 'fin');
-  check('les civils gagnent', host.game.winner === 'civils', host.game.winner);
-  check('les mots sont révélés', Boolean(host.game.words && host.game.words.civil));
-
-  host.socket.emit('game:stop');
-  await wait(800);
-  players.forEach((p) => p.socket.close());
-}
-
-/* ══════════════ 6 — Génération des propositions ══════════════ */
-
-function testChoiceGeneration() {
-  section('Génération des propositions (hors ligne)');
-  const { quizChoices, numericDecoys } = require('../server/choices');
-  const { QUESTIONS } = require('../server/data/questions');
-
-  let allFour = true;
-  let allContainAnswer = true;
-  let allUnique = true;
-  for (const q of QUESTIONS) {
-    const c = quizChoices(q, QUESTIONS);
-    if (c.length !== 4) allFour = false;
-    if (!c.includes(q.a[0])) allContainAnswer = false;
-    if (new Set(c).size !== 4) allUnique = false;
-  }
-  check('les 150 questions produisent 4 propositions', allFour);
-  check('la bonne réponse y figure toujours', allContainAnswer);
-  check('aucun doublon', allUnique);
-
-  const years = numericDecoys(1989, 3);
-  check('leurres d’année plausibles', years.every((y) => Math.abs(Number(y) - 1989) <= 12), years.join(', '));
-  const small = numericDecoys(8, 3);
-  check('leurres de petits nombres plausibles', small.every((n) => Number(n) > 0 && Number(n) <= 12), small.join(', '));
-  const big = numericDecoys(300000, 3);
-  check('leurres de grands nombres arrondis', big.every((n) => Number(n) % 1000 === 0), big.join(', '));
-}
-
-/* ══════════════ Exécution ══════════════ */
+/* ══════════════════════════════════════════════════════ */
 
 (async () => {
-  try {
-    testChoiceGeneration();
-    await testQuizChoice();
-    await testBlindtestChoice();
-    await testVault();
-    await testPresence();
-    await testUndercover();
-    await testAdmin();
-    await testLeaderboard();
-  } catch (err) {
-    console.error('\n💥 ' + err.message);
-    failures++;
+  console.log(`Banc d'essai PartyZone — ${BASE}\n`);
+
+  /* ── Connexion ── */
+  section('Connexion');
+  const alice = await makeGuest('Alice');
+  const bob = await makeGuest('Bob');
+  check('deux invités connectés', Boolean(alice.user && bob.user));
+  check('profil neuf crédité', alice.profile.coins > 0, `${alice.profile.coins} pièces`);
+  check('graine serveur publiée sans être révélée',
+    alice.profile.fair.serverSeedHash.length === 64 && !alice.profile.fair.serverSeed);
+
+  /* ── La mine ── */
+  section('La Mine');
+  const before = alice.profile.coins;
+  alice.socket.emit('mine:open');
+  await waitFor(() => alice.mine, 4000, 'état de la mine');
+  check('cinq améliorations proposées', alice.mine.upgrades.length === 5);
+
+  for (let i = 0; i < 10; i++) { alice.socket.emit('mine:click', { count: 20 }); await wait(40); }
+  await wait(400);
+  check('les clics rapportent', alice.profile.coins > before, `+${alice.profile.coins - before} pièces`);
+
+  // Le plafond : on envoie 200 clics d'un coup, le serveur doit en jeter.
+  const capBefore = alice.mine.clicks;
+  alice.socket.emit('mine:click', { count: 200 });
+  await wait(300);
+  alice.socket.emit('mine:open');
+  await wait(300);
+  check('cadence plafonnée par le serveur', alice.mine.clicks - capBefore <= 40,
+    `${alice.mine.clicks - capBefore} clics retenus sur 200 demandés`);
+
+  await farm(alice, 3000);
+  const coinsForUpgrade = alice.profile.coins;
+  alice.socket.emit('mine:buy', { id: 'pick' });
+  await wait(400);
+  check('amélioration achetée et facturée', alice.profile.coins < coinsForUpgrade && alice.mine.upgrades[0].level === 1);
+  check('le clic rapporte plus après achat', alice.mine.perClick > 1, `${alice.mine.perClick} par clic`);
+
+  /* ── Plinko ── */
+  section('Plinko');
+  alice.socket.emit('plinko:open');
+  await waitFor(() => alice.plinko, 4000, 'config Plinko');
+
+  for (const rows of [8, 12, 16]) {
+    for (const risk of ['low', 'medium', 'high']) {
+      const t = alice.plinko.tables[rows][risk];
+      check(`table ${rows}×${risk} : ${t.multipliers.length} cases, RTP ${t.rtp} %`,
+        t.multipliers.length === rows + 1 && t.rtp > 95 && t.rtp < 99);
+    }
   }
-  console.log(failures === 0 ? '\n🎉 Tous les tests passent.\n' : `\n⚠️  ${failures} test(s) en échec.\n`);
-  process.exit(failures === 0 ? 0 : 1);
-})();
+
+  await farm(alice, 60000);
+  const pkStart = alice.profile.coins;
+  let staked = 0;
+  let returned = 0;
+
+  for (let i = 0; i < 60; i++) {
+    alice.lastPlinko = null;
+    alice.socket.emit('plinko:play', { bet: 10, rows: 16, risk: 'medium', balls: 10 });
+    const r = await waitFor(() => alice.lastPlinko, 4000, 'résultat Plinko');
+    staked += r.staked;
+    returned += r.payout;
+    // Chaque bille doit finir dans la case correspondant à son chemin.
+    const coherent = r.drops.every((d) => d.path.reduce((a, x) => a + x, 0) === d.bucket);
+    if (!coherent) { check('chemin cohérent avec la case', false); break; }
+  }
+  check('chemin de chaque bille cohérent avec sa case', true, `${staked / 10} billes`);
+  const pkRtp = (returned / staked) * 100;
+  check('RTP Plinko observé proche de l’annoncé', Math.abs(pkRtp - 96.85) < 12,
+    `${pkRtp.toFixed(1)} % observé pour 96,85 % annoncé (600 billes, ça bouge)`);
+  check('solde cohérent avec les gains', alice.profile.coins === pkStart - staked + returned,
+    `${alice.profile.coins} = ${pkStart} − ${staked} + ${returned}`);
+
+  /* ── Roulette ── */
+  section('Roulette');
+  alice.socket.emit('roulette:join');
+  const rl = await waitFor(() => alice.roulette, 4000, 'état roulette');
+  check('roue européenne à 37 cases', rl.wheel.length === 37);
+  check('RTP annoncé 97,3 %', rl.rtp === 97.3);
+  check('empreinte du tour publiée', rl.serverSeedHash.length === 64);
+
+  // On attend une phase de mises, on mise, on regarde le règlement.
+  await waitFor(() => alice.roulette.phase === 'betting', 40000, 'phase de mises');
+  const rlBefore = alice.profile.coins;
+  alice.socket.emit('roulette:bet', { type: 'red', value: null, amount: 100 });
+  await wait(500);
+  check('mise débitée immédiatement', alice.profile.coins === rlBefore - 100);
+  check('mise visible dans l’état partagé', alice.roulette.you && alice.roulette.you.staked === 100);
+
+  await waitFor(() => alice.roulette.phase === 'result', 45000, 'résultat du tour');
+  const res = alice.roulette;
+  check('numéro dans les clous', res.result.number >= 0 && res.result.number <= 36, `sorti : ${res.result.number} (${res.result.color})`);
+  check('graine du tour révélée après coup', Boolean(res.reveal && res.reveal.serverSeed));
+
+  const shouldWin = res.result.color === 'red';
+  const detail = res.you.detail[0];
+  check('gain conforme à la couleur sortie', detail.won === shouldWin,
+    shouldWin ? 'rouge : gagné' : `${res.result.color} : perdu`);
+
+  // Refus des mises hors phase.
+  await waitFor(() => alice.roulette.phase !== 'betting', 20000, 'fermeture des mises');
+  alice.toasts = [];
+  alice.socket.emit('roulette:bet', { type: 'black', value: null, amount: 100 });
+  await wait(400);
+  check('mise refusée quand la roue tourne', alice.toasts.some((t) => t.kind === 'error'));
+
+  /* ── Blackjack ── */
+  section('Blackjack');
+  await farm(bob, 5000);
+  alice.socket.emit('bj:create');
+  const table = await waitFor(() => alice.table, 5000, 'création de table');
+  check('table créée avec un code à 4 lettres', /^[A-Z]{4}$/.test(table.code), table.code);
+  check('sabot mélangé depuis une graine publiée', table.shoeSeedHash.length === 64);
+
+  bob.socket.emit('bj:join', { code: table.code });
+  await waitFor(() => bob.table && bob.table.code === table.code, 5000, 'Bob à table');
+  check('deuxième joueur assis', alice.table.seats.length === 2);
+
+  alice.socket.emit('bj:bot', { action: 'add' });
+  await wait(400);
+  check('bot ajouté par l’hôte', alice.table.seats.some((s) => s.isBot));
+
+  bob.toasts = [];
+  bob.socket.emit('bj:bot', { action: 'add' });
+  await wait(400);
+  check('seul l’hôte gère les bots', bob.toasts.some((t) => t.kind === 'error'));
+
+  // Une table neuve reste en attente jusqu'à la première mise : c'est elle
+  // qui lance le compte à rebours, pas l'inverse.
+  check('table en attente tant que personne n’a misé', alice.table.phase === 'waiting');
+  const bjBefore = alice.profile.coins;
+  alice.socket.emit('bj:bet', { amount: 200 });
+  bob.socket.emit('bj:bet', { amount: 100 });
+  await wait(600);
+  check('mise débitée à la table', alice.profile.coins === bjBefore - 200);
+  check('la première mise ouvre le tour', alice.table.phase === 'betting');
+
+  await waitFor(() => alice.table.phase === 'playing' || alice.table.phase === 'payout', 40000, 'distribution');
+  const mySeat = alice.table.seats.find((s) => s.isYou);
+  check('deux cartes reçues', mySeat.hands[0].cards.length === 2);
+  check('carte du croupier cachée pendant le jeu',
+    alice.table.phase !== 'playing' || alice.table.dealer.cards.some((c) => c.hidden));
+
+  // On joue « rester » dès que c'est notre tour.
+  for (const player of [alice, bob]) {
+    const start = Date.now();
+    while (Date.now() - start < 30000) {
+      if (player.table.you.canAct) { player.socket.emit('bj:move', { move: 'stand' }); break; }
+      if (player.table.phase === 'payout' || player.table.phase === 'betting') break;
+      await wait(300);
+    }
+  }
+
+  await waitFor(() => alice.table.phase === 'payout', 60000, 'règlement');
+  const settled = alice.table.seats.find((s) => s.isYou);
+  check('main réglée', Boolean(settled.lastResult), `mise ${settled.lastResult.staked}, retour ${settled.lastResult.payout}`);
+  check('croupier découvert au règlement', alice.table.dealer.cards.every((c) => !c.hidden));
+  check('valeur du croupier calculée', alice.table.dealer.value && alice.table.dealer.value.total > 0,
+    `${alice.table.dealer.value.total}`);
+
+  bob.socket.emit('bj:leave');
+  alice.socket.emit('bj:leave');
+  await wait(400);
+
+  /* ── Caisses ── */
+  section('Caisses à memes');
+  await farm(alice, 20000);
+  alice.socket.emit('vault:open');
+  const vault = await waitFor(() => alice.vault, 4000, 'état du coffre');
+  check('soixante memes au catalogue', vault.items.length === 60);
+  check('quatre caisses proposées', vault.cases.length === 4);
+
+  // Les probabilités affichées doivent faire 100 %.
+  for (const box of vault.cases) {
+    const sum = box.odds.reduce((s, o) => s + o.percent, 0);
+    check(`probabilités de « ${box.name} » cohérentes`, Math.abs(sum - 100) < 0.5, `${sum.toFixed(2)} %`);
+  }
+
+  const vBefore = alice.profile.coins;
+  alice.lastVault = null;
+  alice.socket.emit('vault:pull', { caseId: 'meme', count: 5 });
+  const pull = await waitFor(() => alice.lastVault, 5000, 'ouverture de caisse');
+  check('cinq tirages retournés', pull.ok && pull.pulls.length === 5);
+  check('chaque tirage a sa bande de 58 vignettes',
+    pull.pulls.every((x) => x.reel.strip.length === 58));
+  check('l’objet gagné est bien à l’index annoncé',
+    pull.pulls.every((x) => x.reel.strip[x.reel.winIndex].id === x.id));
+  check('caisse facturée', alice.profile.coins < vBefore);
+
+  // On ouvre en masse pour vérifier que les raretés sortent dans l'ordre attendu.
+  const seen = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0, cursed: 0 };
+  await farm(alice, 80000);
+  for (let i = 0; i < 40; i++) {
+    alice.lastVault = null;
+    alice.socket.emit('vault:pull', { caseId: 'starter', count: 5 });
+    const r = await waitFor(() => alice.lastVault, 5000, 'ouverture en masse');
+    if (!r.ok) break;
+    r.pulls.forEach((x) => { seen[x.r] += 1; });
+  }
+  const totalPulls = Object.values(seen).reduce((a, b) => a + b, 0);
+  check('raretés ordonnées du plus commun au plus rare',
+    seen.common >= seen.rare && seen.rare >= seen.epic && seen.epic >= seen.legendary,
+    `${totalPulls} tirages : ${Object.entries(seen).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+
+  alice.socket.emit('vault:open');
+  await wait(400);
+  check('collection remplie au fil des ouvertures', alice.vault.collection.have > 0,
+    `${alice.vault.collection.have}/${alice.vault.collection.total}`);
+
+  if (alice.vault.duplicates > 0) {
+    const dupBefore = alice.profile.coins;
+    alice.socket.emit('vault:sell');
+    await wait(500);
+    check('doublons revendus contre des pièces', alice.profile.coins > dupBefore,
+      `+${alice.profile.coins - dupBefore} pièces`);
+  }
+
+  /* ── Équité vérifiable ── */
+  section('Équité vérifiable');
+  const oldHash = alice.profile.fair.serverSeedHash;
+  alice.socket.emit('fair:rotate', { clientSeed: 'ma-graine-de-test' });
+  await waitFor(() => alice.profile.fair.serverSeedHash !== oldHash, 4000, 'rotation de graine');
+  const prev = alice.profile.fair.previous;
+  check('ancienne graine révélée', Boolean(prev && prev.serverSeed));
+
+  const crypto = require('crypto');
+  const recomputed = crypto.createHash('sha256').update(prev.serverSeed).digest('hex');
+  check('l’empreinte publiée avant correspond à la graine révélée',
+    recomputed === oldHash && recomputed === prev.serverSeedHash);
+  check('la graine du joueur a bien été prise en compte', prev.clientSeed !== alice.profile.fair.clientSeed
+    || alice.profile.fair.clientSeed === 'ma-graine-de-test');
+
+  /* ── Classement ── */
+  section('Classement');
+  const lb = await (await fetch(`${BASE}/api/leaderboard?sort=coins&limit=10`)).json();
+  check('classement par pièces trié', lb.leaderboard.every((p, i, a) => i === 0 || a[i - 1].coins >= p.coins),
+    `${lb.leaderboard.length} joueurs`);
+  const lbXp = await (await fetch(`${BASE}/api/leaderboard?sort=xp&limit=10`)).json();
+  check('classement par XP trié', lbXp.leaderboard.every((p, i, a) => i === 0 || a[i - 1].xp >= p.xp));
+
+  /* ── Rien ne crée de pièces à partir de rien ── */
+  section('Économie');
+  const cheatBefore = alice.profile.coins;
+  alice.toasts = [];
+  alice.socket.emit('plinko:play', { bet: -100000, rows: 16, risk: 'high', balls: 10 });
+  await wait(400);
+  check('mise négative refusée', alice.profile.coins <= cheatBefore && alice.toasts.some((t) => t.kind === 'error'));
+
+  alice.toasts = [];
+  alice.socket.emit('plinko:play', { bet: alice.profile.coins + 1000000, rows: 16, risk: 'high', balls: 1 });
+  await wait(400);
+  check('mise au-dessus du solde refusée', alice.toasts.some((t) => t.kind === 'error'));
+
+  alice.toasts = [];
+  alice.socket.emit('admin:open', {});
+  await wait(400);
+  check('panel admin refusé à un joueur ordinaire', alice.toasts.some((t) => t.kind === 'error'));
+
+  /* ── Bilan ── */
+  alice.socket.close();
+  bob.socket.close();
+  console.log('\n──────────────────────────────');
+  console.log(failures === 0 ? 'Tout est passé.' : `${failures} vérification(s) en échec.`);
+  process.exit(failures ? 1 : 0);
+})().catch((err) => {
+  console.error('\nLe banc d’essai a échoué :', err.message);
+  process.exit(1);
+});

@@ -72,6 +72,35 @@ function comboMultiplier(combo) {
   return 1 + Math.min(combo, COMBO_MAX) * COMBO_STEP;
 }
 
+/* ─── Le bandeau qui défile ────────────────────────────── */
+
+const REEL_LENGTH = 58;
+const REEL_WIN_INDEX = 50; // l'item gagnant, assez loin pour laisser le temps de freiner
+
+/**
+ * Construit la bande d'items qui défile devant le curseur, façon caisse CS:GO.
+ * Les leurres sont tirés dans la vraie distribution de la caisse : ce que tu
+ * vois défiler est exactement ce que tu aurais pu obtenir, avec les bonnes
+ * fréquences. Rien n'est mis là pour faire joli.
+ */
+function buildReel(box, winner) {
+  const strip = [];
+  for (let i = 0; i < REEL_LENGTH; i++) {
+    const item = i === REEL_WIN_INDEX ? winner : rollItem(box);
+    const rarity = RARITIES[item.r];
+    strip.push({
+      id: item.id,
+      emoji: item.emoji,
+      name: item.name,
+      r: item.r,
+      rarity: rarity.name,
+      color: rarity.color,
+      glow: rarity.glow,
+    });
+  }
+  return { strip, winIndex: REEL_WIN_INDEX };
+}
+
 /* ─── Ouverture ────────────────────────────────────────── */
 
 /**
@@ -142,6 +171,7 @@ function open(profile, caseId, count = 1, now = Date.now()) {
       combo,
       mult: Number(mult.toFixed(2)),
       count: owned + 1,
+      reel: buildReel(box, item),
     });
   }
 
@@ -235,4 +265,4 @@ function view(profile, now = Date.now()) {
   };
 }
 
-module.exports = { blankVault, open, sellDuplicates, view, CASES, FREE_CASE_MS, RESCUE_MS, COMBO_MAX };
+module.exports = { blankVault, open, sellDuplicates, view, buildReel, CASES, FREE_CASE_MS, RESCUE_MS, COMBO_MAX };

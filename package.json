@@ -1,15 +1,14 @@
 {
   "name": "partyzone",
   "version": "1.0.0",
-  "description": "Plateforme de mini-jeux multijoueur entre amis : Blind Test YouTube, Quiz culture G, Undercover et MemeVault.",
+  "description": "Casino entre amis en pièces virtuelles : blackjack, roulette, Plinko, caisses à memes et un clicker pour miner ses pièces. Aucun achat, aucun argent réel.",
   "main": "server/index.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "test": "node test/harness.js",
-    "test:ui": "node test/ui.js",
-    "test:server": "PORT=3100 node -r ./test/stub-youtube.js server/index.js"
+    "test:ui": "node test/ui.js"
   },
   "engines": {
     "node": ">=18"

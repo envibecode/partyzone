@@ -1,0 +1,25 @@
+# Déploiement en un clic sur Render (https://render.com).
+# Après le premier déploiement, renseigne les valeurs marquées sync: false
+# dans l'onglet « Environment » du service, puis ajoute l'URL de callback
+# https://<ton-service>.onrender.com/auth/discord/callback côté Discord.
+services:
+  - type: web
+    name: partyzone
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: BASE_URL
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false

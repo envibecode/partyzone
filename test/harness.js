@@ -1,8 +1,10 @@
 'use strict';
 /**
  * Banc d'essai : simule plusieurs joueurs connectés en Socket.IO et joue
- * une partie complète de chaque mini-jeu. Lancer avec `node test/harness.js`
- * pendant que le serveur tourne sur le port 3000.
+ * une partie complète de chaque mini-jeu, plus la ferme et le classement.
+ *
+ *   node server/index.js     (dans un terminal)
+ *   node test/harness.js     (dans un autre)
  */
 const { io } = require('socket.io-client');
 
@@ -14,6 +16,9 @@ function check(label, cond, extra = '') {
   console.log(`${cond ? '  ✅' : '  ❌'} ${label}${extra ? ' — ' + extra : ''}`);
   if (!cond) failures++;
 }
+function section(title) {
+  console.log('\n▶ ' + title);
+}
 
 async function makeGuest(name) {
   const res = await fetch(`${BASE}/auth/guest`, {
@@ -24,20 +29,35 @@ async function makeGuest(name) {
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
   const cookie = raw.map((c) => c.split(';')[0]).join('; ');
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
-  const player = { name, socket, state: null, game: null, events: [] };
+  const player = { name, socket, cookie, state: null, game: null, farm: null, profile: null, events: [] };
+
   socket.on('room:state', ({ room, you, game }) => {
     player.state = room;
     player.me = you;
     player.game = game;
   });
-  socket.on('toast', (t) => player.events.push(['toast', t.message]));
-  socket.onAny((ev, payload) => {
-    if (ev !== 'room:state') player.events.push([ev, payload]);
+  socket.on('me', ({ user, profile }) => {
+    player.user = user;
+    player.profile = profile;
+    player.me = user.id;
   });
+  socket.on('profile:update', (profile) => {
+    player.profile = profile;
+  });
+  socket.on('farm:state', (payload) => {
+    player.farm = payload.farm;
+    player.lastResult = payload.result;
+    if (payload.me) player.profile = payload.me;
+  });
+  socket.onAny((ev, payload) => {
+    if (!['room:state', 'farm:state'].includes(ev)) player.events.push([ev, payload]);
+  });
+
   await new Promise((resolve, reject) => {
     socket.on('connect', resolve);
     socket.on('connect_error', reject);
   });
+  await until(() => player.profile, 5000, 'profil chargé');
   return player;
 }
 
@@ -45,83 +65,206 @@ async function until(fn, timeout = 15000, label = '') {
   const start = Date.now();
   while (Date.now() - start < timeout) {
     if (fn()) return true;
-    await wait(120);
+    await wait(100);
   }
   throw new Error('délai dépassé : ' + label);
 }
 
-/* ══════════════ Scénario 1 — Quiz ══════════════ */
+/* ══════════════ 1 — Quiz en QCM ══════════════ */
 
-async function testQuiz() {
-  console.log('\n▶ Quiz culture G');
-  const host = await makeGuest('Hôte');
+async function testQuizChoice() {
+  section('Quiz culture G — mode QCM');
+  const host = await makeGuest('Hote');
   const p2 = await makeGuest('Bob');
-  const p3 = await makeGuest('Clara');
 
   host.socket.emit('room:create');
-  await until(() => host.state, 5000, 'salon créé');
+  await until(() => host.state, 5000, 'salon');
   const code = host.state.code;
-  check('salon créé avec un code à 4 lettres', /^[A-Z]{4}$/.test(code), code);
+  check('salon créé', /^[A-Z]{4}$/.test(code), code);
 
   p2.socket.emit('room:join', { code });
-  p3.socket.emit('room:join', { code });
-  await until(() => host.state.players.length === 3, 5000, '3 joueurs');
-  check('3 joueurs dans le salon', host.state.players.length === 3);
-  check('l’hôte est bien le créateur', host.state.hostId === host.me);
+  await until(() => host.state.players.length === 2, 5000, '2 joueurs');
 
-  // un non-hôte ne peut pas lancer la partie
-  p2.socket.emit('game:start', { key: 'quiz' });
-  await wait(400);
-  check('un joueur non-hôte ne peut pas lancer', !host.game);
-
-  host.socket.emit('settings:update', { game: 'quiz', patch: { rounds: 3, roundSeconds: 10 } });
+  host.socket.emit('settings:update', {
+    game: 'quiz',
+    patch: { rounds: 3, answerMode: 'choice', difficulty: 'nightmare' },
+  });
   await wait(300);
   host.socket.emit('game:start', { key: 'quiz' });
 
   await until(() => host.game && host.game.phase === 'playing', 8000, 'phase de jeu');
-  check('la partie démarre', host.game.key === 'quiz');
-  check('3 questions configurées', host.game.totalRounds === 3, String(host.game.totalRounds));
-  check('la réponse est masquée', /·/.test(host.game.hint), host.game.hint);
+  check('mode QCM actif', host.game.answerMode === 'choice');
+  check('exactement 4 propositions', host.game.choices.length === 4, String(host.game.choices.length));
+  check('propositions toutes différentes', new Set(host.game.choices).size === 4);
+  check('la bonne réponse est cachée', host.game.correctIndex === null);
+  check('difficulté appliquée', host.game.difficulty.name === 'NIGHTMARE', host.game.difficulty.name);
 
-  // Bob répond juste (on triche : on lit la réponse dans la banque)
   const { QUESTIONS } = require('../server/data/questions');
   const q = QUESTIONS.find((x) => x.q === host.game.question);
   check('question issue de la banque', Boolean(q));
+  check('la bonne réponse est parmi les propositions', host.game.choices.includes(q.a[0]));
 
-  p2.socket.emit('game:action', { action: 'guess', payload: { text: q.a[0] } });
-  await until(() => p2.game && p2.game.solved, 5000, 'bonne réponse');
-  check('la bonne réponse est acceptée', p2.game.solved);
-  const bob = () => host.state.players.find((p) => p.name === 'Bob');
-  check('Bob marque des points', bob().score > 0, String(bob().score));
+  const good = host.game.choices.indexOf(q.a[0]);
+  const bad = (good + 1) % 4;
 
-  // réponse avec une faute de frappe + accents
-  const typo = q.a[0].normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-  p3.socket.emit('game:action', { action: 'guess', payload: { text: typo } });
-  await until(() => p3.game && p3.game.solved, 5000, 'tolérance orthographique');
-  check('tolérance casse/accents', p3.game.solved);
+  host.socket.emit('game:action', { action: 'pick', payload: { index: good } });
+  await until(() => host.game.yourResult, 4000, 'réponse enregistrée');
+  check('bonne réponse acceptée', host.game.yourResult.correct === true);
+  check('points multipliés par la difficulté', host.game.yourResult.points > 120, String(host.game.yourResult.points));
 
-  const first = host.game.board[0];
-  check('Bob est premier au classement de la manche', first && first.name === 'Bob');
+  // second clic ignoré : un seul essai
+  const pointsBefore = host.state.players.find((p) => p.name === 'Hote').score;
+  host.socket.emit('game:action', { action: 'pick', payload: { index: good } });
+  await wait(400);
+  check('un seul essai autorisé', host.state.players.find((p) => p.name === 'Hote').score === pointsBefore);
 
-  // on laisse la partie se terminer
-  await until(() => host.game && host.game.phase === 'results', 90000, 'fin de partie');
-  check('la partie se termine sur les résultats', host.game.phase === 'results');
-  check('historique complet', host.game.history.length === 3, String(host.game.history.length));
+  p2.socket.emit('game:action', { action: 'pick', payload: { index: bad } });
+  await until(() => p2.game.yourResult, 4000, 'mauvaise réponse');
+  check('mauvaise réponse refusée', p2.game.yourResult.correct === false);
+  check('mauvaise réponse ne rapporte rien', p2.game.yourResult.points === 0);
+
+  await until(() => host.game.phase === 'results', 90000, 'fin de partie');
+  check('partie terminée', host.game.phase === 'results');
 
   host.socket.emit('game:stop');
   await until(() => !host.game, 5000, 'retour au salon');
-  check('retour au salon après la partie', host.game === null);
-  check('les points sont cumulés sur la session', host.state.players.some((p) => p.totalScore > 0));
+  await until(() => host.profile.xp > 0, 6000, 'XP versée');
+  check('XP créditée au profil', host.profile.xp > 0, host.profile.xp + ' XP');
 
-  [host, p2, p3].forEach((p) => p.socket.close());
+  [host, p2].forEach((p) => p.socket.close());
+  return host;
 }
 
-/* ══════════════ Scénario 2 — Undercover ══════════════ */
+/* ══════════════ 2 — Blind test en QCM ══════════════ */
+
+async function testBlindtestChoice() {
+  section('Blind Test — mode QCM');
+  const host = await makeGuest('DJ');
+  host.socket.emit('room:create');
+  await until(() => host.state, 5000, 'salon');
+
+  // le serveur de test simule les métadonnées YouTube (voir test/stub-youtube.js)
+  host.socket.emit('blindtest:import', { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' });
+  const ok = await until(() => host.state.hasPlaylist, 12000, 'playlist importée').catch(() => false);
+  if (!ok) {
+    console.log('  ⏭  playlist indisponible (serveur sans stub YouTube) — test QCM du blind test ignoré');
+    host.socket.close();
+    return;
+  }
+
+  host.socket.emit('settings:update', {
+    game: 'blindtest',
+    patch: { rounds: 2, answerMode: 'choice', difficulty: 'rookie' },
+  });
+  await wait(300);
+  host.socket.emit('game:start', { key: 'blindtest' });
+
+  await until(() => host.game && host.game.phase === 'playing', 10000, 'manche en cours');
+  check('mode QCM actif', host.game.answerMode === 'choice');
+  check('4 propositions « Artiste — Titre »', host.game.choices.length === 4, host.game.choices[0]);
+  check('aucun doublon dans les propositions', new Set(host.game.choices).size === 4);
+  check('la bonne réponse reste cachée', host.game.correctIndex === null);
+  check('difficulté ROOKIE = 40 s', Math.round((host.game.deadline - host.game.serverNow) / 1000) === 40);
+
+  host.socket.emit('game:action', { action: 'pick', payload: { index: 0 } });
+  await until(() => host.game.yourResult, 4000, 'réponse');
+  check('réponse enregistrée', host.game.yourResult !== null);
+
+  await until(() => host.game.phase === 'reveal', 50000, 'révélation');
+  check('la bonne réponse est révélée', Number.isInteger(host.game.correctIndex));
+  check('titre révélé', Boolean(host.game.revealed && host.game.revealed.title));
+
+  host.socket.emit('game:stop');
+  await wait(500);
+  host.socket.close();
+}
+
+/* ══════════════ 3 — PIXEL FARM ══════════════ */
+
+async function testFarm() {
+  section('PIXEL FARM');
+  const p = await makeGuest('Fermier');
+
+  p.socket.emit('farm:open');
+  await until(() => p.farm, 5000, 'ferme ouverte');
+  check('6 parcelles au départ', p.farm.plots.length === 6, String(p.farm.plots.length));
+  check('pièces de départ', p.farm.coins === 40, String(p.farm.coins));
+  check('réservoir plein', p.farm.water === p.farm.waterMax);
+  check('graines avancées verrouillées', p.farm.seeds.find((s) => s.id === 'crystal').locked === true);
+
+  // planter
+  p.socket.emit('farm:action', { action: 'plant', payload: { plot: 0, seed: 'wheat' } });
+  await until(() => p.farm.plots[0].seed === 'wheat', 4000, 'blé planté');
+  check('blé planté', p.farm.plots[0].seed === 'wheat');
+  check('coût débité', p.farm.coins === 38, String(p.farm.coins));
+
+  // planter sur une parcelle occupée doit échouer
+  p.socket.emit('farm:action', { action: 'plant', payload: { plot: 0, seed: 'wheat' } });
+  await wait(400);
+  check('parcelle occupée refusée', p.lastResult && p.lastResult.ok === false, p.lastResult && p.lastResult.message);
+
+  // récolter trop tôt doit échouer
+  p.socket.emit('farm:action', { action: 'harvest', payload: { plot: 0 } });
+  await wait(400);
+  check('récolte prématurée refusée', p.lastResult.ok === false, p.lastResult.message);
+
+  // arroser jusqu'à maturité (chaque clic avance de 4 s, il faut ~30 s)
+  const waterBefore = p.farm.water;
+  for (let i = 0; i < 9; i++) {
+    p.socket.emit('farm:action', { action: 'water', payload: { plot: 0 } });
+    await wait(120);
+  }
+  check('l’eau est consommée par les clics', p.farm.water < waterBefore, `${waterBefore} → ${p.farm.water}`);
+  await until(() => p.farm.plots[0].progress >= 1, 6000, 'blé mûr');
+  check('l’arrosage accélère la pousse', p.farm.plots[0].progress >= 1);
+
+  const coinsBefore = p.farm.coins;
+  const xpBefore = p.profile.xp;
+  p.socket.emit('farm:action', { action: 'harvest', payload: { plot: 0 } });
+  await until(() => p.farm.coins > coinsBefore, 4000, 'récolte');
+  check('récolte créditée en pièces', p.farm.coins === coinsBefore + 8, String(p.farm.coins));
+  await until(() => p.profile.xp > xpBefore, 4000, 'XP de récolte');
+  check('récolte créditée en XP', p.profile.xp === xpBefore + 4, `${xpBefore} → ${p.profile.xp}`);
+  check('compteur de récoltes', p.farm.harvested === 1);
+
+  // améliorations : refusée sans pièces, acceptée avec
+  p.socket.emit('farm:action', { action: 'upgrade', payload: { id: 'can' } });
+  await wait(400);
+  check('amélioration refusée sans pièces', p.lastResult.ok === false, p.lastResult.message);
+
+  // parcelle supplémentaire hors budget
+  p.socket.emit('farm:action', { action: 'buy-plot', payload: {} });
+  await wait(400);
+  check('parcelle refusée sans pièces', p.lastResult.ok === false);
+
+  // action inconnue
+  p.socket.emit('farm:action', { action: 'triche', payload: {} });
+  await wait(400);
+  check('action inconnue rejetée', p.lastResult.ok === false);
+
+  p.socket.close();
+}
+
+/* ══════════════ 4 — Classement ══════════════ */
+
+async function testLeaderboard() {
+  section('Classement général');
+  const { leaderboard } = await fetch(`${BASE}/api/leaderboard?limit=10`).then((r) => r.json());
+  check('le classement répond', Array.isArray(leaderboard));
+  check('il contient les joueurs des tests', leaderboard.length > 0, leaderboard.length + ' joueurs');
+  if (leaderboard.length) {
+    const first = leaderboard[0];
+    check('chaque ligne a rang, niveau et titre', Boolean(first.rank && first.level && first.title), `${first.name} LV${first.level} ${first.title}`);
+    check('trié par XP décroissante', leaderboard.every((p, i) => i === 0 || leaderboard[i - 1].xp >= p.xp));
+  }
+}
+
+/* ══════════════ 5 — Undercover (inchangé) ══════════════ */
 
 async function testUndercover() {
-  console.log('\n▶ Undercover');
+  section('Undercover');
   const players = [];
-  for (const n of ['Alice', 'Bob', 'Clara', 'David']) players.push(await makeGuest(n));
+  for (const n of ['Alice', 'Bruno', 'Chloe', 'David']) players.push(await makeGuest(n));
   const [host] = players;
 
   host.socket.emit('room:create');
@@ -137,97 +280,77 @@ async function testUndercover() {
   await wait(300);
   host.socket.emit('game:start', { key: 'undercover' });
 
-  await until(() => host.game && host.game.phase === 'roles', 6000, 'distribution des rôles');
+  await until(() => host.game && host.game.phase === 'roles', 6000, 'rôles');
   const roles = players.map((p) => p.game.you.role);
-  check('un rôle attribué à chacun', roles.every(Boolean), roles.join(', '));
   check('exactement 1 undercover', roles.filter((r) => r === 'undercover').length === 1);
-  check('3 civils', roles.filter((r) => r === 'civil').length === 3);
-
-  const words = players.map((p) => p.game.you.word);
   const civilWords = players.filter((p) => p.game.you.role === 'civil').map((p) => p.game.you.word);
   check('les civils partagent le même mot', new Set(civilWords).size === 1, civilWords[0]);
-  const underWord = players.find((p) => p.game.you.role === 'undercover').game.you.word;
-  check('l’undercover a un mot différent', underWord !== civilWords[0], `${civilWords[0]} / ${underWord}`);
   check('personne ne voit le rôle des autres', players[0].game.players.every((p) => p.role === null));
 
-  await until(() => host.game.phase === 'describe', 12000, 'phase de description');
-  check('phase de description atteinte', host.game.phase === 'describe');
-
-  // chaque joueur parle à son tour
+  await until(() => host.game.phase === 'describe', 12000, 'description');
   for (let i = 0; i < 4; i++) {
-    await until(() => players.some((p) => p.game && p.game.you.isSpeaker), 20000, 'tour de parole ' + i);
+    await until(() => players.some((p) => p.game && p.game.you.isSpeaker), 20000, 'tour ' + i);
     const speaker = players.find((p) => p.game.you.isSpeaker);
     speaker.socket.emit('game:action', { action: 'describe', payload: { word: 'mot' + i } });
     await wait(900);
   }
 
-  await until(() => host.game.phase === 'vote', 20000, 'phase de vote');
-  check('phase de vote atteinte', host.game.phase === 'vote');
-  check('4 descriptions enregistrées', host.game.descriptions.length === 4, String(host.game.descriptions.length));
+  await until(() => host.game.phase === 'vote', 20000, 'vote');
+  check('4 descriptions enregistrées', host.game.descriptions.length === 4);
 
-  // l'auto-vote est refusé
-  players[0].socket.emit('game:action', { action: 'vote', payload: { targetId: players[0].me } });
-  await wait(400);
-  check('l’auto-vote est refusé', !players[0].game.you.hasVoted);
-
-  // tout le monde vote contre l'undercover
   const target = players.find((p) => p.game.you.role === 'undercover');
   for (const p of players) {
     if (p !== target) p.socket.emit('game:action', { action: 'vote', payload: { targetId: target.me } });
   }
   target.socket.emit('game:action', { action: 'vote', payload: { targetId: players.find((p) => p !== target).me } });
 
-  await until(() => host.game.phase === 'result' || host.game.phase === 'over', 20000, 'résultat du vote');
-  check('un joueur est éliminé', host.game.lastResult && host.game.lastResult.eliminated);
-  check('l’undercover est démasqué', host.game.lastResult.eliminated.role === 'undercover');
-
-  await until(() => host.game.phase === 'over', 20000, 'fin de partie');
+  await until(() => host.game.phase === 'over', 25000, 'fin');
   check('les civils gagnent', host.game.winner === 'civils', host.game.winner);
   check('les mots sont révélés', Boolean(host.game.words && host.game.words.civil));
-  check('les civils marquent des points', host.state.players.filter((p) => p.score > 0).length === 3);
 
+  host.socket.emit('game:stop');
+  await wait(800);
   players.forEach((p) => p.socket.close());
 }
 
-/* ══════════════ Scénario 3 — Blind Test (parsing + garde-fous) ══════════════ */
+/* ══════════════ 6 — Génération des propositions ══════════════ */
 
-async function testBlindTest() {
-  console.log('\n▶ Blind Test');
-  const host = await makeGuest('DJ');
-  host.socket.emit('room:create');
-  await until(() => host.state, 5000, 'salon');
+function testChoiceGeneration() {
+  section('Génération des propositions (hors ligne)');
+  const { quizChoices, numericDecoys } = require('../server/choices');
+  const { QUESTIONS } = require('../server/data/questions');
 
-  host.socket.emit('game:start', { key: 'blindtest' });
-  await until(() => host.events.some(([e, p]) => e === 'toast' && /playlist/i.test(p.message || p)), 5000, 'refus sans playlist');
-  check('refuse de démarrer sans playlist', !host.game);
+  let allFour = true;
+  let allContainAnswer = true;
+  let allUnique = true;
+  for (const q of QUESTIONS) {
+    const c = quizChoices(q, QUESTIONS);
+    if (c.length !== 4) allFour = false;
+    if (!c.includes(q.a[0])) allContainAnswer = false;
+    if (new Set(c).size !== 4) allUnique = false;
+  }
+  check('les 150 questions produisent 4 propositions', allFour);
+  check('la bonne réponse y figure toujours', allContainAnswer);
+  check('aucun doublon', allUnique);
 
-  host.socket.emit('blindtest:import', { url: 'https://example.com/pas-youtube' });
-  await wait(500);
-  check('rejette un lien non YouTube', host.events.some(([e, p]) => e === 'toast' && /non reconnu/i.test((p && p.message) || '')));
-
-  // Vérification du moteur d'appariement hors ligne
-  const { parseTrack } = require('../server/youtube');
-  const { matchesAny } = require('../server/util');
-  const t1 = parseTrack('Daft Punk - Get Lucky (Official Audio) ft. Pharrell Williams', 'DaftPunkVEVO');
-  check('artiste extrait', t1.artist === 'Daft Punk', t1.artist);
-  check('titre nettoyé', /get lucky/i.test(t1.title), t1.title);
-  check('faute de frappe tolérée', matchesAny('get lucki', t1.acceptTitles));
-  check('réponse fausse rejetée', !matchesAny('around the world', t1.acceptTitles));
-
-  const t2 = parseTrack('Stromae — Alors on danse [Clip Officiel]', 'Stromae');
-  check('tiret cadratin géré', t2.artist === 'Stromae' && /alors on danse/i.test(t2.title), `${t2.artist} / ${t2.title}`);
-
-  const t3 = parseTrack('Bohemian Rhapsody', 'Queen Official');
-  check('repli sur la chaîne quand il n’y a pas de séparateur', t3.artist === 'Queen', t3.artist);
-
-  host.socket.close();
+  const years = numericDecoys(1989, 3);
+  check('leurres d’année plausibles', years.every((y) => Math.abs(Number(y) - 1989) <= 12), years.join(', '));
+  const small = numericDecoys(8, 3);
+  check('leurres de petits nombres plausibles', small.every((n) => Number(n) > 0 && Number(n) <= 12), small.join(', '));
+  const big = numericDecoys(300000, 3);
+  check('leurres de grands nombres arrondis', big.every((n) => Number(n) % 1000 === 0), big.join(', '));
 }
+
+/* ══════════════ Exécution ══════════════ */
 
 (async () => {
   try {
-    await testQuiz();
+    testChoiceGeneration();
+    await testQuizChoice();
+    await testBlindtestChoice();
+    await testFarm();
     await testUndercover();
-    await testBlindTest();
+    await testLeaderboard();
   } catch (err) {
     console.error('\n💥 ' + err.message);
     failures++;

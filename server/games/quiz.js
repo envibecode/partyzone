@@ -2,23 +2,33 @@
 const BaseGame = require('./base');
 const { matchesAny, shuffle, maskAnswer } = require('../util');
 const { QUESTIONS } = require('../data/questions');
+const { quizChoices } = require('../choices');
+const difficulty = require('../difficulty');
 
 const REVEAL_MS = 5000;
 const COUNTDOWN_MS = 3000;
 
 /**
- * Quiz culture G « à la PopSauce » : tout le monde tape la réponse en même temps,
- * le plus rapide marque le plus de points, et la réponse se dévoile lettre par lettre.
+ * Quiz culture G « à la PopSauce ».
+ *
+ * En QCM : quatre propositions, un seul essai, le plus rapide marque le plus.
+ * En saisie : on tape la réponse et les lettres se dévoilent au fil du chrono.
  */
 class Quiz extends BaseGame {
   constructor(room, options) {
     super(room, options);
-    const pool = options.categories && options.categories.length
+    this.diff = difficulty.resolve(options.difficulty);
+    this.roundSeconds = this.diff.quiz.seconds;
+    this.hintFrom = this.diff.quiz.hintFrom;
+    this.mult = this.diff.mult;
+    this.answerMode = options.answerMode === 'choice' ? 'choice' : 'type';
+
+    this.pool = options.categories && options.categories.length
       ? QUESTIONS.filter((q) => options.categories.includes(q.c))
       : QUESTIONS;
-    const custom = (options.customQuestions || []).map((q) => ({ c: 'Perso', q: q.q, a: q.a }));
-    this.questions = shuffle([...pool, ...custom]).slice(0, options.rounds || 12);
-    this.roundSeconds = Math.min(60, Math.max(8, options.roundSeconds || 25));
+    if (!this.pool.length) this.pool = QUESTIONS;
+
+    this.questions = shuffle(this.pool).slice(0, options.rounds || 12);
     this.roundIndex = -1;
     this.round = null;
     this.history = [];
@@ -41,8 +51,13 @@ class Quiz extends BaseGame {
     this.roundIndex++;
     if (this.roundIndex >= this.totalRounds) return this.finish();
 
+    const question = this.questions[this.roundIndex];
+    const choices = this.answerMode === 'choice' ? quizChoices(question, this.pool) : null;
+
     this.round = {
-      question: this.questions[this.roundIndex],
+      question,
+      choices,
+      correctIndex: choices ? choices.indexOf(question.a[0]) : -1,
       startedAt: null,
       answers: new Map(), // playerId → { ms, points, correct }
       order: [],
@@ -57,7 +72,7 @@ class Quiz extends BaseGame {
       this.round.startedAt = Date.now();
       this.setPhase('playing', this.roundSeconds * 1000);
       this.sync();
-      this.every(1000, () => this.tickHints());
+      if (this.answerMode === 'type') this.every(1000, () => this.tickHints());
       this.after(this.roundSeconds * 1000, () => this.reveal('temps écoulé'));
     });
   }
@@ -71,23 +86,56 @@ class Quiz extends BaseGame {
     }
   }
 
-  /** Après 35 % du temps, on commence à dévoiler des lettres. */
   hintRatio() {
     if (!this.round || !this.round.startedAt) return 0;
-    const r = (Date.now() - this.round.startedAt) / (this.roundSeconds * 1000);
-    if (r < 0.35) return 0;
-    if (r < 0.55) return 0.2;
-    if (r < 0.75) return 0.35;
-    if (r < 0.9) return 0.5;
+    const elapsed = (Date.now() - this.round.startedAt) / (this.roundSeconds * 1000);
+    if (elapsed < this.hintFrom) return 0;
+    const span = Math.max(0.001, 1 - this.hintFrom);
+    const into = (elapsed - this.hintFrom) / span;
+    if (into < 0.25) return 0.2;
+    if (into < 0.5) return 0.35;
+    if (into < 0.75) return 0.5;
     return 0.65;
   }
 
   handle(playerId, action, payload = {}) {
     if (action === 'guess') return this.onGuess(playerId, payload.text);
+    if (action === 'pick') return this.onPick(playerId, payload.index);
   }
 
+  /* ── QCM ── */
+
+  onPick(playerId, rawIndex) {
+    if (this.phase !== 'playing' || !this.round || this.answerMode !== 'choice') return;
+    if (this.round.answers.has(playerId)) return;
+
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= this.round.choices.length) return;
+
+    const ms = Date.now() - this.round.startedAt;
+    const correct = index === this.round.correctIndex;
+    const rank = this.round.order.length;
+    const points = correct ? this.points(ms, rank) : 0;
+
+    this.round.answers.set(playerId, { ms, points, correct, index });
+    if (correct) {
+      this.round.order.push(playerId);
+      this.addScore(playerId, points);
+      const p = this.player(playerId);
+      this.room.emit('quiz:hit', { playerId, name: p.name, rank: rank + 1, points, ms });
+    }
+    this.toPlayer(playerId, 'quiz:feedback', { ok: correct, points, rank: rank + 1 });
+
+    this.sync();
+    if (this.round.answers.size >= this.room.connectedPlayers().length) {
+      this.reveal('tout le monde a répondu');
+    }
+  }
+
+  /* ── Saisie ── */
+
   onGuess(playerId, text) {
-    if (this.phase !== 'playing' || !this.round) return;
+    if (this.phase !== 'playing' || !this.round || this.answerMode !== 'type') return;
     if (this.round.answers.has(playerId)) return;
 
     const guess = String(text || '').trim().slice(0, 60);
@@ -117,9 +165,9 @@ class Quiz extends BaseGame {
 
   points(ms, rank) {
     const speed = Math.max(0, 1 - ms / (this.roundSeconds * 1000));
-    const base = Math.round(50 + 100 * speed);
+    const base = 50 + 100 * speed;
     const podium = [30, 18, 10][rank] || 0;
-    return base + podium;
+    return Math.round((base + podium) * this.mult);
   }
 
   reveal(reason) {
@@ -158,6 +206,8 @@ class Quiz extends BaseGame {
       serverNow: Date.now(),
       round: this.roundIndex + 1,
       totalRounds: this.totalRounds,
+      answerMode: this.answerMode,
+      difficulty: { id: this.diff.id, name: this.diff.name, color: this.diff.color, mult: this.diff.mult },
       ranking: this.ranking(),
     };
     if (this.phase === 'results') return { ...base, history: this.history };
@@ -165,17 +215,13 @@ class Quiz extends BaseGame {
 
     const q = this.round.question;
     const mine = this.round.answers.get(playerId);
-    const solved = this.phase === 'reveal' || Boolean(mine);
+    const revealAll = this.phase === 'reveal';
 
-    return {
+    const common = {
       ...base,
       category: q.c,
       question: q.q,
-      hint: solved ? q.a[0] : maskAnswer(q.a[0], this.hintRatio()),
-      answerLength: q.a[0].length,
-      solved,
-      you: mine ? { points: mine.points, ms: mine.ms } : null,
-      revealed: this.phase === 'reveal' ? q.a[0] : null,
+      revealed: revealAll ? q.a[0] : null,
       board: this.round.order.map((id, i) => ({
         rank: i + 1,
         id,
@@ -183,8 +229,28 @@ class Quiz extends BaseGame {
         ms: this.round.answers.get(id).ms,
         points: this.round.answers.get(id).points,
       })),
-      answeredCount: this.round.order.length,
+      answeredCount: this.round.answers.size,
       playerCount: this.room.connectedPlayers().length,
+    };
+
+    if (this.answerMode === 'choice') {
+      return {
+        ...common,
+        choices: this.round.choices,
+        correctIndex: revealAll ? this.round.correctIndex : null,
+        yourPick: mine ? mine.index : null,
+        yourResult: mine ? { correct: mine.correct, points: mine.points } : null,
+        solved: Boolean(mine) || revealAll,
+      };
+    }
+
+    const solved = revealAll || Boolean(mine);
+    return {
+      ...common,
+      hint: solved ? q.a[0] : maskAnswer(q.a[0], this.hintRatio()),
+      answerLength: q.a[0].length,
+      solved,
+      you: mine ? { points: mine.points, ms: mine.ms } : null,
     };
   }
 }

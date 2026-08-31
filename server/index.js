@@ -8,6 +8,9 @@ const cookieParser = require('cookie-parser');
 const { Server } = require('socket.io');
 
 const auth = require('./auth');
+const store = require('./store');
+const farm = require('./farm');
+const difficulty = require('./difficulty');
 const { createRoom, getRoom, startJanitor } = require('./room');
 const yt = require('./youtube');
 const { CATEGORIES } = require('./data/questions');
@@ -16,11 +19,7 @@ const BlindTest = require('./games/blindtest');
 const Quiz = require('./games/quiz');
 const Undercover = require('./games/undercover');
 
-const GAMES = {
-  blindtest: BlindTest,
-  quiz: Quiz,
-  undercover: Undercover,
-};
+const GAMES = { blindtest: BlindTest, quiz: Quiz, undercover: Undercover };
 
 const app = express();
 const server = http.createServer(app);
@@ -34,6 +33,22 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', ext
 auth.register(app);
 
 app.get('/api/categories', (req, res) => res.json({ categories: CATEGORIES }));
+
+app.get('/api/difficulties', (req, res) =>
+  res.json({ blindtest: difficulty.list('blindtest'), quiz: difficulty.list('quiz') })
+);
+
+/** Classement général — c'est ce qui s'affiche sur la page d'accueil. */
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const limit = Math.min(50, Math.max(3, Number(req.query.limit) || 15));
+    res.json({ leaderboard: await store.leaderboard(limit) });
+  } catch (err) {
+    console.error('[leaderboard]', err.message);
+    res.status(500).json({ leaderboard: [] });
+  }
+});
+
 app.get('/healthz', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
 /* ─── Socket.IO ────────────────────────────────────────── */
@@ -49,36 +64,49 @@ function currentRoom(socket) {
   return socket.data.roomCode ? getRoom(socket.data.roomCode) : null;
 }
 
-function joinRoom(socket, room) {
+io.on('connection', async (socket) => {
   const user = socket.data.user;
-  socket.join('room:' + room.code);
-  socket.data.roomCode = room.code;
-  room.addPlayer(user, socket.id);
-  socket.emit('room:joined', { code: room.code, chat: room.chat });
-  room.pushChat({ system: true, text: `${user.name} a rejoint le salon.` });
-  room.broadcast();
-}
 
-function leaveRoom(socket) {
-  const room = currentRoom(socket);
-  if (!room) return;
-  const user = socket.data.user;
-  socket.leave('room:' + room.code);
-  socket.data.roomCode = null;
-  room.removePlayer(user.id);
-  room.pushChat({ system: true, text: `${user.name} a quitté le salon.` });
-  room.broadcast();
-}
+  let profile;
+  try {
+    profile = await store.loadProfile(user);
+  } catch (err) {
+    console.error('[store] chargement du profil impossible :', err.message);
+    socket.emit('toast', { message: 'Progression indisponible pour le moment.', kind: 'error' });
+    return;
+  }
+  socket.data.profile = profile;
 
-io.on('connection', (socket) => {
-  const user = socket.data.user;
-  socket.emit('me', user);
+  /** Renvoie au joueur son profil à jour (niveau, XP, pièces). */
+  const sendMe = () => socket.emit('me', { user, profile: store.publicProfile(profile) });
+  sendMe();
+
+  /* ── Salons ────────────────────────────────────────── */
+
+  function joinRoom(room) {
+    socket.join('room:' + room.code);
+    socket.data.roomCode = room.code;
+    room.addPlayer(user, socket.id, profile);
+    socket.emit('room:joined', { code: room.code, chat: room.chat });
+    room.pushChat({ system: true, text: `${user.name} a rejoint le salon.` });
+    room.broadcast();
+  }
+
+  function leaveRoom() {
+    const room = currentRoom(socket);
+    if (!room) return;
+    socket.leave('room:' + room.code);
+    socket.data.roomCode = null;
+    room.removePlayer(user.id);
+    room.pushChat({ system: true, text: `${user.name} a quitté le salon.` });
+    room.broadcast();
+  }
 
   socket.on('room:create', () => {
-    leaveRoom(socket);
+    leaveRoom();
     const room = createRoom(io);
     room.hostId = user.id;
-    joinRoom(socket, room);
+    joinRoom(room);
   });
 
   socket.on('room:join', ({ code } = {}) => {
@@ -87,11 +115,11 @@ io.on('connection', (socket) => {
     if (room.players.size >= 24 && !room.players.has(user.id)) {
       return socket.emit('toast', { message: 'Ce salon est complet (24 joueurs max).', kind: 'error' });
     }
-    leaveRoom(socket);
-    joinRoom(socket, room);
+    leaveRoom();
+    joinRoom(room);
   });
 
-  socket.on('room:leave', () => leaveRoom(socket));
+  socket.on('room:leave', () => leaveRoom());
 
   socket.on('chat:send', ({ text } = {}) => {
     const room = currentRoom(socket);
@@ -99,8 +127,8 @@ io.on('connection', (socket) => {
     const clean = String(text || '').trim().slice(0, 300);
     if (!clean) return;
     room.pushChat({ id: user.id, name: user.name, avatar: user.avatar, text: clean });
-    // Pendant le blind test ou le quiz, le chat sert aussi de zone de réponse.
-    if (room.game && (room.gameKey === 'blindtest' || room.gameKey === 'quiz')) {
+    // En mode saisie, le chat sert aussi de zone de réponse.
+    if (room.game && room.game.answerMode === 'type') {
       room.game.handle(user.id, 'guess', { text: clean });
     }
   });
@@ -115,56 +143,6 @@ io.on('connection', (socket) => {
 
   /* ── Import de playlist YouTube ────────────────────── */
 
-  socket.on('blindtest:import', async ({ url } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-
-    const playlistId = yt.parsePlaylistId(url);
-    const videoId = yt.parseVideoId(url);
-
-    if (!playlistId && !videoId) {
-      return socket.emit('toast', { message: 'Lien YouTube non reconnu. Colle l’URL d’une playlist.', kind: 'error' });
-    }
-
-    socket.emit('blindtest:importing', { playlistId });
-
-    // 1) chemin serveur (si une clé API est configurée)
-    if (playlistId && process.env.YOUTUBE_API_KEY) {
-      try {
-        const tracks = await yt.fetchPlaylistWithApi(playlistId);
-        if (tracks && tracks.length) return setPlaylist(room, tracks, url);
-      } catch (err) {
-        console.warn('[youtube] API indisponible, repli navigateur :', err.message);
-      }
-    }
-
-    // 2) vidéo seule
-    if (!playlistId && videoId) {
-      const tracks = await yt.buildTracksFromIds([videoId]);
-      if (tracks.length) return setPlaylist(room, tracks, url);
-      return socket.emit('toast', { message: 'Vidéo inaccessible.', kind: 'error' });
-    }
-
-    // 3) repli : le navigateur de l'hôte extrait les IDs via l'IFrame API
-    socket.emit('blindtest:extract', { playlistId });
-  });
-
-  socket.on('blindtest:videoIds', async ({ ids, source } = {}) => {
-    const room = currentRoom(socket);
-    if (!room || !room.isHost(user.id)) return;
-    const list = (Array.isArray(ids) ? ids : []).filter((s) => /^[A-Za-z0-9_-]{11}$/.test(s));
-    if (!list.length) {
-      return socket.emit('toast', { message: 'Playlist vide ou privée.', kind: 'error' });
-    }
-    try {
-      const tracks = await yt.buildTracksFromIds(list);
-      if (!tracks.length) throw new Error('aucune piste');
-      setPlaylist(room, tracks, source);
-    } catch (err) {
-      socket.emit('toast', { message: 'Impossible de lire les titres de la playlist.', kind: 'error' });
-    }
-  });
-
   function setPlaylist(room, tracks, source) {
     room.playlist = { tracks, source, importedAt: Date.now() };
     room.settings.blindtest.playlistUrl = source || '';
@@ -175,6 +153,50 @@ io.on('connection', (socket) => {
     room.toast(`Playlist importée : ${tracks.length} titres prêts.`, 'success');
     room.broadcast();
   }
+
+  socket.on('blindtest:import', async ({ url } = {}) => {
+    const room = currentRoom(socket);
+    if (!room || !room.isHost(user.id)) return;
+
+    const playlistId = yt.parsePlaylistId(url);
+    const videoId = yt.parseVideoId(url);
+    if (!playlistId && !videoId) {
+      return socket.emit('toast', { message: 'Lien YouTube non reconnu. Colle l’URL d’une playlist.', kind: 'error' });
+    }
+
+    socket.emit('blindtest:importing', { playlistId });
+
+    if (playlistId && process.env.YOUTUBE_API_KEY) {
+      try {
+        const tracks = await yt.fetchPlaylistWithApi(playlistId);
+        if (tracks && tracks.length) return setPlaylist(room, tracks, url);
+      } catch (err) {
+        console.warn('[youtube] API indisponible, repli navigateur :', err.message);
+      }
+    }
+
+    if (!playlistId && videoId) {
+      const tracks = await yt.buildTracksFromIds([videoId]);
+      if (tracks.length) return setPlaylist(room, tracks, url);
+      return socket.emit('toast', { message: 'Vidéo inaccessible.', kind: 'error' });
+    }
+
+    socket.emit('blindtest:extract', { playlistId });
+  });
+
+  socket.on('blindtest:videoIds', async ({ ids, source } = {}) => {
+    const room = currentRoom(socket);
+    if (!room || !room.isHost(user.id)) return;
+    const list = (Array.isArray(ids) ? ids : []).filter((s) => /^[A-Za-z0-9_-]{11}$/.test(s));
+    if (!list.length) return socket.emit('toast', { message: 'Playlist vide ou privée.', kind: 'error' });
+    try {
+      const tracks = await yt.buildTracksFromIds(list);
+      if (!tracks.length) throw new Error('aucune piste');
+      setPlaylist(room, tracks, source);
+    } catch (err) {
+      socket.emit('toast', { message: 'Impossible de lire les titres de la playlist.', kind: 'error' });
+    }
+  });
 
   /* ── Lancement / arrêt d'un jeu ────────────────────── */
 
@@ -209,7 +231,50 @@ io.on('connection', (socket) => {
     room.game.handle(user.id, action, payload || {});
   });
 
+  /* ── PIXEL FARM ────────────────────────────────────── */
+
+  function farmState(extra = {}) {
+    const level = store.levelFromXp(profile.xp).level;
+    return { farm: farm.view(profile, level), me: store.publicProfile(profile), ...extra };
+  }
+
+  socket.on('farm:open', async () => {
+    const gains = farm.tick(profile);
+    if (gains.xp > 0) store.grantXp(profile, gains.xp);
+    if (gains.harvested) await store.saveProfile(profile);
+    socket.emit(
+      'farm:state',
+      farmState(gains.harvested ? { offline: gains } : {})
+    );
+  });
+
+  socket.on('farm:action', async ({ action, payload } = {}) => {
+    farm.tick(profile);
+    const level = store.levelFromXp(profile.xp).level;
+    const result = farm.act(profile, action, payload || {}, level);
+
+    if (result.ok && result.xp) store.grantXp(profile, result.xp);
+    if (result.ok) {
+      // L'arrosage part en rafale : on n'écrit sur le disque qu'une fois par seconde.
+      if (result.quiet) {
+        clearTimeout(socket.data.saveTimer);
+        socket.data.saveTimer = setTimeout(() => store.saveProfile(profile).catch(() => {}), 1000);
+      } else {
+        await store.saveProfile(profile);
+      }
+    }
+
+    socket.emit('farm:state', farmState({ result }));
+    if (result.ok && !result.quiet) sendMe();
+  });
+
+  /* ── Divers ────────────────────────────────────────── */
+
+  socket.on('me:refresh', () => sendMe());
+
   socket.on('disconnect', () => {
+    clearTimeout(socket.data.saveTimer);
+    store.saveProfile(profile).catch(() => {});
     const room = currentRoom(socket);
     if (!room) return;
     room.removePlayer(user.id);
@@ -223,5 +288,17 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n  🎉 PartyZone démarré sur http://localhost:${PORT}`);
   console.log(`  Discord OAuth : ${auth.discordConfigured() ? 'activé' : 'non configuré (mode invité seulement)'}`);
-  console.log(`  YouTube API   : ${process.env.YOUTUBE_API_KEY ? 'clé détectée' : 'import via navigateur'}\n`);
+  console.log(`  YouTube API   : ${process.env.YOUTUBE_API_KEY ? 'clé détectée' : 'import via navigateur'}`);
+  console.log(`  Progression   : ${process.env.DATABASE_URL ? 'PostgreSQL' : 'fichier data/profiles.json'}\n`);
 });
+
+/* Arrêt propre : on vide le tampon d'écriture avant de mourir. */
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    console.log('\n[serveur] arrêt en cours…');
+    try {
+      await store.close();
+    } catch {}
+    process.exit(0);
+  });
+}

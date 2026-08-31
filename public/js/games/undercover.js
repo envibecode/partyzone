@@ -19,7 +19,7 @@ window.PZGames.undercover = (() => {
         <div class="stage">
           <div style="font-size:2.6rem">👀</div>
           <h2 class="section-title">Tu es spectateur</h2>
-          <p class="muted small">La partie a commencé sans toi — tu joues à la prochaine.</p>
+          <p class="c-dim tiny">La partie a commencé sans toi — tu joues à la prochaine.</p>
           <div class="uc-grid">${state.players.map((p) => card(p, state, u, false)).join('')}</div>
           ${state.descriptions.length ? `<div class="desc-list">${descriptions(state, u)}</div>` : ''}
         </div>`;
@@ -37,7 +37,7 @@ window.PZGames.undercover = (() => {
             <div class="role-word">${you.word ? u.esc(you.word) : '???'}</div>
             <p class="role-hint">${r.hint}</p>
           </div>
-          <p class="muted small">${state.counts.civil} civils · ${state.counts.undercover} undercover${state.counts.mrwhite ? ` · ${state.counts.mrwhite} Mr White` : ''}</p>
+          <p class="c-dim tiny">${state.counts.civil} civils · ${state.counts.undercover} undercover${state.counts.mrwhite ? ` · ${state.counts.mrwhite} Mr White` : ''}</p>
           <div class="countdown" id="cd" style="font-size:2rem">…</div>
         </div>`;
       u.tickCountdown(root.querySelector('#cd'), state.deadline, state.serverNow);
@@ -51,11 +51,11 @@ window.PZGames.undercover = (() => {
       root.innerHTML = `
         <div class="stage">
           <h2 class="reveal-title">${winLabel}</h2>
-          <p class="reveal-sub">Mot des civils : <strong style="color:var(--lime)">${u.esc(state.words.civil)}</strong><br>
-             Mot undercover : <strong style="color:var(--rose)">${u.esc(state.words.undercover)}</strong></p>
+          <p class="reveal-sub">Mot des civils : <strong class="c-green">${u.esc(state.words.civil)}</strong><br>
+             Mot undercover : <strong class="c-pink">${u.esc(state.words.undercover)}</strong></p>
           <div class="uc-grid">${state.players.map((p) => card(p, state, u, false)).join('')}</div>
           <div class="scoreboard">${u.scoreboard(state.ranking)}</div>
-          ${ctx.isHost ? '<button class="btn btn-primary" data-act="back">Retour au salon</button>' : '<p class="muted small">En attente de l’hôte…</p>'}
+          ${ctx.isHost ? '<button class="btn btn-pink" data-act="back">RETOUR AU SALON</button>' : '<p class="c-dim tiny">En attente de l’hôte…</p>'}
         </div>`;
       wire(root, ctx);
       return;
@@ -72,7 +72,7 @@ window.PZGames.undercover = (() => {
             ? `<p class="reveal-sub">Dernière chance : quel était le mot des civils ?</p>
                <form class="guess-form" data-form="mrwhite">
                  <input class="input" placeholder="Le mot des civils…" autocomplete="off" autofocus>
-                 <button class="btn btn-primary" type="submit">Deviner</button>
+                 <button class="btn btn-pink" type="submit">Deviner</button>
                </form>`
             : '<p class="reveal-sub">Il tente de deviner le mot des civils…</p>'}
         </div>`;
@@ -89,8 +89,8 @@ window.PZGames.undercover = (() => {
             ? '<h2 class="reveal-title">🤝 Égalité — personne n’est éliminé</h2>'
             : `<div style="font-size:3rem">${ROLE_UI[r.eliminated.role].emoji}</div>
                <h2 class="reveal-title">${u.esc(r.eliminated.name)} est éliminé</h2>
-               <p class="reveal-sub">C’était un <strong>${ROLE_UI[r.eliminated.role].label}</strong>${r.eliminated.word ? ` — son mot : <strong style="color:var(--cyan)">${u.esc(r.eliminated.word)}</strong>` : ''}</p>`}
-          ${state.mrWhiteGuess ? `<p class="muted small">Proposition de Mr White : « ${u.esc(state.mrWhiteGuess.guess)} » — ${state.mrWhiteGuess.correct ? '✅' : '❌'}</p>` : ''}
+               <p class="reveal-sub">C’était un <strong>${ROLE_UI[r.eliminated.role].label}</strong>${r.eliminated.word ? ` — son mot : <strong class="c-green">${u.esc(r.eliminated.word)}</strong>` : ''}</p>`}
+          ${state.mrWhiteGuess ? `<p class="c-dim tiny">Proposition de Mr White : « ${u.esc(state.mrWhiteGuess.guess)} » — ${state.mrWhiteGuess.correct ? '✅' : '❌'}</p>` : ''}
           <div class="uc-grid">${state.players.map((p) => card(p, state, u, false)).join('')}</div>
         </div>`;
       return;
@@ -110,15 +110,15 @@ window.PZGames.undercover = (() => {
 
         ${isVote
           ? `<h2 class="section-title">🗳️ Qui est l’imposteur ?</h2>
-             <p class="muted small">${canAct ? 'Clique sur un joueur pour voter.' : 'Tu es éliminé — tu regardes.'}</p>`
+             <p class="c-dim tiny">${canAct ? 'Clique sur un joueur pour voter.' : 'Tu es éliminé — tu regardes.'}</p>`
           : you.isSpeaker
             ? `<h2 class="section-title">🎤 À toi ! Donne UN mot</h2>
                <form class="guess-form" data-form="describe">
                  <input class="input" maxlength="40" placeholder="Un seul mot…" autocomplete="off" autofocus>
-                 <button class="btn btn-primary" type="submit">Envoyer</button>
+                 <button class="btn btn-pink" type="submit">Envoyer</button>
                </form>`
             : `<h2 class="section-title">🎤 Tour de table — manche ${state.round}</h2>
-               <p class="muted small">${speakerName(state, u)}</p>`}
+               <p class="c-dim tiny">${speakerName(state, u)}</p>`}
 
         <div class="uc-grid">${state.players.map((p) => card(p, state, u, isVote && canAct && p.alive && p.id !== ctx.me)).join('')}</div>
 
@@ -165,9 +165,9 @@ window.PZGames.undercover = (() => {
   function hud(state, u) {
     const label = { describe: '🎤 Description', vote: '🗳️ Vote', mrwhite: '🎭 Mr White' }[state.phase] || '';
     return `<div class="hud">
-      <span class="badge">${label} · manche ${state.round}</span>
+      <span class="badge2">${label} · manche ${state.round}</span>
       <div class="timer-wrap"><div class="timer-bar" data-timer></div></div>
-      <span class="badge" data-clock>—</span>
+      <span class="badge2" data-clock>—</span>
     </div>`;
   }
 

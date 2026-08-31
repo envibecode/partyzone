@@ -1,5 +1,6 @@
 'use strict';
 const { shuffle } = require('./util');
+const store = require('./store');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (confusion avec 1 et 0)
 const rooms = new Map();
@@ -13,8 +14,8 @@ function makeCode() {
 }
 
 const DEFAULT_SETTINGS = {
-  blindtest: { rounds: 10, roundSeconds: 30, playlistUrl: '', mode: 'both' }, // mode: title | artist | both
-  quiz: { rounds: 12, roundSeconds: 25, categories: [] },
+  blindtest: { rounds: 10, playlistUrl: '', mode: 'both', difficulty: 'veteran', answerMode: 'choice' },
+  quiz: { rounds: 12, categories: [], difficulty: 'veteran', answerMode: 'choice' },
   undercover: { undercoverCount: 1, mrWhite: 1, descriptionSeconds: 45, voteSeconds: 40 },
 };
 
@@ -34,13 +35,14 @@ class Room {
 
   /* ─── Joueurs ─────────────────────────────────────────── */
 
-  addPlayer(user, socketId) {
+  addPlayer(user, socketId, profile) {
     const existing = this.players.get(user.id);
     if (existing) {
       existing.socketId = socketId;
       existing.connected = true;
       existing.name = user.name;
       existing.avatar = user.avatar;
+      if (profile) existing.profile = profile;
     } else {
       this.players.set(user.id, {
         id: user.id,
@@ -51,6 +53,7 @@ class Room {
         connected: true,
         score: 0,
         totalScore: 0,
+        profile: profile || null,
         joinedAt: Date.now(),
       });
     }
@@ -93,16 +96,22 @@ class Room {
       hostId: this.hostId,
       gameKey: this.gameKey,
       settings: this.settings,
+      hasPlaylist: Boolean(this.playlist && this.playlist.tracks.length),
       players: this.playerList()
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          avatar: p.avatar,
-          provider: p.provider,
-          connected: p.connected,
-          score: p.score,
-          totalScore: p.totalScore,
-        }))
+        .map((p) => {
+          const lvl = p.profile ? store.levelFromXp(p.profile.xp) : { level: 1 };
+          return {
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            provider: p.provider,
+            connected: p.connected,
+            score: p.score,
+            totalScore: p.totalScore,
+            level: lvl.level,
+            title: store.rankTitle(lvl.level),
+          };
+        })
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)),
     };
   }
@@ -146,13 +155,59 @@ class Room {
 
   stopGame(broadcast = true) {
     if (this.game) {
+      const key = this.gameKey;
       this.game.stop();
+      const scores = this.playerList().map((p) => ({ id: p.id, score: p.score, player: p }));
       // les points de la partie s'ajoutent au score cumulé de la session
       for (const p of this.players.values()) p.totalScore += p.score;
       this.game = null;
       this.gameKey = null;
+      this.awardXp(key, scores).catch((err) => console.error('[xp]', err.message));
     }
     if (broadcast) this.broadcast();
+  }
+
+  /**
+   * Convertit les points de la partie en XP permanente et met à jour les
+   * statistiques du profil. Le gagnant touche un bonus.
+   */
+  async awardXp(gameKey, scores) {
+    const played = scores.filter((s) => s.score > 0);
+    if (!played.length) return;
+    const best = Math.max(...played.map((s) => s.score));
+
+    const results = [];
+    for (const entry of scores) {
+      const profile = entry.player.profile;
+      if (!profile) continue;
+      const won = entry.score > 0 && entry.score === best;
+      const xp = Math.round(entry.score / 4) + (won ? 50 : 0);
+      if (xp <= 0) continue;
+
+      const before = store.levelFromXp(profile.xp).level;
+      store.grantXp(profile, xp);
+      const after = store.levelFromXp(profile.xp).level;
+
+      profile.stats.games++;
+      if (profile.stats[gameKey] !== undefined) profile.stats[gameKey]++;
+      if (won) profile.stats.wins++;
+      profile.stats.bestScore = Math.max(profile.stats.bestScore, entry.score);
+      await store.saveProfile(profile);
+
+      // le joueur voit immédiatement son nouveau niveau sans recharger la page
+      if (entry.player.socketId) {
+        this.io.to(entry.player.socketId).emit('profile:update', store.publicProfile(profile));
+      }
+
+      results.push({ id: entry.player.id, name: entry.player.name, xp, level: after, levelUp: after > before });
+    }
+
+    if (results.length) {
+      this.emit('xp:awarded', { game: gameKey, results });
+      for (const r of results) {
+        if (r.levelUp) this.pushChat({ system: true, hit: true, text: `⭐ ${r.name} passe niveau ${r.level} !` });
+      }
+    }
   }
 
   shufflePlayers() {

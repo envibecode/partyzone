@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1a">
+<title>PartyZone — Casino entre potes</title>
+<meta name="description" content="Blackjack, roulette, Plinko et caisses à memes. Un casino en pièces virtuelles, gratuit, entre amis. Aucun achat, aucun argent réel.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='10' fill='%230a0e1a'/><text x='16' y='24' font-size='19' text-anchor='middle'>🍀</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ══════════════ L'INTRO ══════════════ -->
+<div id="intro" class="intro" hidden>
+  <button class="intro-skip" id="intro-skip">passer ›</button>
+  <div class="intro-stage">
+    <div class="intro-door" aria-hidden="true">
+      <span class="door left"></span>
+      <span class="door right"></span>
+      <span class="door-glow"></span>
+    </div>
+    <div class="intro-sign" aria-hidden="true">🍀</div>
+    <p class="intro-line l1">Bienvenue</p>
+    <p class="intro-line l2">dans la <em>Taverne</em></p>
+    <p class="intro-line l3">directed by <b>Titiss</b> &amp; <b>Faboz</b></p>
+    <div class="intro-sparks" aria-hidden="true"></div>
+  </div>
+</div>
+
+<!-- ══════════════ CONNEXION ══════════════ -->
+<section id="screen-auth" class="screen active auth-screen">
+  <div class="auth-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
+  <div class="auth-box">
+    <div class="auth-logo"><span class="clover">🍀</span> PartyZone</div>
+    <h1>Le casino<br><em>où personne ne perd d’argent.</em></h1>
+    <p class="auth-lede">
+      Blackjack, roulette, Plinko et caisses à memes. On joue avec des pièces
+      virtuelles qu’on gagne à la mine — il n’y a rien à acheter, nulle part.
+    </p>
+
+    <div class="auth-card">
+      <button id="btn-discord" class="btn btn-discord btn-block big">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369A19.8 19.8 0 0 0 15.43 3.1a.07.07 0 0 0-.074.035c-.211.375-.445.865-.609 1.25a18.3 18.3 0 0 0-5.487 0 12 12 0 0 0-.617-1.25.07.07 0 0 0-.075-.035 19.7 19.7 0 0 0-4.885 1.27.06.06 0 0 0-.03.025C.533 9.046-.32 13.58.099 18.057a.08.08 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.08.08 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13 13 0 0 1-1.872-.892.077.077 0 0 1-.008-.128q.19-.141.365-.291a.07.07 0 0 1 .078-.01c3.927 1.793 8.18 1.793 12.061 0a.07.07 0 0 1 .079.009q.176.15.366.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.891a.077.077 0 0 0-.041.107c.36.698.772 1.363 1.225 1.993a.08.08 0 0 0 .084.028 19.8 19.8 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.663a.06.06 0 0 0-.031-.028M8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419s.956-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418m7.975 0c-1.183 0-2.157-1.085-2.157-2.419s.955-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418"/></svg>
+        Continuer avec Discord
+      </button>
+      <p id="discord-off" class="fine hidden">Discord n’est pas encore configuré sur ce serveur.</p>
+      <div class="rule"><span>ou</span></div>
+      <form id="form-guest" class="auth-guest">
+        <input id="guest-name" class="input" type="text" maxlength="18" placeholder="Ton pseudo" autocomplete="nickname" required>
+        <button class="btn btn-soft" type="submit">Jouer en invité</button>
+      </form>
+      <p class="fine">Avec Discord, tes pièces et ta collection sont gardées pour toujours.</p>
+    </div>
+
+    <div class="auth-warn">
+      <strong>Pièces virtuelles uniquement.</strong> Aucun moyen de paiement, aucun gain
+      réel, aucune conversion. Si tu perds tout, tu retournes à la mine.
+    </div>
+
+    <ul class="auth-tags">
+      <li><i>🃏</i> Blackjack</li>
+      <li><i>🎡</i> Roulette</li>
+      <li><i>🔻</i> Plinko</li>
+      <li><i>📦</i> Caisses</li>
+      <li><i>⛏️</i> La Mine</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════════ APPLICATION ══════════════ -->
+<div id="app" class="screen app">
+
+  <!-- ─── Barre du haut ─── -->
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="btn-menu" aria-label="Menu">☰</button>
+
+    <nav class="topnav left" id="nav-left">
+      <button class="topnav-btn vip" data-go="mine"><i>⛏️</i> LA MINE</button>
+      <button class="topnav-btn" data-go="home">LOBBY</button>
+      <button class="topnav-btn" data-go="leaderboard">CLASSEMENT</button>
+    </nav>
+
+    <button class="brand" data-go="home">
+      <span>PARTY</span><i class="clover">🍀</i><span>ZONE</span>
+    </button>
+
+    <nav class="topnav right" id="nav-right">
+      <button class="topnav-btn" data-go="vault">CAISSES</button>
+      <button class="topnav-btn" data-go="medals">MÉDAILLES</button>
+      <button class="topnav-btn" data-go="fair">ÉQUITÉ</button>
+      <button class="topnav-btn hidden" id="nav-admin" data-go="admin">ADMIN</button>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="balance" id="balance">
+        <span class="bal-coins"><i>🪙</i><b id="coins">0</b></span>
+        <button class="bal-mine" data-go="mine">Miner</button>
+      </div>
+      <button class="me-chip" id="me-chip">
+        <img id="me-avatar" alt="" width="34" height="34">
+        <span class="me-text">
+          <b id="me-name">…</b>
+          <small id="me-title">…</small>
+        </span>
+        <span class="lvl" id="me-level">1</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── Contenu ─── -->
+  <main class="main" id="main">
+
+    <!-- ══════ LOBBY ══════ -->
+    <section class="view active" id="view-home">
+      <div class="lobby">
+
+        <!-- Colonne compte -->
+        <aside class="lobby-left">
+          <div class="tokens">
+            <div>
+              <span class="tokens-label">Tes</span>
+              <span class="tokens-name">Pièces</span>
+            </div>
+            <div class="tokens-value"><b id="tk-coins">0</b><i class="coin">🪙</i></div>
+          </div>
+
+          <div class="panel wallets">
+            <div class="wallets-head">Tes réserves</div>
+            <div class="wallet-list" id="wallets"></div>
+            <button class="wallet-add" data-go="mine">Gagner des pièces</button>
+          </div>
+        </aside>
+
+        <!-- Scène centrale -->
+        <div class="lobby-mid">
+          <div class="gamebar" id="gamebar"></div>
+
+          <div class="stage-wrap">
+            <div class="ghost-title" aria-hidden="true">PARTYZONE</div>
+            <div class="carousel" id="carousel">
+              <div class="carousel-track" id="carousel-track"></div>
+              <button class="car-nav prev" id="car-prev" aria-label="Jeu précédent">‹</button>
+              <button class="car-nav next" id="car-next" aria-label="Jeu suivant">›</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <aside class="lobby-right">
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats" id="chat-stats">— en ligne</div>
+            </div>
+            <div class="chat-log" id="chat-log"></div>
+            <form class="chat-form" id="chat-form">
+              <input class="input" id="chat-input" maxlength="240" placeholder="Écris quelque chose…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Tables ouvertes -->
+      <div class="rooms">
+        <div class="rooms-intro">
+          <span class="rooms-kicker">Les</span>
+          <h2>TABLES</h2>
+          <div class="rooms-nav">
+            <button id="rooms-prev" aria-label="Précédent">←</button>
+            <button id="rooms-next" aria-label="Suivant">→</button>
+          </div>
+          <button class="btn btn-gold" id="rooms-create">CRÉER LA MIENNE</button>
+        </div>
+        <div class="rooms-track" id="rooms-track"></div>
+      </div>
+    </section>
+
+    <!-- ══════ CLASSEMENT ══════ -->
+    <section class="view" id="view-leaderboard">
+      <div class="view-head">
+        <h1>🏆 Classement</h1>
+        <p>Qui a le plus de pièces, et qui a le plus joué. Deux façons de lire la même soirée.</p>
+      </div>
+      <div class="lb-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Le tableau</h2>
+            <div class="segs" id="lb-sort">
+              <button class="seg active" data-sort="coins">Pièces</button>
+              <button class="seg" data-sort="xp">Niveau</button>
+            </div>
+          </div>
+          <ol class="lb" id="leaderboard"><li class="empty">Chargement…</li></ol>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Ça vient de tomber</h2></div>
+          <ul class="feed" id="feed"><li class="empty">Rien pour l’instant. Sois le premier.</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ LA MINE ══════ -->
+    <section class="view" id="view-mine">
+      <div class="view-head">
+        <h1>⛏️ La Mine</h1>
+        <p>Tape sur le filon. C’est la seule source de pièces avec les gains du casino — et c’est gratuit, pour toujours.</p>
+      </div>
+      <div class="mine-grid">
+        <div class="panel mine-stage">
+          <div class="mine-readout">
+            <div><b id="mine-perclick">1</b><span>par coup</span></div>
+            <div><b id="mine-crit-r">5</b><span>% de critique</span></div>
+            <div><b id="mine-clicks">0</b><span>coups</span></div>
+            <div><b id="mine-earned">0</b><span>total miné</span></div>
+          </div>
+
+          <div class="stamina">
+            <div class="stamina-head">
+              <span>Endurance</span>
+              <b id="stam-val">60 / 60</b>
+            </div>
+            <div class="stamina-bar"><span id="stam-fill"></span></div>
+            <p class="fine" id="stam-note">À bout de souffle, chaque coup ne rapporte plus que 12 %.</p>
+          </div>
+          <button class="rock" id="rock" aria-label="Miner">
+            <span class="rock-face">💎</span>
+            <span class="rock-ring"></span>
+          </button>
+          <div class="floaters" id="floaters" aria-hidden="true"></div>
+          <p class="fine">
+            Coup critique : <b id="mine-crit">5</b> % de chances de gagner <b id="mine-critx">7</b>×.
+            L’endurance remonte de <b id="mine-regen">3,2</b> points par seconde et le serveur
+            plafonne à <b id="mine-cap">12</b> coups/seconde : un autoclic vide juste la barre
+            plus vite et mine à perte. <b>Aucun revenu quand tu n’es pas là.</b>
+          </p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Améliorations</h2></div>
+          <div class="ups" id="ups"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ PLINKO ══════ -->
+    <section class="view" id="view-plinko">
+      <div class="game-layout three">
+        <aside class="betpanel">
+          <div class="bet-tabs"><button class="bet-tab active">Manuel</button></div>
+          <label class="field">
+            <span>Mise <i>🪙</i></span>
+            <div class="bet-input">
+              <input type="number" id="pk-bet" value="100" min="10" step="10">
+              <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
+            </div>
+          </label>
+          <label class="field"><span>Risque</span>
+            <select id="pk-risk" class="input"><option value="low">Prudent</option><option value="medium" selected>Équilibré</option><option value="high">Casse-cou</option></select>
+          </label>
+          <label class="field"><span>Rangées</span>
+            <select id="pk-rows" class="input"><option>8</option><option>12</option><option selected>16</option></select>
+          </label>
+          <label class="field"><span>Nombre de billes</span>
+            <input type="number" id="pk-balls" class="input" value="1" min="1" max="10">
+          </label>
+          <button class="btn btn-green btn-block big" id="pk-play">Lâcher la bille</button>
+          <div class="bet-meta">
+            <div><span>Redistribution</span><b id="pk-rtp">—</b></div>
+            <div><span>Dernier gain</span><b id="pk-last">—</b></div>
+          </div>
+        </aside>
+        <div class="stage pk-stage">
+          <canvas id="pk-canvas" width="760" height="588"></canvas>
+          <div class="pk-buckets" id="pk-buckets"></div>
+        </div>
+
+        <aside class="panel pk-side">
+          <div class="panel-head"><h2>Bille par bille</h2></div>
+          <div class="pk-hhead"><span>multi</span><span>net</span><span>reçu</span></div>
+          <div class="pk-history" id="pk-history">
+            <div class="empty">Lâche une bille pour commencer.</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ MACHINE À SOUS ══════ -->
+    <section class="view" id="view-slots">
+      <div class="game-layout three">
+        <aside class="betpanel">
+          <div class="bet-tabs"><button class="bet-tab active">Les Copains</button></div>
+          <label class="field">
+            <span>Mise par ligne <i>🪙</i></span>
+            <div class="bet-input">
+              <input type="number" id="sl-bet" value="20" min="10" step="10">
+              <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
+            </div>
+          </label>
+          <div class="sl-total">
+            <span>10 lignes fixes · total misé</span>
+            <b id="sl-total">200</b>
+          </div>
+          <button class="btn btn-green btn-block big" id="sl-spin">TOURNER</button>
+          <button class="btn btn-mini btn-block" id="sl-auto">Auto : off</button>
+          <div class="bet-meta">
+            <div><span>Redistribution</span><b id="sl-rtp">—</b></div>
+            <div><span>Tour bonus</span><b id="sl-bonus">—</b></div>
+            <div><span>Dernier gain</span><b id="sl-last">—</b></div>
+          </div>
+          <button class="link" id="sl-table">voir la table des gains</button>
+        </aside>
+
+        <div class="stage sl-stage">
+          <div class="sl-banner" id="sl-banner"></div>
+          <div class="slots" id="slots"></div>
+          <div class="sl-lines" id="sl-lines"></div>
+        </div>
+
+        <aside class="panel pk-side">
+          <div class="panel-head"><h2>Derniers tours</h2></div>
+          <div class="pk-hhead"><span>tour</span><span>net</span><span>reçu</span></div>
+          <div class="pk-history" id="sl-history"><div class="empty">Lance un tour.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ ROULETTE ══════ -->
+    <section class="view" id="view-roulette">
+      <div class="game-layout three rl-layout">
+        <aside class="betpanel">
+          <div class="rl-phase" id="rl-phase">Connexion…</div>
+          <div class="rl-timer"><span id="rl-bar"></span></div>
+          <label class="field">
+            <span>Jeton <i>🪙</i></span>
+            <div class="bet-input">
+              <input type="number" id="rl-chip" value="100" min="10" step="10">
+              <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
+            </div>
+          </label>
+          <div class="rl-quick">
+            <button class="btn btn-soft" id="rl-rebet">↻ Remiser</button>
+            <button class="btn btn-mini" id="rl-auto">Auto : off</button>
+          </div>
+
+          <div class="rl-setups">
+            <div class="panel-head"><h2>Configurations</h2><button class="link" id="rl-save">enregistrer</button></div>
+            <div class="rl-setup-list" id="rl-setups"><span class="fine">Pose des jetons puis enregistre-les ici.</span></div>
+          </div>
+
+          <div class="rl-mine">
+            <div class="panel-head"><h2>Tes mises</h2><button class="link" id="rl-clear">Tout retirer</button></div>
+            <ul id="rl-bets"><li class="empty">Clique sur le tapis.</li></ul>
+            <div class="rl-total">Total misé <b id="rl-staked">0</b> 🪙</div>
+          </div>
+          <div class="bet-meta">
+            <div><span>Joueurs</span><b id="rl-players">0</b></div>
+            <div><span>Redistribution</span><b id="rl-rtp">97,30 %</b></div>
+          </div>
+          <p class="fine">Roue européenne, un seul zéro. Empreinte du tour :
+            <code id="rl-hash" class="hash">…</code></p>
+        </aside>
+        <div class="stage rl-stage">
+          <div class="rl-ticker" id="rl-ticker" aria-live="polite"></div>
+          <div class="wheel-wrap">
+            <canvas id="rl-canvas" width="420" height="420"></canvas>
+            <div class="wheel-result" id="rl-result"></div>
+          </div>
+          <div class="rl-history" id="rl-history"></div>
+          <div class="rl-table" id="rl-table"></div>
+        </div>
+
+        <aside class="rl-side">
+          <div class="panel">
+            <div class="panel-head"><h2>À cette table</h2></div>
+            <ul class="rl-players" id="rl-players-list"><li class="empty">Personne n’a encore misé.</li></ul>
+          </div>
+
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats">—</div>
+            </div>
+            <div class="chat-log" id="rl-chat-log"></div>
+            <form class="chat-form" id="rl-chat-form">
+              <input class="input" id="rl-chat-input" maxlength="240" placeholder="Écris…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ BLACKJACK ══════ -->
+    <section class="view" id="view-blackjack">
+      <div class="bj-lobby" id="bj-lobby">
+        <div class="view-head">
+          <h1>🃏 Blackjack</h1>
+          <p>Six jeux de cartes, cinq sièges, le blackjack paie 3:2. La table tourne en
+             continu : tu poses ta mise avant la fin du décompte et tu joues, seul ou à
+             plusieurs. Rejoins une table ouverte ou ouvre la tienne.</p>
+        </div>
+
+        <div class="bj-open">
+          <div class="panel-head">
+            <h2>Tables ouvertes</h2>
+            <div class="lobby-join">
+              <form id="bj-join-form" class="lobby-join">
+                <input class="input code" id="bj-code" maxlength="4" placeholder="CODE" autocomplete="off">
+                <button class="btn btn-soft" type="submit">Rejoindre</button>
+              </form>
+              <button class="btn btn-green" id="bj-create">Ouvrir une table</button>
+            </div>
+          </div>
+          <div class="bj-open-grid" id="bj-open-grid"></div>
+        </div>
+      </div>
+
+      <div class="bj-room hidden" id="bj-room">
+        <div class="bj-main">
+          <div class="bj-top">
+            <div class="bj-code">Table <b id="bj-table-code">—</b>
+              <button class="link" id="bj-copy">copier</button></div>
+            <div class="bj-phase" id="bj-phase">…</div>
+            <div class="bj-tools">
+              <button class="btn btn-mini" id="bj-auto">Auto : off</button>
+              <button class="btn btn-mini" id="bj-rebet">Remiser</button>
+              <button class="btn btn-mini danger" id="bj-leave">Quitter</button>
+            </div>
+          </div>
+          <div class="felt">
+            <div class="dealer" id="bj-dealer">
+              <div class="who">Croupier <b id="bj-dealer-val"></b></div>
+              <div class="cards" id="bj-dealer-cards"></div>
+            </div>
+            <div class="seats" id="bj-seats"></div>
+          </div>
+          <div class="bj-actions" id="bj-actions"></div>
+          <div class="bj-betrow" id="bj-betrow">
+            <div class="bet-input wide">
+              <input type="number" id="bj-bet" value="100" min="10" step="10">
+              <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
+            </div>
+            <button class="btn btn-green" id="bj-place">Miser</button>
+          </div>
+
+          <div class="sidebets" id="sidebets">
+            <div class="sb-head">
+              <h3>Paris annexes <small>réglés dès la donne</small></h3>
+              <button class="link" id="sb-info">comment ça paie ?</button>
+            </div>
+            <div class="sb-row">
+              <label class="sb-bet">
+                <span class="sb-name">PAIRE <em id="sb-rtp-pairs">—</em></span>
+                <div class="bet-input">
+                  <input type="number" id="sb-pairs" value="0" min="0" step="10">
+                </div>
+                <span class="sb-hint">Tes deux cartes forment une paire.</span>
+              </label>
+              <label class="sb-bet">
+                <span class="sb-name">21+3 <em id="sb-rtp-trio">—</em></span>
+                <div class="bet-input">
+                  <input type="number" id="sb-trio" value="0" min="0" step="10">
+                </div>
+                <span class="sb-hint">Tes deux cartes + celle du croupier font une main de poker.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <aside class="bj-side">
+          <div class="panel">
+            <div class="panel-head"><h2>La table</h2></div>
+            <ul class="bj-log" id="bj-log"></ul>
+            <p class="fine">Sabot mélangé à partir d’une graine publiée :
+              <code class="hash" id="bj-hash">…</code></p>
+          </div>
+
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats">—</div>
+            </div>
+            <div class="chat-log" id="bj-chat-log"></div>
+            <form class="chat-form" id="bj-chat-form">
+              <input class="input" id="bj-chat-input" maxlength="240" placeholder="Écris…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ CAISSES ══════ -->
+    <section class="view" id="view-vault">
+      <div class="view-head">
+        <h1>📦 Caisses</h1>
+        <p>518 objets de culture internet à trouver, du commun au maudit. Les doublons se
+           revendent en pièces, et les caisses à thème ne piochent que dans leur catégorie.</p>
+      </div>
+      <div class="vault-bar" id="vault-bar"></div>
+
+      <div class="gifts panel hidden" id="gifts">
+        <div class="panel-head"><h2>Tes cadeaux</h2></div>
+        <div class="gift-list" id="gift-list"></div>
+      </div>
+
+      <div class="panel gift-send">
+        <div class="panel-head"><h2>Offrir une caisse</h2></div>
+        <form class="gift-form" id="gift-form">
+          <input class="input" id="gift-to" maxlength="24" placeholder="Pseudo du copain" autocomplete="off">
+          <select class="input" id="gift-case"></select>
+          <input class="input" id="gift-count" type="number" value="1" min="1" max="10">
+          <button class="btn btn-gold" type="submit">Offrir</button>
+        </form>
+        <p class="fine" id="gift-note">—</p>
+      </div>
+
+      <div class="cases" id="cases"></div>
+
+      <div class="panel collection-panel">
+        <div class="panel-head">
+          <h2>Collection <b id="coll-count">0/518</b></h2>
+          <div class="segs" id="coll-filter">
+            <button class="seg active" data-r="all">Tout</button>
+            <button class="seg" data-r="have">Obtenus</button>
+            <button class="seg" data-r="miss">Manquants</button>
+          </div>
+        </div>
+        <div class="coll-cats" id="coll-cats"></div>
+        <div class="coll-rarities" id="coll-rarities"></div>
+        <div class="collection" id="collection"></div>
+      </div>
+    </section>
+
+    <!-- ══════ MÉDAILLES ══════ -->
+    <section class="view" id="view-medals">
+      <div class="view-head">
+        <h1>🏅 Médailles &amp; parures</h1>
+        <p>Tous les cinquante objets trouvés, un palier tombe. Le premier joueur du site
+           à l’atteindre décroche la version dorée — et elle ne se redonne jamais.</p>
+      </div>
+
+      <div class="med-top">
+        <div class="panel med-progress">
+          <div class="panel-head"><h2>Ta collection</h2></div>
+          <div class="med-count"><b id="med-have">0</b><span>/ <em id="med-total">518</em> objets</span></div>
+          <div class="med-bar"><span id="med-fill"></span></div>
+          <div class="med-next fine" id="med-next">—</div>
+        </div>
+
+        <div class="panel med-season" id="med-season">
+          <div class="panel-head"><h2>Le mois en cours</h2></div>
+          <div id="season-body" class="fine">Chargement…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Les paliers</h2></div>
+        <div class="tiers" id="tiers"></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head"><h2>Ta parure</h2></div>
+        <p class="fine" style="margin-bottom:14px">
+          Ce que tu portes se voit partout : dans le chat, au classement, à la table.
+        </p>
+        <div class="cosmetics" id="cosmetics"></div>
+      </div>
+    </section>
+
+    <!-- ══════ ÉQUITÉ ══════ -->
+    <section class="view" id="view-fair">
+      <div class="view-head">
+        <h1>🛡️ Équité vérifiable</h1>
+        <p>Aucun résultat n’est décidé après ta mise. Voilà comment le prouver toi-même.</p>
+      </div>
+      <div class="fair-grid">
+        <div class="panel">
+          <div class="panel-head"><h2>Tes graines</h2></div>
+          <div class="fair-row"><span>Empreinte de la graine serveur</span><code class="hash" id="fair-hash">…</code></div>
+          <div class="fair-row"><span>Ta graine (modifiable)</span>
+            <form id="fair-form"><input class="input" id="fair-seed" maxlength="64" placeholder="ta-graine"><button class="btn btn-soft">Changer</button></form>
+          </div>
+          <div class="fair-row"><span>Nonce actuel</span><b id="fair-nonce">0</b></div>
+          <div class="fair-prev hidden" id="fair-prev">
+            <h3>Graine précédente, révélée</h3>
+            <div class="fair-row"><span>Graine serveur</span><code class="hash" id="fair-prev-seed">…</code></div>
+            <div class="fair-row"><span>Son empreinte</span><code class="hash" id="fair-prev-hash">…</code></div>
+            <div class="fair-row"><span>Ta graine d’alors</span><code class="hash" id="fair-prev-client">…</code></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Comment vérifier</h2></div>
+          <ol class="steps">
+            <li>Avant de jouer, tu vois l’<b>empreinte</b> SHA-256 de la graine du serveur. Elle est figée.</li>
+            <li>Tu peux mettre <b>ta propre graine</b> : le serveur ne peut donc pas viser un résultat précis.</li>
+            <li>Chaque coup consomme un <b>nonce</b> qui s’incrémente. Rien ne se rejoue.</li>
+            <li>Quand tu changes de graine, l’ancienne est <b>révélée</b>. Tu vérifies que son SHA-256 correspond bien à l’empreinte affichée avant.</li>
+            <li>Le résultat vient de <code>HMAC_SHA256(graine_serveur, graine_client:nonce:curseur)</code>.</li>
+          </ol>
+          <p class="fine">Le RTP affiché sur chaque jeu est calculé à partir des vraies tables,
+             après arrondi des multiplicateurs. Ce n’est pas un chiffre marketing.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ ADMIN ══════ -->
+    <section class="view" id="view-admin">
+      <div class="view-head"><h1>🛠️ Administration</h1></div>
+      <div id="admin-root"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Surcouches -->
+<div class="toasts" id="toasts"></div>
+<div class="tip" id="tip" hidden></div>
+<canvas id="confetti" class="confetti"></canvas>
+<div class="modal" id="modal" hidden><div class="modal-box" id="modal-box"></div></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/sfx.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/chat.js"></script>
+<script src="/js/lobby.js"></script>
+<script src="/js/mine.js"></script>
+<script src="/js/plinko.js"></script>
+<script src="/js/roulette.js"></script>
+<script src="/js/blackjack.js"></script>
+<script src="/js/slots.js"></script>
+<script src="/js/medals.js"></script>
+<script src="/js/vault.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

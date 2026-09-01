@@ -16,14 +16,18 @@ virtuelles uniquement**.
 
 | | |
 |---|---|
-| ⛏️ **La Mine** | Le robinet à pièces. Un clicker avec cinq améliorations, des coups critiques, et un revenu passif qui tourne même quand tu n'es pas là (jusqu'à 8 h rattrapées). |
-| 🃏 **Blackjack** | Table à 5 sièges, 6 jeux de cartes, blackjack payé 3:2. Tu joues seul contre des bots qui appliquent la stratégie de base, ou tu envoies un code à 4 lettres à tes potes. Tirer, rester, doubler, séparer. |
-| 🎡 **Roulette** | Roue européenne à 37 cases, **partagée par tout le site** : tout le monde mise sur le même tour. Cycle de 33 s. Redistribution 97,30 % sur toutes les mises. |
-| 🔻 **Plinko** | 8, 12 ou 16 rangées, trois niveaux de risque. Les multiplicateurs sont calculés à partir des vraies probabilités binomiales, pas inventés à la main. |
-| 📦 **Caisses à memes** | 60 memes à collectionner, six raretés du commun au maudit. Animation de rouleau horizontal façon CS:GO qui montre ce que tu aurais pu avoir. Les doublons se revendent. |
-| 🏆 **Classement** | Par pièces ou par niveau, sur la page d'accueil. |
+| ⛏️ **La Mine** | Le seul robinet à pièces. Un clicker avec cinq améliorations, des coups critiques, une **endurance** qui se vide et un plafond serveur à 12 clics/seconde : un autoclic tape dans le vide. Aucun revenu hors ligne. |
+| 🃏 **Blackjack** | Table à 5 sièges, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot** : on voit les salons ouverts et on rejoint ses potes. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
+| 🎡 **Roulette** | Roue européenne à 37 cases, **partagée par tout le site**. On voit les mises des autres case par case, les pseudos des gagnants du dernier tour défilent, et le solde est gelé pendant la rotation pour ne pas dévoiler le résultat. Remise, mises automatiques, configurations enregistrées. |
+| 🔻 **Plinko** | 8, 12 ou 16 rangées, trois niveaux de risque. Multiplicateurs calculés à partir des vraies probabilités binomiales. Historique bille par bille sur le côté. |
+| 🎰 **Les Copains** | Machine à sous 5 rouleaux × 3 rangées, 10 lignes, thème serveur Discord. Joker, symbole bonus, 8 tours offerts à ×3. Redistribution **mesurée** sur 400 000 tours simulés : 95,39 %. |
+| 📦 **Caisses** | **518 objets de culture internet** à collectionner, six raretés, huit catégories. 5 caisses générales + 8 caisses à thème. Rouleau horizontal façon CS:GO qui montre ce que tu aurais pu avoir. Les doublons se revendent. |
+| 🏅 **Médailles & parures** | Un palier tous les 50 objets. Le **premier joueur du site** à l'atteindre garde la version dorée, pour toujours. On y débloque des contours d'avatar, des pseudos en flammes et des icônes animées, visibles partout sur le site. |
+| 🎁 **Cadeaux** | Offrir une caisse à un copain (le donneur paie, plafond quotidien) ou en distribuer depuis le panel admin. |
+| 🏆 **Classements** | Général par pièces ou par niveau, plus un **classement du mois** sur le bénéfice net. |
+| 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
-| 🛠️ **Panel admin** | Joueurs, pièces, XP, bannissements, tables ouvertes, annonces, journal des actions. |
+| 🛠️ **Panel admin** | Joueurs, pièces, XP, caisses offertes, bannissements, tables ouvertes, annonces animées, journal des actions. La page se rafraîchit toute seule. |
 
 Connexion **Discord** (facultative) ou en invité. Avec Discord, ta
 progression est gardée pour toujours et ton avatar s'affiche partout.
@@ -110,6 +114,12 @@ Une minute ou deux plus tard, le site est à jour. L'onglet *Events* de
 Render montre l'avancement, *Logs* montre les erreurs éventuelles. Si un
 déploiement casse quelque chose, *Rollback* remet la version d'avant.
 
+> ⚠️ **Sans base de données, chaque mise à jour efface la progression.**
+> Le fichier `data/profiles.json` vit sur le disque temporaire de Render, qui
+> est jeté à chaque redéploiement. Branche PostgreSQL (section
+> *Garder la progression pour de bon*) **avant** de commencer à jouer
+> sérieusement — c'est l'étape à ne pas sauter.
+
 ---
 
 ## L'honnêteté du casino
@@ -134,6 +144,8 @@ Les taux de redistribution annoncés sont **calculés**, pas décoratifs :
 | Roulette | 97,30 % (règle européenne, 36/37) |
 | Plinko | 96,6 % à 97,5 % selon la table — calculé après arrondi des multiplicateurs |
 | Blackjack | dépend de ton jeu ; la stratégie de base tourne autour de 99,5 % |
+| Paris annexes | paires parfaites 93,89 %, 21+3 95,38 % — calculés par énumération exacte |
+| Machine à sous | 95,39 %, mesurée au démarrage sur 400 000 tours simulés (tour bonus compris) |
 
 Le panel admin affiche en plus la **redistribution réellement observée**
 sur l'ensemble du site depuis le premier jour.
@@ -146,8 +158,12 @@ Le navigateur ne fait qu'afficher. Il ne calcule aucun résultat.
 
 - Le solde, les mises, les tirages, la distribution des cartes : tout est
   côté serveur, et revérifié à chaque message.
-- La mine plafonne à 20 clics par seconde, comptés par le serveur avec un
-  seau à jetons. Un autoclic ne rapporte rien de plus qu'une main rapide.
+- La mine plafonne à 12 clics par seconde, comptés par le serveur avec un
+  seau à jetons, et l'endurance descend plus vite qu'elle ne remonte. Un
+  autoclic tape dans le vide au bout de quelques secondes — c'est réglé par
+  la mécanique du jeu, pas par une détection qu'on peut contourner.
+- Les cadeaux entre joueurs ont un plafond quotidien : on ne peut pas vider
+  un compte dans un autre pour fausser le classement du mois.
 - Le rouleau des caisses est envoyé **déjà tiré** : l'animation ne fait que
   rejouer un résultat décidé avant.
 - Le panel admin revérifie les droits à chaque action. Masquer un bouton
@@ -169,8 +185,10 @@ colle à celui annoncé, que la graine révélée correspond bien à l'empreinte
 publiée avant, et qu'aucune mise négative ou supérieure au solde ne passe.
 
 `npm run test:ui` vérifie notamment que l'aiguille du rouleau s'arrête bien
-sur l'objet gagné, que la collection affiche les 60 memes avec les manquants
-grisés, et qu'aucun nom n'est tronqué.
+sur l'objet gagné, que la collection affiche les 518 objets avec les
+manquants grisés, qu'aucun nom n'est tronqué, que les rouleaux de la machine
+à sous se posent sur leurs quinze symboles, et que le panel admin se met à
+jour sans qu'on recharge la page.
 
 Les captures atterrissent dans `shots/`.
 
@@ -185,17 +203,25 @@ server/
   clicker.js     La Mine
   plinko.js      tables de multiplicateurs et tirages
   roulette.js    la roue partagée
-  blackjack.js   tables, sabot, bots
+  blackjack.js   tables, sabot, manches
+  sidebets.js    paris annexes et leurs taux exacts
+  slots.js       la machine à sous et sa redistribution mesurée
   vault.js       caisses, rouleau, collection
-  store.js       profils (fichier JSON ou PostgreSQL)
+  medals.js      paliers, premiers du site, parures
+  season.js      classement du mois et palmarès
+  gifts.js       cadeaux entre joueurs et distribution admin
+  chat.js        la salle de discussion
+  store.js       profils et état du site (fichier JSON ou PostgreSQL)
   auth.js        Discord OAuth2 + invités
   presence.js    qui est en ligne
   admin.js       panel d'administration
-  data/memes.js  les 60 memes et les 4 caisses
+  data/collection.js  les 518 objets
+  data/cases.js       les 13 caisses et leurs probabilités
 public/
   index.html     la coquille
   css/style.css  toute la direction artistique
-  js/            app, mine, plinko, roulette, blackjack, vault, admin, sfx
+  js/            app, lobby, chat, mine, plinko, roulette, blackjack,
+                 slots, medals, vault, admin, sfx
 test/
   harness.js     banc d'essai Socket.IO
   ui.js          parcours navigateur

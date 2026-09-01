@@ -37,10 +37,11 @@
       note: 'Le vocal a besoin d’un serveur relais dédié — c’est le prochain gros morceau.',
     },
     {
-      id: 'uno', name: 'Uno', icon: 'i-uno', colour: '#c9a86a',
-      players: '2 à 8', minutes: '15 min',
-      blurb: 'Le +4 au dernier tour, les disputes sur les règles maison, tout ça.',
-      ready: false,
+      id: 'uno', name: 'Uno', icon: 'i-uno', colour: '#e8a33c',
+      players: '2 à 10', minutes: '15 min',
+      blurb: 'Les +2 qui se cumulent, le +4 qu’on peut contester quand on sent le bluff, ' +
+        'et les deux cartes de pénalité pour qui oublie d’annoncer.',
+      ready: true,
     },
     {
       id: 'belote', name: 'Belote', icon: 'i-cards', colour: '#7fa8bd',
@@ -322,11 +323,14 @@
 
     // Le serveur nous place dans un salon : on ouvre l'écran du jeu.
     socket.on('party:joined', ({ game }) => {
-      PZ.go(game === 'poker' ? 'pk' : 'uc');
+      // Chaque jeu Party a sa vue. La table de correspondance vit ici,
+      // à un seul endroit : c'est ce qui évite qu'un nouveau jeu marche
+      // partout sauf au moment de rejoindre un salon.
+      PZ.go({ poker: 'pk', uno: 'uno', undercover: 'uc' }[game] || 'uc');
     });
 
     socket.on('party:left', () => {
-      if (PZ.view === 'uc' || PZ.view === 'pk') PZ.go('party');
+      if (['uc', 'pk', 'uno'].includes(PZ.view)) PZ.go('party');
     });
 
     // Un message de salon arrive tout seul, sans état complet : on l'ajoute

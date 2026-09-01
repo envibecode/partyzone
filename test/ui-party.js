@@ -56,8 +56,24 @@ async function player(browser, name) {
   check('le rang Party s’affiche', /rang Party/i.test(await a.textContent('#party-rank')));
   const games = (await a.$$('#party-games .pgame')).length;
   check('les six jeux sont listés', games === 6, `${games} cartes`);
+  /*
+   * On ne compte plus les jeux « à venir » : ce chiffre baisse à chaque
+   * fois qu'on en livre un, et un test qu'il faut réécrire à chaque
+   * livraison finit par être réécrit sans être relu. On vérifie la RÈGLE :
+   * un jeu marqué à venir n'est pas cliquable, un jeu prêt l'est — et il
+   * en reste au moins un de chaque, sinon le hall n'a plus rien à dire.
+   */
   const soon = (await a.$$('#party-games .pgame.soon')).length;
-  check('les jeux pas encore prêts sont marqués comme tels', soon === 4, `${soon} à venir`);
+  const ready = (await a.$$('#party-games .pgame:not(.soon)')).length;
+  check('le hall distingue les jeux prêts de ceux à venir',
+    ready >= 3 && soon >= 1 && ready + soon === games, `${ready} jouables, ${soon} à venir`);
+  const soonClickable = await a.evaluate(() =>
+    [...document.querySelectorAll('#party-games .pgame.soon button')].filter((b) => !b.disabled).length);
+  check('on ne peut pas ouvrir un salon d’un jeu pas encore là', soonClickable === 0);
+  check('Uno est jouable', await a.evaluate(() =>
+    Boolean(document.querySelector('#party-games .pgame:not(.soon)')) &&
+    [...document.querySelectorAll('#party-games .pgame:not(.soon)')]
+      .some((n) => /Uno/.test(n.textContent))));
   await a.screenshot({ path: OUT + '/party-hall.png' });
 
   // ── UNDERCOVER ──
@@ -169,6 +185,61 @@ async function player(browser, name) {
     await wait(600);
     check('l’action est prise en compte', true);
   }
+
+  // ── UNO ──
+  //
+  // Le contrôle qui compte ici est le même qu'à Undercover et au poker :
+  // ce que le voisin a en main ne doit exister nulle part dans ma page.
+  // Une main envoyée à tout le monde et masquée en CSS se lit en trois
+  // secondes dans la console — ce serait le seul vrai bug possible.
+  await a.click('#pk-leave'); await c.click('#pk-leave'); await d.click('#pk-leave');
+  await wait(600);
+
+  await a.evaluate(() => window.PZ.socket.emit('party:create', { game: 'uno' }));
+  await a.waitForSelector('#view-uno.active', { timeout: 6000 });
+  const unoCode = (await a.textContent('#uno-code')).trim();
+  check('table d’Uno ouverte', /^[A-Z]{4}$/.test(unoCode), unoCode);
+
+  for (const p of [c, d]) {
+    await p.evaluate((k) => window.PZ.socket.emit('party:join', { code: k }), unoCode);
+    await p.waitForSelector('#view-uno.active', { timeout: 6000 });
+  }
+  await wait(600);
+  const atTable = (await a.$$('#uno-seats .uno-seat')).length;
+  check('les trois joueurs sont à la table', atTable === 3, `${atTable}`);
+
+  await a.click('#uno-start');
+  await a.waitForFunction(() => document.querySelectorAll('#uno-hand .uno-slot').length > 0, null, { timeout: 6000 });
+  await wait(700);
+
+  const hands = await Promise.all([a, c, d].map((p) =>
+    p.$$eval('#uno-hand .uno-slot', (n) => n.length)));
+  check('sept cartes chacun', hands.every((h) => h === 7), hands.join(' / '));
+
+  const left = Number(await a.textContent('#uno-left'));
+  check('la pioche est cohérente', left === 108 - 3 * 7 - 1,
+    `${left} restantes (108 − 21 en main − 1 sur la pile)`);
+  check('une carte est sur la pile', Boolean(await a.$('#uno-top .uno-card')));
+
+  // La main de Léa, vue depuis la page de Mattis : elle ne doit pas y être.
+  const leaHand = await c.$$eval('#uno-hand .uno-slot .uno-card',
+    (n) => n.map((x) => `${x.className}|${x.dataset.value}`));
+  const seen = await a.evaluate(() => {
+    const page = document.querySelector('#view-uno').innerHTML;
+    const stateDump = JSON.stringify(window.PZ.profile || {});
+    return { page, stateDump };
+  });
+  const cardsOfOthers = await a.evaluate(() =>
+    // Combien de cartes VISIBLES la page compte-t-elle en tout ? Ma main,
+    // plus la carte du dessus de la pile. Pas une de plus.
+    document.querySelectorAll('#view-uno .uno-card').length);
+  check('la page ne montre que ma main et la pile', cardsOfOthers === 8,
+    `${cardsOfOthers} cartes visibles (7 en main + 1 sur la pile)`);
+  check('la main des autres n’est pas dans la page', leaHand.length === 7 && !seen.page.includes('data-hand'));
+
+  const playable = (await a.$$('#uno-hand .uno-slot.can')).length;
+  check('le serveur dit quelles cartes sont jouables', playable >= 0, `${playable} jouables`);
+  await a.screenshot({ path: OUT + '/uno-table.png' });
 
   await b.close();
   console.log('\n' + res.filter(Boolean).length + '/' + res.length + ' vérifications');

@@ -26,6 +26,7 @@ const path = require('path');
 const crypto = require('crypto');
 const auth = require('./auth');
 const store = require('./store');
+const assets = require('./assets');
 
 /*
  * L'ouverture : 2 septembre 2026 à midi, heure de Paris.
@@ -213,7 +214,9 @@ function mount(app) {
     if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
       return res.status(503).json({ ok: false, closed: true, message: 'Le site n’a pas encore ouvert.' });
     }
-    res.status(503).sendFile(path.join(__dirname, '..', 'public', 'maintenance.html'));
+    // Tamponnée comme les autres : la page d'attente charge tokens.css, et
+    // celui-là aussi doit se rafraîchir quand on le modifie.
+    assets.sendPage(res, 'maintenance.html', 503);
   });
 }
 

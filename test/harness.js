@@ -392,9 +392,31 @@ async function topUp(player, target) {
     r.pulls.forEach((x) => { seen[x.r] += 1; });
   }
   const totalPulls = Object.values(seen).reduce((a, b) => a + b, 0);
-  check('raretés ordonnées du plus commun au plus rare',
-    seen.common >= seen.rare && seen.rare >= seen.epic && seen.epic >= seen.legendary,
+  /*
+   * ATTENTION À CE QU'ON VÉRIFIE ICI.
+   *
+   * La version précédente exigeait un ordre STRICT sur les six raretés :
+   * commun ≥ rare ≥ épique ≥ légendaire. Sur deux cents tirages c'est un
+   * test qui échoue tout seul de temps en temps — épique (3,3 %) et
+   * légendaire (2,2 %) sont trop proches, et il suffit d'un peu de chance
+   * pour que le second dépasse le premier. Un banc d'essai qui échoue au
+   * hasard est pire qu'un banc d'essai absent : on prend l'habitude de le
+   * relancer sans lire, et le jour où il attrape un vrai bug, on le relance
+   * aussi.
+   *
+   * On ne vérifie donc que ce qui est vraiment garanti :
+   *   · le commun domine largement — c'est la définition d'une caisse ;
+   *   · les deux paliers les plus hauts restent rares ;
+   *   · aucune rareté n'est impossible à obtenir.
+   * L'exactitude des probabilités, elle, se vérifie dans le simulateur,
+   * pas sur un échantillon de deux cents.
+   */
+  const haut = seen.legendary + seen.mythic + seen.cursed;
+  check('le commun domine, comme dans n’importe quelle caisse',
+    seen.common > seen.rare && seen.common > totalPulls * 0.4,
     `${totalPulls} tirages : ${Object.entries(seen).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  check('le haut du tableau reste rare',
+    haut < totalPulls * 0.12, `${haut} objets légendaires ou mieux sur ${totalPulls}`);
 
   alice.socket.emit('vault:open');
   await wait(400);

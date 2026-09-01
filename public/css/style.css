@@ -3156,3 +3156,313 @@ button.seat.free:hover {
   .me-chip { padding: 4px 6px; }
   .balance { padding: 7px 10px; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   UNO
+
+   La seule page du site où la couleur ne suit pas la règle n° 2 — et c'est
+   la règle elle-même qui l'autorise. Partout ailleurs, la couleur identifie
+   un jeu. Ici, la couleur EST le jeu : rouge, jaune, vert, bleu ne sont pas
+   une décoration, ce sont les quatre familles entre lesquelles on choisit à
+   chaque tour. Le chrome autour reste en lime, comme toute la section Party.
+
+   Les quatre teintes sont volontairement plus sourdes que le rouge et le
+   jaune d'un vrai paquet : sur fond noir, les couleurs pures vibrent et
+   fatiguent au bout de dix minutes.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.uno-stage { align-content: start; --uno-r: #D8443C; --uno-y: #E5A72B; --uno-g: #2E9E5B; --uno-b: #2F6FD0; }
+
+/* ── LA CARTE ──
+   Un fond de couleur, un ovale blanc penché, un chiffre par-dessus. Ce sont
+   les trois seuls éléments, et l'ovale fait tout le travail : c'est lui
+   qu'on reconnaît de loin, avant d'avoir lu quoi que ce soit. */
+.uno-card {
+  position: relative;
+  width: 72px; height: 108px;
+  border-radius: 10px;
+  background: var(--cc, var(--ink-4));
+  border: 3px solid #F4F1EA;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25), 0 3px 8px -2px rgba(0, 0, 0, .7);
+  display: grid; place-items: center;
+  overflow: hidden;
+  user-select: none;
+}
+.uno-card.c-r { --cc: var(--uno-r); }
+.uno-card.c-y { --cc: var(--uno-y); }
+.uno-card.c-g { --cc: var(--uno-g); }
+.uno-card.c-b { --cc: var(--uno-b); }
+.uno-card.c-w { --cc: #16131F; }
+
+.uno-oval {
+  position: absolute; inset: 12% 8%;
+  border-radius: 50%;
+  background: #F4F1EA;
+  transform: rotate(-20deg);
+}
+/* Le joker : les quatre couleurs en quartiers dans l'ovale. */
+.uno-quad {
+  position: absolute; inset: 12% 8%;
+  border-radius: 50%;
+  transform: rotate(-20deg);
+  background: conic-gradient(var(--uno-r) 0 25%, var(--uno-y) 0 50%,
+                             var(--uno-g) 0 75%, var(--uno-b) 0);
+}
+.uno-card.c-w .uno-oval { background: #F4F1EA; }
+.uno-card.c-w .uno-quad { inset: 18% 14%; }
+
+.uno-face {
+  position: relative; z-index: 2;
+  font: 800 30px/1 var(--f-brand);
+  color: var(--cc);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .5);
+}
+.uno-card.c-w .uno-face { color: #16131F; font-size: 24px; }
+
+.uno-corner {
+  position: absolute; z-index: 2;
+  font: 700 12px/1 var(--f-brand); font-style: normal;
+  color: #F4F1EA;
+}
+.uno-corner.tl { top: 5px; left: 6px; }
+.uno-corner.br { bottom: 5px; right: 6px; transform: rotate(180deg); }
+.uno-card.c-w .uno-corner { color: #F4F1EA; }
+
+.uno-card.small { width: 46px; height: 69px; border-width: 2px; border-radius: 7px; }
+.uno-card.small .uno-face { font-size: 19px; }
+.uno-card.small .uno-corner { display: none; }
+
+/* ── LE MILIEU DE TABLE ── */
+
+.uno-table {
+  position: relative;
+  display: grid; place-items: center;
+  min-height: 210px;
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-tile);
+  background:
+    radial-gradient(70% 60% at 50% 30%, rgba(195, 239, 60, .07), transparent 70%),
+    var(--ink-1);
+  border: 1px solid var(--hair);
+  box-shadow: var(--e-panel);
+}
+
+.uno-middle { display: flex; align-items: center; gap: var(--s-6); }
+
+/* La pioche : un dos de carte, et le nombre restant. On voit fondre le
+   paquet, ce qui prévient le remélange au lieu de le subir. */
+.uno-pile {
+  position: relative;
+  display: grid; place-items: center; gap: 7px;
+  padding: 0; background: none; border: 0; cursor: pointer;
+  transition: transform var(--t-fast) var(--ease);
+}
+.uno-pile:hover { transform: translateY(-3px); }
+.uno-back {
+  width: 72px; height: 108px; border-radius: 10px;
+  border: 3px solid #F4F1EA;
+  background:
+    radial-gradient(60% 46% at 50% 50%, #F4F1EA 0 38%, transparent 39%),
+    repeating-linear-gradient(135deg, #1A1526 0 8px, #221B32 8px 16px);
+  box-shadow: 0 3px 8px -2px rgba(0, 0, 0, .7);
+}
+.uno-pile b {
+  font: 600 12px/1 var(--f-ui); color: var(--t-low);
+  font-variant-numeric: tabular-nums;
+}
+
+.uno-top { position: relative; display: grid; place-items: center; }
+/* La couleur demandée, écrite sous la pile. Après un joker, la carte du
+   dessus ne la dit plus — c'est la première cause de coup refusé. */
+.uno-color-say {
+  margin-top: 10px;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase;
+}
+.uno-top[data-color="r"] .uno-color-say { color: var(--uno-r); }
+.uno-top[data-color="y"] .uno-color-say { color: var(--uno-y); }
+.uno-top[data-color="g"] .uno-color-say { color: var(--uno-g); }
+.uno-top[data-color="b"] .uno-color-say { color: var(--uno-b); }
+/* Un halo de la couleur en cours, très faible, derrière la pile. */
+.uno-top::before {
+  content: '';
+  position: absolute; inset: -26px -30px 14px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--halo, transparent), transparent 72%);
+  opacity: .5; pointer-events: none;
+}
+.uno-top[data-color="r"] { --halo: var(--uno-r); }
+.uno-top[data-color="y"] { --halo: var(--uno-y); }
+.uno-top[data-color="g"] { --halo: var(--uno-g); }
+.uno-top[data-color="b"] { --halo: var(--uno-b); }
+
+.uno-pending {
+  position: absolute; top: -14px; right: -58px;
+  padding: 7px 11px; border-radius: var(--r-panel);
+  background: var(--lose-wash);
+  border: 1px solid color-mix(in srgb, var(--lose) 40%, transparent);
+  text-align: center;
+}
+.uno-pending b { display: block; font: 700 20px/1 var(--f-num); color: var(--lose); }
+.uno-pending span { font: var(--ty-fine); font-size: 10.5px; color: var(--t-mid); }
+
+/* ── LE BOUTON UNO ──
+   Il n'est pas rangé avec les autres : c'est un geste urgent, il se pose
+   par-dessus la table, gros, au centre. */
+.uno-shout {
+  position: absolute; left: 50%; bottom: 16px;
+  transform: translateX(-50%);
+  padding: 13px 30px;
+  border: 0; border-radius: var(--r-control);
+  background: var(--g-party); color: #1A2405;
+  font: 800 19px/1 var(--f-brand); letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 4px 0 #7FA411;
+  animation: uno-call 1.1s var(--ease) 3;
+}
+.uno-shout:active { transform: translateX(-50%) translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 0 0 #7FA411; }
+/* Trois battements, puis plus rien : le temps qu'on le remarque, pas de
+   quoi clignoter jusqu'à la fin de la partie. */
+@keyframes uno-call {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 4px 0 #7FA411, 0 0 0 0 rgba(195,239,60,.5); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 4px 0 #7FA411, 0 0 0 14px rgba(195,239,60,0); }
+}
+
+/* ── L'ÉVENTAIL ──
+   Les cartes se chevauchent et pivotent : une main tenue, pas une rangée
+   de vignettes. Celle qu'on survole se lève, celle qu'on ne peut pas jouer
+   descend et perd sa couleur — sans disparaître, parce qu'on réfléchit
+   avec sa main entière. */
+.uno-hand-wrap { overflow-x: auto; overflow-y: visible; padding: 22px 0 4px; }
+.uno-hand {
+  display: flex; justify-content: center; align-items: flex-end;
+  min-height: 118px; padding: 0 var(--s-4);
+}
+/* L'écartement.
+   À -22 px sur des cartes de 72, on ne voyait qu'une languette de chaque
+   carte du milieu : impossible de lire sa main sans la survoler une par
+   une. À -12 px le chiffre et la couleur restent visibles partout, et
+   l'éventail garde sa forme. */
+.uno-slot {
+  padding: 0; background: none; border: 0; cursor: pointer;
+  margin-left: -12px; flex: none;
+  transform: rotate(var(--rot)) translateY(var(--lift));
+  transform-origin: bottom center;
+  transition: transform var(--t-base) var(--ease), filter var(--t-base) var(--ease), opacity var(--t-base) var(--ease);
+}
+.uno-slot:first-child { margin-left: 0; }
+.uno-slot.can:not(:disabled):hover { transform: rotate(var(--rot)) translateY(-20px); z-index: 99 !important; }
+/* Une carte injouable est EN RETRAIT, pas abîmée. Le premier réglage
+   (grayscale .85, brightness .6) la rendait grise et sale — on croyait à un
+   bug d'affichage plutôt qu'à une règle. Elle garde ici un reste de sa
+   couleur : on continue de lire sa main d'un coup d'œil, et on voit
+   pourquoi elle ne passe pas. */
+.uno-slot.cant { filter: saturate(.35) brightness(.7); opacity: .8; transform: rotate(var(--rot)) translateY(calc(var(--lift) + 8px)); }
+.uno-slot:disabled { cursor: default; }
+.uno-slot.fresh .uno-card { box-shadow: 0 0 0 2px var(--g-party), 0 4px 12px -3px rgba(0, 0, 0, .8); }
+
+/* ── LES ACTIONS ── */
+
+.uno-actions {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--s-3); flex-wrap: wrap;
+  min-height: 40px; margin-top: var(--s-2);
+}
+.uno-hint { font: var(--ty-fine); color: var(--t-mid); }
+
+/* ── LES JOUEURS ── */
+
+.uno-seat {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: var(--r-control);
+  border: 1px solid transparent;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.uno-seat + .uno-seat { margin-top: 2px; }
+.uno-seat img { border-radius: var(--r-circle); background: var(--ink-3); flex: none; }
+.uno-seat.turn { background: var(--ink-3); border-color: color-mix(in srgb, var(--g-party) 40%, transparent); }
+.uno-seat.away { opacity: .45; }
+.uno-seat-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.uno-seat-info b { font: var(--ty-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uno-seat-info span { font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+
+.uno-count {
+  display: grid; place-items: center;
+  min-width: 30px; height: 30px; padding: 0 7px;
+  border-radius: var(--r-inline);
+  background: var(--ink-4); flex: none;
+}
+.uno-count b { font: 700 13px/1 var(--f-num); color: var(--t-mid); }
+/* Une seule carte : c'est l'information la plus importante de la colonne. */
+.uno-count.alert { background: var(--warn-wash); }
+.uno-count.alert b { color: var(--warn); }
+
+.uno-snitch {
+  padding: 5px 9px; border-radius: var(--r-inline);
+  background: var(--g-party); color: #1A2405; border: 0;
+  font: 700 11px/1 var(--f-ui); cursor: pointer; flex: none;
+}
+
+/* ── RÉGLAGES, JOURNAL, DÉCOMPTES ── */
+
+.uno-settings { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
+.uno-settings h3 { font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3); }
+.uno-settings .segs { margin-top: var(--s-3); width: 100%; }
+.uno-settings .seg { flex: 1; }
+
+.uno-log { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
+.uno-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
+.uno-line:first-child { color: var(--t-mid); }
+
+.uno-summary {
+  width: 100%; max-width: 460px;
+  padding: var(--s-4); border-radius: var(--r-panel);
+  background: var(--ink-2); border: 1px solid var(--hair);
+}
+.uno-summary.win { border-color: color-mix(in srgb, var(--g-party) 40%, transparent); }
+.uno-summary h2 { font: var(--ty-sub); margin-bottom: 4px; }
+.uno-tally { margin: var(--s-3) 0; }
+.uno-tally div {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 6px 0; border-top: 1px solid var(--hair);
+  font: var(--ty-fine);
+}
+.uno-tally div span { flex: 1; color: var(--t-mid); }
+.uno-tally div i { color: var(--t-low); font-style: normal; }
+.uno-tally div b { font: 700 13px/1 var(--f-num); }
+.uno-tally div.top b { color: var(--g-party); }
+
+/* ── LA ROUE DES COULEURS ── */
+
+.uno-pick-color { width: min(320px, 90vw); text-align: center; }
+.uno-pick-color h2 { font: var(--ty-sub); margin-bottom: var(--s-4); }
+.uno-wheel {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2);
+}
+.uno-quarter {
+  padding: 22px 8px; border: 0; border-radius: var(--r-panel);
+  color: #fff; cursor: pointer;
+  font: 700 13px/1 var(--f-ui); text-transform: capitalize;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
+  transition: transform var(--t-fast) var(--ease);
+}
+.uno-quarter:hover { transform: translateY(-2px); }
+.uno-quarter.q-r { background: #D8443C; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 3px 0 #96241E; }
+.uno-quarter.q-y { background: #E5A72B; color: #2A1B00; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 3px 0 #9A6B0D; }
+.uno-quarter.q-g { background: #2E9E5B; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 3px 0 #196638; }
+.uno-quarter.q-b { background: #2F6FD0; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 3px 0 #1B4488; }
+
+/* ── MOBILE ──
+   La colonne des joueurs et le chat passent sous la table : sur un
+   téléphone, ce qu'on regarde c'est sa main et la pile. Les cartes
+   rétrécissent et l'éventail se resserre pour tenir dans la largeur. */
+@media (max-width: 900px) {
+  .uno-card { width: 58px; height: 87px; }
+  .uno-card .uno-face { font-size: 24px; }
+  .uno-back { width: 58px; height: 87px; }
+  .uno-slot { margin-left: -26px; }
+  .uno-middle { gap: var(--s-4); }
+  .uno-table { min-height: 200px; }
+  .uno-pending { right: -46px; }
+}

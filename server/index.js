@@ -28,7 +28,9 @@ const partyRooms = require('./party/rooms');
 const partyRank = require('./party/rank');
 const { Undercover } = require('./party/undercover');
 const { Poker } = require('./party/poker');
+const { Uno } = require('./party/uno');
 const gate = require('./gate');
+const assets = require('./assets');
 
 const app = express();
 const server = http.createServer(app);
@@ -48,7 +50,27 @@ app.use(cookieParser());
 // page d'accueil en tapant /index.html n'est pas fermé.
 gate.mount(app);
 
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', extensions: ['html'] }));
+/*
+ * LES PAGES HTML, AVANT LE SERVICE DE FICHIERS.
+ *
+ * Elles passent par `assets.sendPage`, qui tamponne les adresses des CSS et
+ * des JS avec l'empreinte du déploiement et interdit leur mise en cache.
+ * Sans ça, un joueur qui revient après une mise à jour reçoit le nouveau
+ * HTML avec l'ancienne feuille de style — le site s'affiche à moitié, et
+ * personne ne comprend pourquoi.
+ *
+ * Elles sont déclarées AVANT express.static : sinon le middleware statique
+ * servirait index.html brut et le tampon ne serait jamais posé.
+ */
+app.get(['/', '/index.html'], (req, res) => assets.sendPage(res, 'index.html'));
+
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  // Les fichiers portent une empreinte dans leur adresse : quand leur
+  // contenu change, l'adresse change, donc on peut les garder longtemps
+  // sans risque de servir du périmé.
+  maxAge: '30d',
+  extensions: ['html'],
+}));
 
 auth.register(app);
 
@@ -920,6 +942,7 @@ io.on('connection', async (socket) => {
   const GAMES = {
     undercover: { build: () => new Undercover(io) },
     poker: { build: () => new Poker(io) },
+    uno: { build: () => new Uno(io) },
   };
 
   const partyRoom = () => partyRooms.roomOf(user.id);
@@ -994,6 +1017,12 @@ io.on('connection', async (socket) => {
     const result = enterRoom(room);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     socket.emit('party:joined', { code: room.code, game: room.game });
+    // Et l'état APRÈS avoir dit où aller. `enterRoom` a déjà diffusé une
+    // fois, mais le client n'écoutait pas encore : sa page du jeu n'est
+    // branchée qu'au moment où il y arrive, c'est-à-dire sur ce
+    // `party:joined`. Sans ce second envoi, on tombe sur un salon vide qui
+    // ne se remplit qu'au premier coup joué.
+    room.broadcast();
   });
 
   socket.on('party:join', ({ code } = {}) => {
@@ -1006,6 +1035,7 @@ io.on('connection', async (socket) => {
     const result = enterRoom(room);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     socket.emit('party:joined', { code: room.code, game: room.game });
+    room.broadcast();   // même raison que ci-dessus
   });
 
   socket.on('party:leave', () => leaveParty());
@@ -1062,6 +1092,36 @@ io.on('connection', async (socket) => {
       }
     }
   }
+
+  /* ─── Uno ─── */
+
+  /**
+   * Le salon du joueur, à condition que ce soit bien une table d'Uno.
+   *
+   * On revérifie le jeu à chaque message : sans ça, un client bricolé
+   * pourrait envoyer « uno:play » à une partie de poker et faire planter la
+   * soirée de tout le monde.
+   */
+  const unoRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'uno' ? room : null;
+  };
+
+  /** Renvoie le refus au joueur, sans rien dire aux autres. */
+  const unoDo = (fn) => {
+    const room = unoRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  };
+
+  socket.on('uno:configure', (payload = {}) => unoDo((r) => r.configure(user.id, payload)));
+  socket.on('uno:play', ({ cardId, color } = {}) => unoDo((r) => r.play(user.id, { cardId, color })));
+  socket.on('uno:draw', () => unoDo((r) => r.pick(user.id)));
+  socket.on('uno:keep', () => unoDo((r) => r.keep(user.id)));
+  socket.on('uno:challenge', () => unoDo((r) => r.challenge(user.id)));
+  socket.on('uno:say', () => unoDo((r) => r.sayUno(user.id)));
+  socket.on('uno:catch', ({ id } = {}) => unoDo((r) => r.catchUno(user.id, id)));
 
   /* ─── Undercover ─── */
 

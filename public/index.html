@@ -921,6 +921,80 @@
       </div>
     </section>
 
+    <!-- ══════ UNO ══════ -->
+    <!--
+      La table d'Uno.
+
+      Même charpente que le poker et Undercover : une barre de salon en
+      haut, trois colonnes en dessous. Ce qui change, c'est le centre — la
+      pile et la pioche côte à côte, et la main du joueur en bas, tenue
+      comme un vrai éventail.
+
+      Le fond de la vue reste en lime, la couleur de la section Party. Les
+      seules couleurs franches de l'écran sont celles des cartes, et c'est
+      exactement l'idée : à l'Uno, la couleur EST la règle.
+    -->
+    <section class="view" id="view-uno" data-game="party">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-uno"/></svg> Uno</span>
+          <button class="room-code" id="uno-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="uno-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="uno-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="uno-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="uno-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>À la table</h2></div>
+          <div id="uno-seats"></div>
+
+          <div class="uno-settings hidden" id="uno-settings">
+            <h3>Réglages</h3>
+            <label class="check"><input type="checkbox" id="uno-stacking" checked> Les +2 se cumulent</label>
+            <div class="segs" id="uno-rounds">
+              <button class="seg" data-rounds="1">1 manche</button>
+              <button class="seg active" data-rounds="3">3 manches</button>
+              <button class="seg" data-rounds="5">5 manches</button>
+            </div>
+          </div>
+
+          <div class="uno-log" id="uno-log"></div>
+        </aside>
+
+        <div class="stage uno-stage">
+          <div class="uno-table" id="uno-table">
+            <div class="uno-middle">
+              <button class="uno-pile" id="uno-pick" data-tip="Piocher">
+                <span class="uno-back"></span>
+                <b id="uno-left">—</b>
+              </button>
+              <div class="uno-top" id="uno-top"></div>
+            </div>
+            <div class="uno-flow" id="uno-flow"></div>
+          </div>
+
+          <div class="uno-hand-wrap">
+            <div class="uno-hand" id="uno-hand"></div>
+          </div>
+          <div class="uno-actions" id="uno-actions"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="uno-chat"></div>
+          <form class="chat-form" id="uno-chat-form">
+            <input class="input" id="uno-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
     <!-- ══════ MARCHÉ ══════ -->
     <section class="view" id="view-market" data-game="market">
       <div class="view-head">
@@ -1090,6 +1164,7 @@
 <script src="/js/party.js"></script>
 <script src="/js/undercover.js"></script>
 <script src="/js/poker.js"></script>
+<script src="/js/uno.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

@@ -16,6 +16,8 @@ const path = require('path');
 const { blankVault } = require('./vault');
 const { blankClicker } = require('./clicker');
 const medals = require('./medals');
+const partyRank = require('./party/rank');
+const rakeback = require('./rakeback');
 const season = require('./season');
 const fairness = require('./fair');
 
@@ -87,6 +89,9 @@ function blankProfile(user, now = Date.now()) {
     unlocked: [],     // cosmétiques débloqués par les paliers
     gifts: [],        // caisses offertes, en attente d'ouverture
     giftDay: null,    // plafond quotidien de cadeaux
+    party: partyRank.blank(), // rang de la section Party, séparé du casino
+    rake: rakeback.blank(),   // rakeback accumulé sur les mises
+    marketSales: [],          // ventes récentes sur le marché
     admin: false,
     banned: false,
     banReason: '',
@@ -113,6 +118,9 @@ function migrate(profile, now = Date.now()) {
     unlocked: Array.isArray(profile.unlocked) ? profile.unlocked : [],
     gifts: Array.isArray(profile.gifts) ? profile.gifts : [],
     giftDay: profile.giftDay || null,
+    party: { ...fresh.party, ...(profile.party || {}) },
+    rake: { ...fresh.rake, ...(profile.rake || {}) },
+    marketSales: Array.isArray(profile.marketSales) ? profile.marketSales : [],
   };
   merged.vault.items = { ...(merged.vault.items || {}) };
   merged.clicker.upgrades = { ...fresh.clicker.upgrades, ...(merged.clicker.upgrades || {}) };
@@ -331,6 +339,8 @@ function publicProfile(profile) {
     cosmetics: medals.publicCosmetics(profile),
     medals: { tiers: profile.medals.tiers.length, firsts: profile.medals.firsts.length },
     season: profile.season,
+    party: partyRank.view(profile),
+    rake: rakeback.view(profile, lvl.level),
     fair: fairness.publicFair(profile.fair),
   };
 }
@@ -343,7 +353,11 @@ function publicProfile(profile) {
 async function leaderboard(limit = 20, sort = 'coins') {
   await backend.ready();
   const all = await backend.all();
-  const key = sort === 'xp' ? (p) => p.xp : (p) => p.vault.coins;
+  // Le classement Party est à part : il ne compte ni pièces ni mises, mais
+  // l'XP gagnée en jouant avec les autres.
+  const key = sort === 'party' ? (p) => partyRank.ensure(p).xp
+    : sort === 'xp' ? (p) => p.xp
+      : (p) => p.vault.coins;
   return all
     .filter((p) => key(p) > 0 && !p.banned)
     .sort((a, b) => key(b) - key(a) || a.createdAt - b.createdAt)
@@ -366,6 +380,10 @@ function recordPlay(profile, staked, returned) {
   // Le classement du mois compte le BÉNÉFICE net, pas le solde : sinon il
   // suffirait de miser gros et de tout récupérer pour grimper.
   season.record(profile, { profit: returned - staked, staked, rounds: 1 });
+
+  // Le rakeback se nourrit du VOLUME joué, gagné ou perdu. C'est ce qui fait
+  // qu'une soirée de malchance rapporte quand même quelque chose.
+  rakeback.record(profile, staked, levelFromXp(profile.xp).level);
 
   const xp = Math.max(1, Math.floor(staked / 20));
   grantXp(profile, xp);

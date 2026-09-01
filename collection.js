@@ -304,12 +304,23 @@ const CURSED = [
 /* ─── Assemblage ───────────────────────────────────────── */
 
 const RARITIES = {
-  common:    { id: 'common',    name: 'COMMUN',     color: '#93a1bb', glow: 'rgba(147,161,187,.5)',  xp: 4,   dust: 6,    weight: 5800 },
-  rare:      { id: 'rare',      name: 'RARE',       color: '#4da3ff', glow: 'rgba(77,163,255,.55)',  xp: 14,  dust: 24,   weight: 2600 },
-  epic:      { id: 'epic',      name: 'ÉPIQUE',     color: '#a06bff', glow: 'rgba(160,107,255,.6)',  xp: 44,  dust: 90,   weight: 1100 },
-  legendary: { id: 'legendary', name: 'LÉGENDAIRE', color: '#ffb03d', glow: 'rgba(255,176,61,.65)',  xp: 150, dust: 340,  weight: 420  },
-  mythic:    { id: 'mythic',    name: 'MYTHIQUE',   color: '#ff5fa2', glow: 'rgba(255,95,162,.7)',   xp: 520, dust: 1300, weight: 72   },
-  cursed:    { id: 'cursed',    name: 'MAUDIT',     color: '#33e6c0', glow: 'rgba(51,230,192,.75)',  xp: 1800, dust: 4800, weight: 8   },
+  /*
+   * Les couleurs de rareté.
+   *
+   * Elles restent distinctes — c'est leur seul travail : reconnaître une
+   * rareté d'un coup d'œil, de loin, sur une vignette de 60 pixels. Mais
+   * elles sont DÉSATURÉES par rapport aux néons d'origine, pour tenir dans
+   * une interface champagne sans la faire ressembler à une borne d'arcade.
+   * L'ordre de chaleur suit l'ordre de rareté : gris froid pour le commun,
+   * or pour le légendaire, puis deux teintes rares qu'on ne voit presque
+   * jamais et qui peuvent donc se permettre d'être vives.
+   */
+  common:    { id: 'common',    name: 'COMMUN',     color: '#8d95a3', glow: 'rgba(141,149,163,.45)', xp: 4,    dust: 6,    weight: 5800 },
+  rare:      { id: 'rare',      name: 'RARE',       color: '#6f9fc9', glow: 'rgba(111,159,201,.5)',  xp: 14,   dust: 24,   weight: 2600 },
+  epic:      { id: 'epic',      name: 'ÉPIQUE',     color: '#9a86cf', glow: 'rgba(154,134,207,.55)', xp: 44,   dust: 90,   weight: 1100 },
+  legendary: { id: 'legendary', name: 'LÉGENDAIRE', color: '#d4af6a', glow: 'rgba(212,175,106,.6)',  xp: 150,  dust: 340,  weight: 420  },
+  mythic:    { id: 'mythic',    name: 'MYTHIQUE',   color: '#cf7f9e', glow: 'rgba(207,127,158,.65)', xp: 520,  dust: 1300, weight: 72   },
+  cursed:    { id: 'cursed',    name: 'MAUDIT',     color: '#4fc4a8', glow: 'rgba(79,196,168,.7)',   xp: 1800, dust: 4800, weight: 8    },
 };
 
 const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'];

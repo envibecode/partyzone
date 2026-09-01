@@ -34,6 +34,26 @@
     payout: 'Règlement',
   };
 
+  /**
+   * Ce qui se passe à la table, dit du point de vue de celui qui regarde.
+   *
+   * « À vous de jouer » affiché à quelqu'un qui n'a pas la main — un
+   * spectateur, ou un joueur dont ce n'est simplement pas le tour — est
+   * une invitation à cliquer dans le vide. On nomme donc qui joue, et on
+   * ne dit « Placez vos mises » qu'à ceux qui peuvent en poser une.
+   */
+  function phaseText(s) {
+    if (s.phase === 'playing') {
+      const active = (s.seats || [])[s.activeSeat];
+      if (active) return active.isYou ? 'À vous de jouer' : `${active.name} joue`;
+    }
+    if (s.seated === false) {
+      if (s.phase === 'betting') return 'Mises en cours';
+      if (s.phase === 'waiting') return 'Prochain tour…';
+    }
+    return PHASE_TEXT[s.phase] || s.phase;
+  }
+
   /* ─── Lobby ─── */
 
   $('#bj-create').addEventListener('click', () => PZ.socket.emit('bj:create'));
@@ -44,6 +64,8 @@
     if (code.length !== 4) return PZ.toast('Le code fait 4 lettres.', 'error');
     PZ.socket.emit('bj:join', { code });
   });
+
+  $('#bj-sit').addEventListener('click', () => PZ.socket.emit('bj:sit'));
 
   $('#bj-leave').addEventListener('click', () => {
     PZ.socket.emit('bj:leave');
@@ -179,11 +201,21 @@
       foot.appendChild(el('span', null, `main n° ${t.hand || 0}`));
       card.appendChild(foot);
 
-      if (t.seats >= t.seatsMax) {
-        card.disabled = true;
-        card.appendChild(el('div', 'boc-full', 'Complète'));
-      } else {
-        card.addEventListener('click', () => PZ.socket.emit('bj:join', { code: t.code }));
+      // Une table complète n'est plus une porte fermée : on peut la
+      // regarder. C'est aussi comme ça qu'on attend qu'une place se libère.
+      const full = t.seats >= t.seatsMax;
+      card.addEventListener('click', () => PZ.socket.emit('bj:join', { code: t.code, watch: full }));
+      card.appendChild(el('div', full ? 'boc-full' : 'boc-go', full ? 'Complète — regarder' : 'Rejoindre'));
+
+      // Le second bouton : suivre la partie sans prendre de place.
+      if (!full) {
+        const watch = el('button', 'boc-watch', 'Regarder');
+        watch.dataset.tip = 'Voir la partie sans t’asseoir';
+        watch.addEventListener('click', (e) => {
+          e.stopPropagation();
+          PZ.socket.emit('bj:join', { code: t.code, watch: true });
+        });
+        card.appendChild(watch);
       }
 
       grid.appendChild(card);
@@ -247,7 +279,7 @@
     showRoom();
 
     $('#bj-table-code').textContent = s.code;
-    $('#bj-phase').textContent = PHASE_TEXT[s.phase] || s.phase;
+    $('#bj-phase').textContent = phaseText(s);
     $('#bj-hash').textContent = s.shoeSeedHash;
     $('#bj-bet').min = s.minBet;
     $('#bj-bet').max = s.maxBet;
@@ -269,11 +301,48 @@
     fillCards(dealerCards, s.dealer.cards, 'dealer');
     $('#bj-dealer-val').textContent = s.dealer.value ? (s.dealer.value.total > 21 ? `${s.dealer.value.total} — sauté` : s.dealer.value.total) : '';
 
-    // Sièges
+    // Le bandeau du spectateur.
+    const watchBar = $('#bj-watch');
+    watchBar.classList.toggle('hidden', s.seated !== false);
+    if (s.seated === false) {
+      $('#bj-sit').disabled = s.seatsFree <= 0;
+      $('#bj-sit').textContent = s.seatsFree > 0
+        ? `Prendre une place (${s.seatsFree} libre${s.seatsFree > 1 ? 's' : ''})`
+        : 'Table complète';
+    }
+
+    // Sièges : les cinq, toujours, même vides.
     const seats = $('#bj-seats');
     seats.replaceChildren();
-    s.seats.forEach((seat) => {
+
+    for (let i = 0; i < s.seatsMax; i++) {
+      const seat = s.seats[i];
+
+      if (!seat) {
+        // Une place libre reste dessinée : on voit qu'il reste de la place,
+        // et on peut s'y asseoir d'un clic si on est en train de regarder.
+        const free = el(s.seated === false ? 'button' : 'div', 'seat free');
+        free.appendChild(el('div', 'seat-num', `Place ${i + 1}`));
+        free.appendChild(el('div', null, s.seated === false ? 'S’asseoir' : 'Libre'));
+        if (s.seated === false) {
+          free.addEventListener('click', () => PZ.socket.emit('bj:sit'));
+        }
+        seats.appendChild(free);
+        continue;
+      }
+
       const node = el('div', `seat${seat.active ? ' active' : ''}${seat.isYou ? ' you' : ''}`);
+
+      // L'hôte peut libérer une place occupée par quelqu'un qui ne joue pas.
+      if (s.isHost && !seat.isYou && !seat.bet && !seat.hands.length) {
+        const kick = el('button', 'seat-kick', '✕');
+        kick.dataset.tip = `Retirer ${seat.name} de la table`;
+        kick.addEventListener('click', (e) => {
+          e.stopPropagation();
+          PZ.socket.emit('bj:kick', { id: seat.id });
+        });
+        node.appendChild(kick);
+      }
 
       const who = el('div', 'seat-who');
       const img = new Image(24, 24);
@@ -305,7 +374,7 @@
       const staked = seat.bet || (seat.lastResult ? seat.lastResult.staked : 0);
       const bet = el('div', 'seat-bet');
       bet.appendChild(document.createTextNode('Mise '));
-      bet.appendChild(el('b', null, staked ? `${fmt(staked)} 🪙` : '—'));
+      bet.appendChild(el('b', null, staked ? `${fmt(staked)} ¤` : '—'));
       node.appendChild(bet);
 
       // Les paris annexes du siège, et ce qu'ils ont donné.
@@ -336,7 +405,7 @@
       }
 
       seats.appendChild(node);
-    });
+    }
 
     // Coups possibles
     const actions = $('#bj-actions');
@@ -349,10 +418,15 @@
       actions.appendChild(btn);
     });
 
-    // Barre de mise
-    const canBet = s.phase === 'betting' || s.phase === 'waiting';
+    // Barre de mise — un spectateur n'en a pas, il n'a pas de siège où poser
+    // ses jetons. Les paris annexes et le mode auto disparaissent avec elle.
+    const canBet = (s.phase === 'betting' || s.phase === 'waiting') && s.seated !== false;
     $('#bj-betrow').classList.toggle('hidden', !canBet);
-    $('#bj-place').textContent = s.you && s.you.bet ? `Misé : ${fmt(s.you.bet)} 🪙 — changer` : 'Miser';
+    const sidebets = $('#sidebets');
+    if (sidebets) sidebets.classList.toggle('hidden', s.seated === false);
+    $('#bj-auto').classList.toggle('hidden', s.seated === false);
+    $('#bj-rebet').classList.toggle('hidden', s.seated === false);
+    $('#bj-place').textContent = s.you && s.you.bet ? `Misé : ${fmt(s.you.bet)} ¤ — changer` : 'Miser';
 
     // Journal
     const log = $('#bj-log');
@@ -396,7 +470,7 @@
       if (state !== s) return;
       const left = Math.max(0, s.deadline - (Date.now() - offset));
       const secs = Math.ceil(left / 1000);
-      $('#bj-phase').textContent = `${PHASE_TEXT[s.phase] || s.phase}${secs > 0 ? ` · ${secs} s` : ''}`;
+      $('#bj-phase').textContent = `${phaseText(s)}${secs > 0 ? ` · ${secs} s` : ''}`;
       if (left > 0) timerRaf = requestAnimationFrame(step);
     };
     step();

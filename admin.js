@@ -75,6 +75,7 @@
     grid.appendChild(stat(s.discord ? 'oui' : 'non', 'Discord configuré'));
     root.appendChild(grid);
 
+    if (data.gate) root.appendChild(renderGate(data.gate));
     root.appendChild(renderPlayers({ total: data.total, players: data.players || [] }));
     root.appendChild(renderTables(data.tables || []));
     root.appendChild(renderLog(data.log || []));
@@ -155,9 +156,14 @@
       box.appendChild(btn);
     };
 
-    act('+1k 🪙', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
+    act('+1k ¤', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
     act('+500 XP', '', () => send('grant-xp', { id: p.id, amount: 500 }));
     act('🎁 Caisses', '', () => giveCases(p));
+    act('✏️ Renommer', '', () => {
+      const wanted = prompt(`Nouveau pseudo pour ${p.name} ?`, p.name);
+      if (wanted === null) return;
+      send('rename', { id: p.id, name: wanted.trim() });
+    });
     act(p.banned ? 'Débannir' : 'Bannir', p.banned ? '' : 'danger', () => {
       if (p.banned) return send('unban', { id: p.id });
       const reason = prompt(`Raison du bannissement de ${p.name} ?`, 'Comportement inapproprié.');
@@ -192,7 +198,7 @@
 
     const select = el('select', 'input');
     cases.forEach((c) => {
-      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙 pièce`);
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} ¤ pièce`);
       opt.value = c.id;
       select.appendChild(opt);
     });
@@ -302,6 +308,73 @@
       list.appendChild(li);
     });
     panel.appendChild(list);
+    return panel;
+  }
+
+  /* ─── L'ouverture du site ─── */
+
+  /**
+   * L'interrupteur de la porte.
+   *
+   * Il est en haut du panel, avant même la liste des joueurs, parce que
+   * c'est la seule commande dont on a besoin dans l'urgence : le jour de
+   * l'ouverture, et le jour où quelque chose casse.
+   *
+   * Il dit toujours l'état RÉEL en premier (ouvert / fermé), avant de
+   * proposer de le changer. Un interrupteur qui n'affiche que ses trois
+   * boutons oblige à deviner dans quelle position il se trouve.
+   */
+  function renderGate(gate) {
+    const panel = el('div', 'panel');
+    const head = el('div', 'panel-head');
+    head.appendChild(el('h2', null, 'Ouverture du site'));
+
+    const badge = el('span', `gate-state ${gate.open ? 'on' : 'off'}`,
+      gate.open ? 'Ouvert' : 'Fermé au public');
+    head.appendChild(badge);
+    panel.appendChild(head);
+
+    const when = new Date(gate.opensAt).toLocaleString('fr-FR', {
+      dateStyle: 'full', timeStyle: 'short',
+    });
+    panel.appendChild(el('p', 'fine',
+      gate.mode === 'auto'
+        ? `Le site s’ouvrira tout seul le ${when}. Personne n’a besoin d’être devant l’écran.`
+        : gate.mode === 'open'
+          ? `Ouverture forcée : la date du ${when} est ignorée.`
+          : `Fermeture forcée : seule la clé d’administration passe, quelle que soit l’heure.`));
+
+    const row = el('div', 'gate-modes');
+    [
+      ['auto', 'Automatique', 'ouvre à la date prévue'],
+      ['open', 'Ouvrir maintenant', 'tout le monde entre'],
+      ['closed', 'Fermer', 'compte à rebours pour tous'],
+    ].forEach(([mode, label, note]) => {
+      const b = el('button', `gate-mode${gate.mode === mode ? ' on' : ''}`);
+      b.appendChild(el('b', null, label));
+      b.appendChild(el('span', null, note));
+      b.addEventListener('click', () => send('site-gate', { mode }));
+      row.appendChild(b);
+    });
+    panel.appendChild(row);
+
+    const form = el('form', 'gate-when');
+    const input = el('input', 'input');
+    input.type = 'datetime-local';
+    // La valeur d'un champ datetime-local est de l'heure LOCALE sans fuseau :
+    // on retire donc le décalage avant de la formater, sinon le champ
+    // afficherait l'heure de Greenwich à quelqu'un qui est à Paris.
+    const d = new Date(gate.opensAt);
+    input.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    form.appendChild(input);
+    form.appendChild(el('button', 'btn btn-soft', 'Changer la date'));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!input.value) return;
+      send('site-gate', { mode: 'auto', opensAt: new Date(input.value).getTime() });
+    });
+    panel.appendChild(form);
+
     return panel;
   }
 

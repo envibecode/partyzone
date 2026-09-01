@@ -229,7 +229,7 @@
       const chip = el('div', 'setup-chip');
       const use = el('button', 'setup-use');
       use.appendChild(el('b', null, s.name));
-      use.appendChild(el('span', null, `${fmt(s.total)} 🪙 · ${s.bets.length} mise${s.bets.length > 1 ? 's' : ''}`));
+      use.appendChild(el('span', null, `${fmt(s.total)} ¤ · ${s.bets.length} mise${s.bets.length > 1 ? 's' : ''}`));
       use.addEventListener('click', () => PZ.socket.emit('roulette:setup-apply', { name: s.name }));
       chip.appendChild(use);
 
@@ -312,7 +312,7 @@
       if (you && you.payout != null) {
         if (you.payout > 0) {
           SFX.win(Math.min(1, you.payout / Math.max(1, you.staked * 6)));
-          PZ.toast(`Tu récupères ${fmt(you.payout)} 🪙 !`, 'success');
+          PZ.toast(`Tu récupères ${fmt(you.payout)} ¤ !`, 'success');
           if (you.payout >= you.staked * 8) PZ.confetti(110);
         } else if (you.staked > 0) {
           SFX.lose();
@@ -353,7 +353,7 @@
         img.alt = '';
         item.appendChild(img);
         item.appendChild(el('b', null, w.name));
-        item.appendChild(el('span', 'g', `+${fmt(w.payout)} 🪙`));
+        item.appendChild(el('span', 'g', `+${fmt(w.payout)} ¤`));
         strip.appendChild(item);
       });
       return strip;
@@ -381,7 +381,7 @@
       const nameNode = el('span', 'n', p.name);
       li.appendChild(nameNode);
       if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
-      li.appendChild(el('b', null, `${fmt(p.staked)} 🪙`));
+      li.appendChild(el('b', null, `${fmt(p.staked)} ¤`));
       list.appendChild(li);
     });
   }
@@ -408,7 +408,7 @@
       const li = el('li');
       if (detail && detail[i]) li.classList.add(detail[i].won ? 'won' : 'lost');
       li.appendChild(el('span', null, b.label));
-      li.appendChild(el('b', null, `${fmt(b.amount)} 🪙`));
+      li.appendChild(el('b', null, `${fmt(b.amount)} ¤`));
       list.appendChild(li);
     });
     $('#rl-staked').textContent = fmt(you.staked);
@@ -449,7 +449,7 @@
             img.alt = '';
             faces.appendChild(img);
           });
-          faces.dataset.tip = `${fmt(board.total)} 🪙 misés par ${board.players.map((p) => p.name).join(', ')}`;
+          faces.dataset.tip = `${fmt(board.total)} ¤ misés par ${board.players.map((p) => p.name).join(', ')}`;
           cell.appendChild(faces);
         }
       }

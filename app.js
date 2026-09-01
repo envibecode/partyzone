@@ -53,6 +53,16 @@ function avatarUrl(user) {
 PZ.avatarUrl = avatarUrl;
 
 const timeOf = (at) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+/*
+ * LE SIGNE MONÉTAIRE.
+ *
+ * L'interface écrit « 1 200 ¤ ». Le caractère ¤ (symbole monétaire
+ * générique) a la même graisse et la même hauteur que les chiffres, il est
+ * présent dans toutes les polices, et il est stylé en champagne par le CSS.
+ * L'emoji 🪙 qu'on utilisait avant changeait de dessin d'un appareil à
+ * l'autre et décalait la ligne de base d'un demi-pixel partout.
+ */
 PZ.timeOf = timeOf;
 
 /* ─── Notifications ────────────────────────────────────── */
@@ -128,6 +138,7 @@ const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
   blackjack: 'blackjack', vault: 'vault', slots: 'slots',
   medals: 'medals', admin: 'admin',
+  party: 'party', uc: 'undercover', pk: 'poker', market: 'market', soon: 'home',
 };
 
 function go(name) {
@@ -166,10 +177,17 @@ addEventListener('hashchange', () => {
 
 const menuBtn = $('#btn-menu');
 if (menuBtn) {
-  menuBtn.addEventListener('click', () => {
-    const nav = $('#nav-left');
+  // Le tiroir de navigation mobile. Il se referme dès qu'on choisit une
+  // destination : rester ouvert par-dessus la page qu'on vient d'ouvrir
+  // n'aide personne.
+  const nav = $('#nav-left');
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     nav.classList.toggle('open');
-    $('#nav-right').classList.toggle('open');
+  });
+  nav.addEventListener('click', () => nav.classList.remove('open'));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.topbar')) nav.classList.remove('open');
   });
 }
 
@@ -214,6 +232,14 @@ function applyProfile(profile) {
   [avatar, nameSlot].forEach((node) => {
     [...node.classList].filter((c) => COSMETIC_CLASS.test(c)).forEach((c) => node.classList.remove(c));
   });
+  const menuName = $('#menu-name');
+  const menuSub = $('#menu-sub');
+  if (menuName) menuName.textContent = PZ.me ? PZ.me.name : '';
+  if (menuSub) {
+    menuSub.textContent = `Niveau ${profile.level} · ${profile.title}`
+      + (profile.party ? ` — Party niveau ${profile.party.level}` : '');
+  }
+
   const oldBadge = nameSlot.parentNode && nameSlot.parentNode.querySelector('.cos-badge');
   if (oldBadge) oldBadge.remove();
   if (PZ.applyCosmetics) PZ.applyCosmetics(null, profile.cosmetics, { avatar, name: nameSlot });
@@ -340,41 +366,66 @@ function ccStep() {
 let lbSort = 'coins';
 let lbTimer = null;
 
-async function loadLeaderboard() {
-  const list = $('#leaderboard');
+const LB_EMPTY = {
+  party: 'Personne n’a encore joué en Party. Ouvre un salon.',
+  xp: 'Personne au tableau. Va jouer.',
+  coins: 'Personne au tableau. Va miner.',
+};
+
+/**
+ * Une ligne de classement.
+ *
+ * Extraite pour être partagée entre la page complète et la fenêtre d'accès
+ * rapide : deux rendus différents du même classement finissent toujours par
+ * diverger, et on se retrouve avec un tableau qui n'affiche pas la même
+ * chose selon l'endroit d'où on le regarde.
+ */
+function lbRow(p, index, sort) {
+  const li = el('li');
+  if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
+  li.appendChild(el('span', 'rk', String(index + 1)));
+
+  const img = new Image(34, 34);
+  img.src = avatarUrl(p);
+  img.alt = '';
+  li.appendChild(img);
+
+  const who = el('div', 'who');
+  const nameNode = el('b', 'n', p.name);
+  who.appendChild(nameNode);
+  if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
+  // Le classement Party affiche le rang Party, pas celui du casino : ce sont
+  // deux progressions séparées et les mélanger n'aurait aucun sens.
+  who.appendChild(el('span', 't', sort === 'party' && p.party
+    ? `Party niv. ${p.party.level} · ${p.party.title}`
+    : `Niv. ${p.level} · ${p.title}`));
+  li.appendChild(who);
+
+  li.appendChild(el('span', 'v',
+    sort === 'party' ? `${fmt(p.party ? p.party.xp : 0)} XP`
+      : sort === 'xp' ? `${fmt(p.xp)} XP`
+        : `${fmt(p.coins)} ¤`));
+  return li;
+}
+
+/** Remplit une liste avec le classement demandé. */
+async function fillLeaderboard(list, sort, limit = 20) {
   if (!list) return;
   try {
-    const data = await (await fetch(`/api/leaderboard?sort=${lbSort}&limit=20`)).json();
+    const data = await (await fetch(`/api/leaderboard?sort=${sort}&limit=${limit}`)).json();
     const rows = data.leaderboard || [];
     list.replaceChildren();
     if (!rows.length) {
-      list.appendChild(el('li', 'empty', 'Personne au tableau. Va miner.'));
+      list.appendChild(el('li', 'empty', LB_EMPTY[sort] || LB_EMPTY.coins));
       return;
     }
-    rows.forEach((p, i) => {
-      const li = el('li');
-      if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
-      li.appendChild(el('span', 'rk', String(i + 1)));
-
-      const img = new Image(34, 34);
-      img.src = avatarUrl(p);
-      img.alt = '';
-      li.appendChild(img);
-
-      const who = el('div', 'who');
-      const nameNode = el('b', 'n', p.name);
-      who.appendChild(nameNode);
-      if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
-      who.appendChild(el('span', 't', `Niv. ${p.level} · ${p.title}`));
-      li.appendChild(who);
-
-      li.appendChild(el('span', 'v', lbSort === 'xp' ? `${fmt(p.xp)} XP` : `${fmt(p.coins)} 🪙`));
-      list.appendChild(li);
-    });
+    rows.forEach((p, i) => list.appendChild(lbRow(p, i, sort)));
   } catch {
     list.replaceChildren(el('li', 'empty', 'Classement indisponible.'));
   }
 }
+
+const loadLeaderboard = () => fillLeaderboard($('#leaderboard'), lbSort, 20);
 PZ.loadLeaderboard = loadLeaderboard;
 
 $('#lb-sort').addEventListener('click', (e) => {
@@ -393,6 +444,86 @@ PZ.views.leaderboard = {
   },
   leave() { clearInterval(lbTimer); lbTimer = null; },
 };
+
+/* ─── Le classement en accès rapide ────────────────────── */
+
+/**
+ * Le classement, depuis n'importe où.
+ *
+ * On veut savoir où on en est sans quitter sa table de blackjack ni perdre
+ * sa mise en cours. La fenêtre se ferme sur Échap ou en cliquant à côté, et
+ * elle se rafraîchit tant qu'elle est ouverte.
+ */
+const LB_TABS = [
+  { id: 'coins', label: 'Pièces' },
+  { id: 'xp', label: 'Niveau' },
+  { id: 'party', label: 'Party' },
+];
+
+let popTimer = null;
+let popSort = 'coins';
+
+function openLeaderboard() {
+  const box = el('div', 'lb-pop');
+
+  const head = el('div', 'lb-pop-head');
+  head.appendChild(el('h2', null, 'Classement'));
+
+  const segs = el('div', 'segs');
+  LB_TABS.forEach((t) => {
+    const b = el('button', `seg${t.id === popSort ? ' active' : ''}`, t.label);
+    b.addEventListener('click', () => {
+      popSort = t.id;
+      [...segs.children].forEach((x) => x.classList.toggle('active', x === b));
+      fillLeaderboard(list, popSort, 15);
+    });
+    segs.appendChild(b);
+  });
+  head.appendChild(segs);
+  box.appendChild(head);
+
+  const list = el('ol', 'lb');
+  list.appendChild(el('li', 'empty', 'Chargement…'));
+  // Le dégradé du bas dit « ça continue » ; il n'a plus lieu d'être une
+  // fois qu'on touche le fond de la liste.
+  list.addEventListener('scroll', () => {
+    const end = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+    list.classList.toggle('at-end', end);
+  });
+  box.appendChild(list);
+
+  const foot = el('div', 'lb-pop-foot');
+  const full = el('button', 'btn btn-soft btn-block', 'Voir la page complète');
+  full.addEventListener('click', () => { closeModal(); go('leaderboard'); });
+  foot.appendChild(full);
+  box.appendChild(foot);
+
+  openModal(box);
+  fillLeaderboard(list, popSort, 15);
+
+  clearInterval(popTimer);
+  popTimer = setInterval(() => {
+    // La fenêtre a pu être fermée entre-temps : on arrête plutôt que de
+    // continuer à interroger le serveur pour une liste que personne ne voit.
+    if (!box.isConnected) return clearInterval(popTimer);
+    fillLeaderboard(list, popSort, 15);
+  }, 10000);
+}
+PZ.openLeaderboard = openLeaderboard;
+
+$('#btn-lb').addEventListener('click', openLeaderboard);
+
+// Un raccourci clavier, parce qu'on regarde le classement souvent. On
+// n'intercepte évidemment pas la touche quand on est en train d'écrire.
+addEventListener('keydown', (e) => {
+  if (e.key !== 'c' && e.key !== 'C') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+  if (!modal.hidden) return;
+  openLeaderboard();
+});
+
 
 /* ─── Le fil des gros coups ────────────────────────────── */
 
@@ -437,9 +568,14 @@ const STICKERS = [
   { emoji: '🔥', anim: 'flame',  colour: '#ff8a3d' },
 ];
 
-function announce(text) {
-  const pick = STICKERS[(Math.random() * STICKERS.length) | 0];
-  const box = el('div', 'announce');
+function announce(text, kind = 'info') {
+  // Un jackpot n'a pas la même tête qu'une annonce de l'administration : il
+  // est doré, il dure plus longtemps, et il ne demande pas la permission.
+  const jackpot = kind === 'jackpot';
+  const pick = jackpot
+    ? { emoji: '👑', colour: '#ffc23d', anim: 'an-pop' }
+    : STICKERS[(Math.random() * STICKERS.length) | 0];
+  const box = el('div', `announce${jackpot ? ' jackpot' : ''}`);
   box.style.setProperty('--c', pick.colour);
 
   const scene = el('div', 'announce-scene');
@@ -451,16 +587,17 @@ function announce(text) {
   }
   box.appendChild(scene);
 
-  box.appendChild(el('div', 'announce-kicker', 'Annonce'));
+  box.appendChild(el('div', 'announce-kicker', jackpot ? 'JACKPOT' : 'Annonce'));
   box.appendChild(el('p', 'announce-text', text));
 
-  const close = el('button', 'btn btn-gold modal-close', 'Compris');
+  const close = el('button', 'btn btn-gold modal-close', jackpot ? 'Chapeau' : 'Compris');
   close.addEventListener('click', closeModal);
   box.appendChild(close);
 
   openModal(box);
   SFX.fanfare();
-  confetti(70);
+  confetti(jackpot ? 220 : 70);
+  if (jackpot) setTimeout(() => confetti(160), 700);
 }
 PZ.announce = announce;
 
@@ -551,6 +688,59 @@ function showAuth() {
 
 $('#btn-discord').addEventListener('click', () => { location.href = '/auth/discord'; });
 
+/* ══════════════════════════════════════════════════════════════════════
+   L'ACCÈS ÉQUIPE
+
+   Une seule clé pour deux serrures : elle ouvre la porte du site quand
+   celui-ci n'a pas encore ouvert, et elle donne les droits
+   d'administration dès qu'on est connecté. Elle est retenue dans le
+   stockage de session — le temps de l'onglet, pas plus — parce que sinon
+   il faudrait la retaper après chaque connexion, et qu'une clé qu'on
+   retape dix fois par jour finit collée sur un post-it.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const STAFF_KEY = 'pz-staff-key';
+
+(() => {
+  const toggle = $('#staff-toggle');
+  const box = $('#staff-box');
+  if (!toggle || !box) return;
+
+  toggle.addEventListener('click', () => {
+    const open = box.hidden;
+    box.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) $('#staff-key').focus();
+  });
+
+  $('#staff-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const said = $('#staff-said');
+    const key = $('#staff-key').value;
+    said.className = 'fine';
+    said.textContent = 'Vérification…';
+    try {
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.ok) {
+        said.className = 'fine bad';
+        said.textContent = data.message || 'Clé refusée.';
+        return;
+      }
+      try { sessionStorage.setItem(STAFF_KEY, key); } catch { /* mode privé */ }
+      said.className = 'fine good';
+      said.textContent = 'Clé acceptée. Connecte-toi, les droits suivront.';
+    } catch {
+      said.className = 'fine bad';
+      said.textContent = 'Le serveur n’a pas répondu.';
+    }
+  });
+})();
+
 $('#form-guest').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('#guest-name').value.trim();
@@ -565,7 +755,48 @@ $('#form-guest').addEventListener('submit', async (e) => {
   start(data.user);
 });
 
-$('#me-chip').addEventListener('click', () => go('fair'));
+/* ─── Le menu du compte ─── */
+
+const meMenu = $('#me-menu');
+$('#me-chip').addEventListener('click', (e) => {
+  e.stopPropagation();
+  meMenu.hidden = !meMenu.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!meMenu.hidden && !e.target.closest('.me-wrap')) meMenu.hidden = true;
+});
+meMenu.addEventListener('click', () => { meMenu.hidden = true; });
+
+/**
+ * Changer de compte.
+ *
+ * Se connecter avec le mauvais compte Discord arrive tout le temps, et sans
+ * ce bouton il faut aller vider ses cookies pour s'en sortir. On efface la
+ * session côté serveur puis on recharge : on retombe sur l'écran d'accueil.
+ */
+$('#btn-logout').addEventListener('click', async () => {
+  const box = el('div');
+  box.appendChild(el('h2', null, 'Changer de compte ?'));
+  box.appendChild(el('p', 'fine',
+    'Ta progression est enregistrée sur ce compte : tu la retrouveras en te ' +
+    'reconnectant avec. Si tu joues en invité en revanche, ce compte-là ne ' +
+    'sera plus accessible — un invité n’a pas de mot de passe pour revenir.'));
+
+  const actions = el('div', 'modal-actions');
+  const ok = el('button', 'btn btn-danger', 'Me déconnecter');
+  ok.addEventListener('click', async () => {
+    ok.disabled = true;
+    try { await fetch('/auth/logout', { method: 'POST' }); } catch { /* on recharge quand même */ }
+    location.href = '/';
+  });
+  const cancel = el('button', 'btn btn-soft', 'Rester connecté');
+  cancel.addEventListener('click', closeModal);
+  actions.appendChild(ok);
+  actions.appendChild(cancel);
+  box.appendChild(actions);
+
+  openModal(box);
+});
 
 function start(user) {
   PZ.me = user;
@@ -578,11 +809,22 @@ function start(user) {
   socket.on('me', ({ user: u, profile }) => {
     PZ.me = u;
     applyProfile(profile);
+    // La clé saisie sur l'écran de connexion se transforme en droits dès
+    // que la connexion est établie — une seule fois, puis on l'oublie.
+    let staff = null;
+    try { staff = sessionStorage.getItem(STAFF_KEY); } catch { /* mode privé */ }
+    if (staff && !profile.admin) socket.emit('admin:claim', { key: staff });
   });
   socket.on('profile:update', applyProfile);
   socket.on('toast', ({ message, kind }) => toast(message, kind));
   socket.on('feed', pushFeed);
-  socket.on('announce', ({ text }) => announce(text));
+  socket.on('announce', ({ text, kind }) => announce(text, kind));
+
+  // Un renommage par l'administration : le pseudo change sous nos yeux.
+  socket.on('me:renamed', ({ name }) => {
+    if (PZ.me) PZ.me.name = name;
+    if (PZ.profile) applyProfile(PZ.profile);
+  });
 
   // Un cadeau peut arriver n'importe quand : on écoute ici, pas dans la page
   // des caisses, sinon on ne le saurait qu'en allant y faire un tour.

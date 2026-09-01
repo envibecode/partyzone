@@ -7,6 +7,16 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args:['--no-sandbox'] });
   const ctx = await b.newContext({ viewport:{width:1500,height:940}, locale:'fr-FR', deviceScaleFactor:2 });
   const p = await ctx.newPage();
+
+  // La porte : le site est fermé avant son ouverture, et le navigateur
+  // d'essai entre comme tout le monde — avec la clé.
+  await p.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await p.evaluate((k) => fetch('/api/gate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
+  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
+  // On n'écoute la console qu'À PARTIR D'ICI. Avant, on était sur la page
+  // d'attente, qui tente forcément de charger des ressources que la porte
+  // refuse : ces 503-là sont le comportement attendu, pas des erreurs.
   p.on('pageerror',e=>errs.push('ERR '+e.message));
   p.on('console',m=>{ if(m.type()==='error' && !/favicon|ERR_TUNNEL/.test(m.text())) errs.push('CON '+m.text()); });
 
@@ -18,8 +28,12 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   check('intro de la taverne au premier chargement', await p.isVisible('#intro'));
   check('la signature est affichée', /Titiss/.test(await p.textContent('#intro')));
   await p.screenshot({path:OUT+'/intro.png'});
-  await p.click('#intro-skip'); await wait(1000);
-  check('l’intro se passe', (await p.$('#intro'))===null);
+  // Elle se termine toute seule au bout de 4,6 s : si la capture d'écran a
+  // pris ce temps-là, le bouton n'existe plus, et c'est très bien.
+  const introSkip = await p.$('#intro-skip');
+  if (introSkip) await introSkip.click();
+  await p.waitForFunction(()=>!document.querySelector('#intro'), null, {timeout:8000});
+  check('l’intro se termine', (await p.$('#intro'))===null);
 
   await p.fill('#guest-name','Mattis'); await p.click('#form-guest button');
   await p.waitForSelector('#app.active'); await p.waitForFunction(()=>window.PZ&&window.PZ.profile);
@@ -142,8 +156,11 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   check('bon de caisse affiché', giftCards >= 1, `${giftCards} bon(s)`);
   await p.screenshot({path:OUT+'/cadeaux.png'});
   await p.click('#gift-list .gift'); await wait(1500);
-  check('le cadeau s’ouvre avec le rouleau', await p.isVisible('.reel-modal'));
-  await wait(5200);
+  // Un cadeau de deux caisses ouvre la fenêtre multi-rouleaux ; une seule
+  // caisse garde le grand rouleau plein écran. Les deux sont valables.
+  check('le cadeau s’ouvre avec le rouleau',
+    (await p.isVisible('.multi-modal')) || (await p.isVisible('.reel-modal')));
+  await wait(6500);
   const close = await p.$('.modal-close'); if (close) await close.click();
   await wait(600);
 
@@ -173,6 +190,22 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   check('les parures sont proposées', cos >= 12, `${cos} vignettes`);
   check('classement du mois affiché', /Fin dans/.test(await p.textContent('#season-body')));
   await p.screenshot({path:OUT+'/medailles.png', fullPage:true});
+  // Ouvrir cent cinquante caisses fait franchir les paliers de 50, 100 et
+  // 150 objets, et chaque palier ouvre une fenêtre d'annonce. Elle recouvre
+  // la page : on la referme avant de cliquer sur une parure, sinon le clic
+  // part dans le voile de la modale.
+  const stuck = await p.evaluate(() => {
+    const m = document.querySelector('#modal');
+    if (!m || m.hidden) return null;
+    const what = m.querySelector('#modal-box > *');
+    return what ? (what.className || what.tagName) : 'inconnu';
+  });
+  if (stuck) {
+    console.log(`  · fenêtre laissée ouverte (${stuck}) — on la referme`);
+    await p.evaluate(() => window.PZ.closeModal());
+    await wait(300);
+  }
+
   const free = await p.$('#cosmetics .cos:not(.locked):not(.on)');
   if (free) { await free.click(); await wait(700); }
   check('parure équipée visible dans le bandeau du haut',
@@ -195,6 +228,12 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   const before = await countTables();
   const ctx2 = await b.newContext({ viewport:{width:1200,height:800}, locale:'fr-FR' });
   const p2 = await ctx2.newPage();
+  // Nouveau contexte, nouveaux cookies : ce second navigateur doit lui
+  // aussi franchir la porte avant de voir quoi que ce soit.
+  await p2.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await p2.evaluate((k) => fetch('/api/gate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
+  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
   await p2.goto('http://localhost:3000',{waitUntil:'networkidle'});
   await p2.fill('#guest-name','Lea'); await p2.click('#form-guest button');
   await p2.waitForSelector('#app.active'); await p2.waitForFunction(()=>window.PZ&&window.PZ.profile);

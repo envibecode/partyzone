@@ -154,13 +154,25 @@
     const row = el('div', `pk-hrow ${ball.win >= ball.stake ? 'up' : 'down'}`);
     row.appendChild(el('span', 'm', `${ball.multiplier}×`));
     row.appendChild(el('span', 'g', `${ball.win >= ball.stake ? '+' : ''}${fmt(ball.win - ball.stake)}`));
-    row.appendChild(el('span', 'p', `${fmt(ball.win)} 🪙`));
+    row.appendChild(el('span', 'p', `${fmt(ball.win)} ¤`));
 
     history.prepend(row);
     while (history.children.length > 40) history.lastElementChild.remove();
   }
 
   /* ─── Cases du bas ─── */
+
+  /** Probabilité d'atterrir dans chaque case, pour un nombre de rangées. */
+  function bucketOdds(n) {
+    const out = [];
+    let c = 1; // coefficient binomial, construit de proche en proche
+    const total = Math.pow(2, n);
+    for (let k = 0; k <= n; k++) {
+      out.push(c / total);
+      c = (c * (n - k)) / (k + 1);
+    }
+    return out;
+  }
 
   function renderBuckets() {
     const table = config.tables[rows][risk];
@@ -176,10 +188,21 @@
     // plutôt que de le laisser se faire couper.
     bucketBox.style.setProperty('--bs', rows >= 16 ? '10px' : rows >= 12 ? '11.5px' : '13px');
 
+    // La probabilité de chaque case, calculée ici comme le serveur la calcule :
+    // le coefficient binomial divisé par 2^rangées.
+    const odds = bucketOdds(rows);
+
     table.multipliers.forEach((m, i) => {
       // À trois chiffres le « × » ne rentre plus : le contexte suffit.
       const node = el('div', 'pk-bucket', m >= 100 ? String(m) : `${m}×`);
       node.style.background = bucketColor(i);
+
+      // Les gros multiplicateurs des bords ont l'air injouables — et on
+      // soupçonne vite un bug. Ils tombent bel et bien, c'est juste très
+      // rare : autant écrire la cote, ça vaut mieux qu'un doute.
+      const chance = odds[i];
+      node.dataset.tip = `×${m} — 1 chance sur ${Math.round(1 / chance).toLocaleString('fr-FR')} par bille`;
+      if (chance < 0.0005) node.classList.add('rare');
       bucketBox.appendChild(node);
     });
     $('#pk-rtp').textContent = `${String(table.rtp).replace('.', ',')} %`;
@@ -227,7 +250,7 @@
     if (!raf) raf = requestAnimationFrame(loop);
 
     const profit = result.profit;
-    $('#pk-last').textContent = `${profit >= 0 ? '+' : ''}${fmt(profit)} 🪙`;
+    $('#pk-last').textContent = `${profit >= 0 ? '+' : ''}${fmt(profit)} ¤`;
     $('#pk-last').style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
 
     const best = Math.max(...result.drops.map((d) => d.multiplier));

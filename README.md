@@ -19,7 +19,7 @@ virtuelles uniquement**.
 | ⛏️ **La Mine** | Le robinet de secours, volontairement chiche : une barre d'endurance pleine vaut **environ 60 pièces**, et elle met 85 secondes à se refaire. De quoi poser une mise quand on est fauché, pas de quoi s'enrichir. Autoclic inutile par construction. |
 | 💸 **Rakeback** | **1 à 1,8 % de tout ce qui est misé** revient au joueur, gagné ou perdu. Comme les jeux détruisent 3 à 5 % du volume, l'ensemble reste déflationniste. C'est la vraie source de revenus d'un joueur régulier. |
 | 🛒 **Marché** | Revente de doublons entre joueurs, au prix qu'on veut. Commission de 8 % **détruite** (pas redistribuée), prix plancher et plafond, et le dernier exemplaire d'un objet n'est jamais vendable. |
-| 🃏 **Blackjack** | Table à 5 sièges, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot** : on voit les salons ouverts et on rejoint ses potes. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
+| 🃏 **Blackjack** | Vrai tapis vert à **cinq places, pas une de plus**, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot**. On peut **regarder une partie sans jouer** (et s'asseoir quand une place se libère), la donne **part dès que tout le monde a misé** au lieu d'attendre les 22 secondes, et l'hôte peut **retirer quelqu'un qui squatte un siège** — jamais quelqu'un qui a une mise en jeu. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
 | 🎡 **Roulette** | Roue européenne à 37 cases, **partagée par tout le site**. On voit les mises des autres case par case, les pseudos des gagnants du dernier tour défilent, et le solde est gelé pendant la rotation pour ne pas dévoiler le résultat. Remise, mises automatiques, configurations enregistrées. |
 | 🔻 **Plinko** | 8, 12 ou 16 rangées, trois niveaux de risque. Multiplicateurs calculés à partir des vraies probabilités binomiales. Historique bille par bille sur le côté. |
 | 🎰 **Les Copains** | Machine à sous 5 rouleaux × 3 rangées, 10 lignes, thème serveur Discord. Joker, symbole bonus, 8 tours offerts à ×3. Redistribution **mesurée** sur 400 000 tours simulés : 95,39 %. |
@@ -29,7 +29,9 @@ virtuelles uniquement**.
 | 🏆 **Classements** | Général par pièces, par niveau ou par rang Party, plus un **classement du mois** sur le bénéfice net. |
 | 🗺️ **À venir** | Une page qui dit franchement ce qui est en chantier, ce qui reste à décider (publicité, abonnements) et ce qui est déjà en ligne. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
-| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Deux jeux dedans pour l'instant — **Undercover** (3 à 12 joueurs, avec Monsieur Blanc) et **Poker** Texas Hold'em en tournoi (2 à 8, jetons de tournoi, blindes qui montent, pots secondaires). Loup-garou, Uno, Belote et Monopoly sont annoncés dans le hall mais pas encore jouables. |
+| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Trois jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8, blindes qui montent, pots secondaires) et **Uno** (2 à 10). Loup-garou, Belote et Monopoly sont annoncés dans le hall mais pas encore jouables. |
+| 🎴 **Uno** | Les 108 cartes, avec les règles qu'on oublie toujours : **un seul 0 par couleur** (donc deux fois plus rare qu'un 7), les **+2 qui se cumulent** (réglable par l'hôte), le **+4 contestable** — le serveur sait si tu bluffais, et c'est le menteur qui ramasse — et les **2 cartes de pénalité** pour qui oublie d'annoncer, à condition qu'un adversaire le remarque dans les quatre secondes. Un tour trop long ou un joueur déconnecté ne bloque jamais la table : le serveur pioche et passe. |
+| 🚧 **Porte d'ouverture** | Tant que le site n'a pas ouvert, **toute** adresse renvoie un compte à rebours — pas de page qui fuit parce qu'on connaît son URL, et les websockets sont fermés aussi. L'ouverture se fait **toute seule à la date prévue** (2 septembre 2026, midi, heure de Paris) ; le panel admin permet d'ouvrir plus tôt, de refermer, ou de changer la date. Un « accès équipe » discret sur la page d'attente et sur l'écran de connexion accepte la clé `ADMIN_KEY` et donne un laissez-passer de douze heures. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
 | 🛠️ **Panel admin** | Joueurs, pièces, XP, caisses offertes, bannissements, tables ouvertes, annonces animées, journal des actions. La page se rafraîchit toute seule. |
 
@@ -117,6 +119,34 @@ git push
 Une minute ou deux plus tard, le site est à jour. L'onglet *Events* de
 Render montre l'avancement, *Logs* montre les erreurs éventuelles. Si un
 déploiement casse quelque chose, *Rollback* remet la version d'avant.
+
+### « J'ai poussé, mais je vois encore l'ancienne version »
+
+Ça n'arrivera pas, et voici pourquoi — c'est le genre de panne qui fait
+perdre une soirée entière à chercher un bug qui n'existe pas.
+
+Le navigateur garde les feuilles de style et les scripts en mémoire pour ne
+pas les retélécharger à chaque page. Le problème, c'est que l'adresse ne
+change jamais&nbsp;: c'est toujours `/css/style.css`. Après une mise à jour,
+le navigateur sert donc le **nouveau HTML avec l'ancien CSS** — la page
+s'affiche à moitié, avec les mauvaises couleurs, et on croit avoir raté son
+déploiement.
+
+`server/assets.js` calcule au démarrage une empreinte du contenu de tous les
+CSS et JS, et la colle dans les adresses&nbsp;:
+
+```html
+<link rel="stylesheet" href="/css/style.css?v=8df1601986">
+```
+
+Le contenu change → l'empreinte change → l'adresse change → le navigateur
+retélécharge, tout seul. Tant que rien ne bouge, il garde sa copie trente
+jours. Le HTML, lui, n'est jamais mis en cache, puisque c'est lui qui porte
+les empreintes.
+
+Si tu vois quand même une page à moitié à jour, c'est le cache de Render ou
+de Cloudflare&nbsp;: un **Ctrl + Maj + R** tranche la question en deux
+secondes.
 
 > ⚠️ **Sans base de données, chaque mise à jour efface la progression.**
 > Le fichier `data/profiles.json` vit sur le disque temporaire de Render, qui
@@ -220,6 +250,8 @@ npm test               # joue vraiment à tout, en Socket.IO, et vérifie l'éco
 npm run test:economy   # marché, rakeback, récompenses Party, gros cadeaux
 npm run test:party     # une partie d'Undercover et une main de poker, à 4 clients
 npm run test:poker     # 60 tournois simulés : aucun jeton créé ni perdu
+npm run test:bj        # les cinq places, les spectateurs, l'exclusion, le départ immédiat
+npm run test:uno       # 60 parties d'Uno simulées : aucune carte créée ni perdue
 npm run test:ui        # parcours navigateur du casino + captures d'écran
 npm run test:ui-party  # parcours navigateur de la section Party
 ```
@@ -233,6 +265,21 @@ sur l'objet gagné, que la collection affiche les 518 objets avec les
 manquants grisés, qu'aucun nom n'est tronqué, que les rouleaux de la machine
 à sous se posent sur leurs quinze symboles, et que le panel admin se met à
 jour sans qu'on recharge la page.
+
+`npm run test:bj` ouvre une table avec trois clients : il vérifie qu'il y a
+bien cinq places et pas six, qu'un spectateur reçoit l'état de la table sans
+en occuper une et sans pouvoir miser, que la donne part en moins de deux
+secondes quand tout le monde a misé au lieu d'attendre le chrono, et qu'on ne
+peut pas retirer de la table quelqu'un dont les jetons sont sur le tapis.
+
+`npm run test:uno` ne demande pas de serveur non plus. Il fait jouer des
+joueurs au hasard et vérifie **après chaque coup** qu'il y a toujours
+exactement 108 cartes, chacune une seule fois — dans les mains, la pioche et
+la défausse réunies. C'est l'invariant qui compte : dans un jeu de cartes,
+les bugs qui font mal ne sont pas « le +2 ne fait pas piocher », ce sont les
+fuites — une carte défaussée deux fois, une main qui garde une carte déjà
+posée. Elles ne se voient pas en jouant, la partie continue simplement un
+peu faussée.
 
 `npm run test:poker` ne demande pas de serveur : il joue soixante tournois
 entiers au hasard, avec beaucoup de tapis pour fabriquer des pots secondaires,
@@ -291,3 +338,34 @@ test/
 
 Aucune étape de compilation : ce que tu lis dans `public/` est exactement
 ce que le navigateur exécute. Tu peux modifier, recharger, voir le résultat.
+
+
+---
+
+## La direction artistique
+
+Le CSS est en trois couches, et l'ordre compte :
+
+| Fichier | Rôle |
+|---|---|
+| `public/css/tokens.css` | **Le socle.** Il ne dessine rien : il énonce les règles. Palette, fontes, élévations, rayons, échelle typographique, durées. Rien d'autre n'a le droit d'écrire une couleur en dur. |
+| `public/css/style.css` | Les composants. Il commence par une **passerelle** qui rebranche les anciens noms de jetons (`--gold`, `--panel`, `--muted`…) sur le socle. |
+| `public/fonts/` | Les trois fontes, auto-hébergées (156 Ko). Aucun appel à Google. |
+
+### Les cinq règles
+
+1. **Le chrome est gris.** Barre du haut, panneaux, tableaux, formulaires : encre désaturée. Neuf dixièmes de l'écran ne contiennent aucune couleur.
+2. **La couleur appartient aux jeux.** Le blackjack est jade, la roulette vermillon, le plinko cyan, la machine à sous magenta, les caisses améthyste, la mine ambre, le marché bleu, Party lime. On pose `data-game="plinko"` sur un élément et lui **et toute sa descendance** — boutons compris — passent au cyan. Conséquence : l'accueil n'est pas violet, il est noir avec des objets colorés dessus.
+3. **Le rayon dit la nature.** Objet à regarder 18 px, panneau d'information 12 px, bouton 9 px, ligne de tableau 0. Le cercle est réservé aux avatars. Il n'y a pas de bouton en gélule.
+4. **La profondeur se mérite.** Trois niveaux : à plat (les données), creusé (les panneaux : un filet clair en haut, aucune ombre portée), soulevé (ce qui recouvre vraiment). Une ombre colorée n'existe que pour le jeu en cours et emprunte *sa* couleur.
+5. **Les boutons principaux sont des touches.** Aplat plein, filet clair en haut, tranche de 3 px en bas qui s'écrase à l'appui. Pas de dégradé, pas de lueur. Un seul bouton primaire par écran.
+
+### Les trois fontes
+
+**Unbounded** parle pour la marque (nom du site, titres, noms de jeux — jamais une phrase entière).
+**Instrument Sans** écrit l'interface et se tait.
+**Azeret Mono** porte l'argent et les codes : une somme qui change ne doit pas faire bouger ses voisines.
+
+### Le piège à connaître
+
+Une propriété personnalisée qui en cite une autre est résolue **là où elle est déclarée**. Écrire `--gold: var(--accent)` dans `:root` fige `--gold` sur la valeur racine, et les couleurs de jeux ne descendent jamais jusqu'aux boutons. C'est pour ça que `tokens.css` redéclare les alias dans un bloc `[data-game]` placé **après** les règles par jeu.

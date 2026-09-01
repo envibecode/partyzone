@@ -162,7 +162,7 @@
       who.appendChild(el('b', 'n', p.name));
       who.appendChild(el('span', 't', `${fmt(p.rounds)} manches`));
       li.appendChild(who);
-      li.appendChild(el('span', 'v', `+${fmt(p.coins)} 🪙`));
+      li.appendChild(el('span', 'v', `+${fmt(p.coins)} ¤`));
       list.appendChild(li);
     });
     box.appendChild(list);
@@ -170,7 +170,7 @@
     if (s.you) {
       const you = el('div', 'season-you');
       you.appendChild(el('span', null, 'Ton bénéfice du mois'));
-      const v = el('b', null, `${s.you.coins >= 0 ? '+' : ''}${fmt(s.you.coins)} 🪙`);
+      const v = el('b', null, `${s.you.coins >= 0 ? '+' : ''}${fmt(s.you.coins)} ¤`);
       v.style.color = s.you.coins >= 0 ? 'var(--green)' : 'var(--red)';
       you.appendChild(v);
       box.appendChild(you);
@@ -183,7 +183,7 @@
         const line = el('div', 'hof-line');
         line.appendChild(el('span', 'hof-month', w.label));
         line.appendChild(el('b', null, w.name));
-        line.appendChild(el('span', 'hof-coins', `+${fmt(w.coins)} 🪙`));
+        line.appendChild(el('span', 'hof-coins', `+${fmt(w.coins)} ¤`));
         hof.appendChild(line);
       });
       box.appendChild(hof);

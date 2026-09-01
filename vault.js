@@ -99,7 +99,7 @@
       top.appendChild(el('span', 'case-emoji', c.emoji));
       const names = el('div');
       names.appendChild(el('div', 'case-name', c.name));
-      names.appendChild(el('div', 'fine', isFree ? 'Gratuite maintenant' : `${fmt(c.price)} 🪙`));
+      names.appendChild(el('div', 'fine', isFree ? 'Gratuite maintenant' : `${fmt(c.price)} ¤`));
       top.appendChild(names);
       node.appendChild(top);
 
@@ -182,6 +182,7 @@
 
   const ITEM_W = 110;
   const GAP = 8;
+  const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'];
 
   function itemNode(item, cls = 'reel-item') {
     const node = el('div', cls);
@@ -272,7 +273,7 @@
       gains.appendChild(el('b', null, `${fmt(pull_.xp)} XP`));
       if (pull_.dust) {
         gains.appendChild(document.createTextNode(' · doublon revendu +'));
-        gains.appendChild(el('b', null, `${fmt(pull_.dust)} 🪙`));
+        gains.appendChild(el('b', null, `${fmt(pull_.dust)} ¤`));
       }
       if (pull_.mult > 1) gains.appendChild(document.createTextNode(` · combo ×${String(pull_.mult).replace('.', ',')}`));
       prize.appendChild(gains);
@@ -297,8 +298,165 @@
     requestAnimationFrame(frame);
   }
 
+
+  /* ═══════════ L'OUVERTURE MULTIPLE ═══════════ */
+
   /**
-   * File d'attente : une caisse ×5 enchaîne cinq rouleaux.
+   * Cinq ou dix caisses d'un coup.
+   *
+   * Les jouer l'une après l'autre prendrait vingt secondes pour cinq, et on
+   * finit par cliquer « tout révéler » sans rien regarder. On les fait donc
+   * tourner TOUTES EN MÊME TEMPS, sur des lignes empilées, et on les fait
+   * s'arrêter les unes après les autres — c'est le suspense d'une seule
+   * ouverture, multiplié, au lieu de cinq attentes à la suite.
+   */
+  function spinMulti(pulls) {
+    const wrap = el('div', 'multi-modal');
+
+    const head = el('div', 'reel-head');
+    head.appendChild(el('span', 'reel-title', `Ouverture de ${pulls.length} caisses`));
+    const skip = el('button', 'link', 'Tout révéler ›');
+    head.appendChild(skip);
+    wrap.appendChild(head);
+
+    const rows = el('div', 'multi-rows');
+    const needle = el('div', 'multi-needle');
+    rows.appendChild(needle);
+
+    const lines = pulls.map((pull) => {
+      const row = el('div', 'mreel');
+      const window_ = el('div', 'reel-window mini');
+      const strip = el('div', 'reel-strip');
+      pull.reel.strip.forEach((it) => strip.appendChild(itemNode(it, 'reel-item mini')));
+      window_.appendChild(strip);
+      row.appendChild(window_);
+      rows.appendChild(row);
+      return { pull, row, window_, strip };
+    });
+
+    wrap.appendChild(rows);
+
+    const prize = el('div', 'multi-prize');
+    wrap.appendChild(prize);
+
+    PZ.openModal(wrap, { closable: false });
+
+    // Mesure APRÈS ouverture, et via offsetWidth : la fenêtre s'ouvre avec une
+    // animation d'échelle, et un rectangle mesuré pendant cette animation
+    // renverrait une largeur trop petite — les rouleaux s'arrêteraient tous
+    // légèrement à côté de la bonne vignette.
+    const first = lines[0] && lines[0].strip.firstElementChild;
+    const w = first ? first.offsetWidth : 78;
+    const step = w + GAP;
+
+    let landed = 0;
+    let stopped = false;
+
+    function land(line, index) {
+      if (line.done) return;
+      line.done = true;
+      const won = line.strip.children[line.pull.reel.winIndex];
+      if (won) won.classList.add('won');
+      line.row.classList.add('landed');
+      line.row.style.setProperty('--rc', line.pull.color);
+      SFX.reveal(line.pull.r);
+
+      const tag = el('div', 'mreel-tag');
+      tag.style.setProperty('--rc', line.pull.color);
+      tag.appendChild(el('b', null, line.pull.name));
+      tag.appendChild(el('span', null, line.pull.rarity));
+      if (line.pull.isNew) tag.appendChild(el('i', 'new-dot', 'NEW'));
+      line.row.appendChild(tag);
+
+      landed++;
+      if (landed === lines.length) finish();
+      void index;
+    }
+
+    function finish() {
+      if (stopped) return;
+      stopped = true;
+      skip.remove();
+
+      const xp = pulls.reduce((sum, x) => sum + x.xp, 0);
+      const dust = pulls.reduce((sum, x) => sum + x.dust, 0);
+      const best = pulls.reduce((a, b) => (RARITY_ORDER.indexOf(b.r) > RARITY_ORDER.indexOf(a.r) ? b : a));
+
+      const line = el('div', 'g');
+      line.appendChild(document.createTextNode('+'));
+      line.appendChild(el('b', null, `${fmt(xp)} XP`));
+      if (dust) {
+        line.appendChild(document.createTextNode(' · doublons revendus +'));
+        line.appendChild(el('b', null, `${fmt(dust)} ¤`));
+      }
+      const news = pulls.filter((x) => x.isNew).length;
+      if (news) {
+        line.appendChild(document.createTextNode(` · ${news} nouveau${news > 1 ? 'x' : ''}`));
+      }
+      prize.appendChild(line);
+      prize.classList.add('show');
+
+      const close = el('button', 'btn btn-soft modal-close', 'Fermer');
+      close.addEventListener('click', () => PZ.closeModal());
+      wrap.appendChild(close);
+
+      if (['legendary', 'mythic', 'cursed'].includes(best.r)) {
+        PZ.confetti(best.r === 'cursed' ? 200 : 120);
+        SFX.fanfare();
+      }
+    }
+
+    skip.addEventListener('click', () => {
+      lines.forEach((line, i) => {
+        line.strip.style.transform = `translateX(${-target(line)}px)`;
+        land(line, i);
+      });
+    });
+
+    function target(line) {
+      const centre = line.window_.clientWidth / 2 - w / 2;
+      if (line.target === undefined) {
+        const jitter = (Math.random() - 0.5) * w * 0.5;
+        line.target = line.pull.reel.winIndex * step - centre + jitter;
+      }
+      return line.target;
+    }
+
+    const START_X = step * 2;
+    const BASE_MS = 3200;
+    const GAP_MS = 420; // ce qui décale l'arrêt d'une ligne à la suivante
+    const start = performance.now();
+
+    lines.forEach((line) => { line.strip.style.transform = `translateX(${-START_X}px)`; });
+
+    function frame(now) {
+      // Une nouvelle ouverture a remplacé celle-ci dans la fenêtre : on
+      // s'arrête là. Sans ce garde-fou, l'ancienne animation continuerait à
+      // tourner indéfiniment sur des éléments qui ne sont plus dans la page.
+      if (!wrap.isConnected) return;
+
+      let running = false;
+      lines.forEach((line, i) => {
+        if (line.done) return;
+        const duration = BASE_MS + i * GAP_MS;
+        const t = Math.min(1, (now - start) / duration);
+        const e = 1 - Math.pow(1 - t, 4.2);
+        const x = START_X + (target(line) - START_X) * e;
+        line.strip.style.transform = `translateX(${-x}px)`;
+
+        const tick = Math.floor(x / step);
+        if (tick !== line.tick) { line.tick = tick; if (i === 0) SFX.reelTick(); }
+
+        if (t < 1) running = true;
+        else land(line, i);
+      });
+      if (running && !stopped) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /**
+   * File d'attente : une caisse seule garde son grand rouleau.
    *
    * Si de nouveaux tirages arrivent pendant qu'un rouleau tourne, on les
    * met à la suite au lieu de repartir de zéro — sinon l'animation en cours
@@ -309,6 +467,10 @@
     running: false,
     autoTimer: null,
     start(pulls) {
+      // Une seule caisse : le grand rouleau, plein écran. Plusieurs : elles
+      // tournent toutes ensemble, ce qui est à la fois plus rapide et plus
+      // spectaculaire que cinq attentes à la suite.
+      if (pulls.length > 1) return spinMulti(pulls);
       this.pulls.push(...pulls);
       if (!this.running) this.step();
     },
@@ -340,7 +502,7 @@
 
     const grid = el('div', 'reel-multi');
     let best = 'common';
-    const ORDER = ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'];
+    const ORDER = RARITY_ORDER;
     pulls.forEach((x) => {
       const node = el('div', 'mi');
       node.style.setProperty('--rc', x.color);
@@ -360,7 +522,7 @@
     g.appendChild(el('b', null, `${fmt(xp)} XP`));
     if (dust) {
       g.appendChild(document.createTextNode(' · doublons revendus +'));
-      g.appendChild(el('b', null, `${fmt(dust)} 🪙`));
+      g.appendChild(el('b', null, `${fmt(dust)} ¤`));
     }
     line.appendChild(g);
     wrap.appendChild(line);
@@ -461,7 +623,7 @@
     const keep = select.value;
     select.replaceChildren();
     v.cases.forEach((c) => {
-      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙`);
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} ¤`);
       opt.value = c.id;
       select.appendChild(opt);
     });
@@ -531,7 +693,7 @@
         return;
       }
       if (result && result.pulls) queue.start(result.pulls);
-      else if (result && result.coins) PZ.toast(`Doublons revendus : +${fmt(result.coins)} 🪙`, 'success');
+      else if (result && result.coins) PZ.toast(`Doublons revendus : +${fmt(result.coins)} ¤`, 'success');
 
       if (medals && medals.length) celebrate(medals);
     });

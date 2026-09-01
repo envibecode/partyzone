@@ -12,7 +12,9 @@
     "test:party": "node test/party.js",
     "test:poker": "node test/poker-sim.js",
     "test:ui": "node test/ui.js",
-    "test:ui-party": "node test/ui-party.js"
+    "test:ui-party": "node test/ui-party.js",
+    "test:bj": "node test/blackjack.js",
+    "test:uno": "node test/uno-sim.js"
   },
   "engines": {
     "node": ">=18"

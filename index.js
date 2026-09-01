@@ -17,11 +17,20 @@ const slots = require('./slots');
 const medals = require('./medals');
 const season = require('./season');
 const gifts = require('./gifts');
+const market = require('./market');
+const rakeback = require('./rakeback');
 const blackjack = require('./blackjack');
 const { Roulette } = require('./roulette');
 const { Presence } = require('./presence');
 const { Chat } = require('./chat');
 const admin = require('./admin');
+const partyRooms = require('./party/rooms');
+const partyRank = require('./party/rank');
+const { Undercover } = require('./party/undercover');
+const { Poker } = require('./party/poker');
+const { Uno } = require('./party/uno');
+const gate = require('./gate');
+const assets = require('./assets');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,7 +41,36 @@ const chat = new Chat(io);
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', extensions: ['html'] }));
+
+// LA PORTE, avant tout le reste.
+//
+// Elle est posée AVANT express.static exprès : si elle venait après, le
+// fichier index.html serait servi par le middleware statique et la porte
+// ne verrait jamais passer la requête. Un site fermé dont on peut lire la
+// page d'accueil en tapant /index.html n'est pas fermé.
+gate.mount(app);
+
+/*
+ * LES PAGES HTML, AVANT LE SERVICE DE FICHIERS.
+ *
+ * Elles passent par `assets.sendPage`, qui tamponne les adresses des CSS et
+ * des JS avec l'empreinte du déploiement et interdit leur mise en cache.
+ * Sans ça, un joueur qui revient après une mise à jour reçoit le nouveau
+ * HTML avec l'ancienne feuille de style — le site s'affiche à moitié, et
+ * personne ne comprend pourquoi.
+ *
+ * Elles sont déclarées AVANT express.static : sinon le middleware statique
+ * servirait index.html brut et le tampon ne serait jamais posé.
+ */
+app.get(['/', '/index.html'], (req, res) => assets.sendPage(res, 'index.html'));
+
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  // Les fichiers portent une empreinte dans leur adresse : quand leur
+  // contenu change, l'adresse change, donc on peut les garder longtemps
+  // sans risque de servir du périmé.
+  maxAge: '30d',
+  extensions: ['html'],
+}));
 
 auth.register(app);
 
@@ -43,7 +81,7 @@ app.get('/api/admin-config', (req, res) => res.json({ keyConfigured: admin.admin
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const limit = Math.min(50, Math.max(3, Number(req.query.limit) || 12));
-    const sort = req.query.sort === 'xp' ? 'xp' : 'coins';
+    const sort = ['xp', 'party'].includes(req.query.sort) ? req.query.sort : 'coins';
     res.json({ leaderboard: await store.leaderboard(limit, sort), sort });
   } catch (err) {
     console.error('[leaderboard]', err.message);
@@ -158,7 +196,13 @@ setInterval(() => checkSeason().catch(() => {}), 3600 * 1000).unref();
 
 /* ─── Socket.IO ────────────────────────────────────────── */
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
+  // La porte vaut aussi pour les websockets. Sans ce contrôle, une page
+  // laissée ouverte avant la fermeture continuerait de jouer tranquillement
+  // pendant que le site est censé être clos.
+  if (!(await gate.isOpen()) && !gate.hasPassHeader(socket.handshake.headers.cookie)) {
+    return next(new Error('site_ferme'));
+  }
   const user = auth.userFromCookieHeader(socket.handshake.headers.cookie);
   if (!user) return next(new Error('non_authentifie'));
   socket.data.user = user;
@@ -255,7 +299,7 @@ io.on('connection', async (socket) => {
         text: `×${best}`,
         amount: result.payout,
       });
-      chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} 🪙 !`, 'win');
+      chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} ¤ !`, 'win');
     }
   });
 
@@ -281,7 +325,7 @@ io.on('connection', async (socket) => {
         name: user.name, avatar: user.avatar, game: 'Machine à sous',
         text: 'tour bonus déclenché', amount: result.payout,
       });
-      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} 🪙 !`, 'win');
+      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} ¤ !`, 'win');
     } else if (result.profit >= result.staked * 15) {
       io.emit('feed', {
         name: user.name, avatar: user.avatar, game: 'Machine à sous',
@@ -365,18 +409,46 @@ io.on('connection', async (socket) => {
     return socket.data.tableCode ? blackjack.getTable(socket.data.tableCode) : null;
   }
 
-  function joinTable(table) {
+  /**
+   * Rejoindre une table, assis ou debout.
+   *
+   * `watch: true` place en spectateur : on voit tout, on ne mise rien. C'est
+   * aussi le repli automatique quand les cinq sièges sont pris — plutôt que
+   * de renvoyer un message d'erreur et de laisser la personne devant une
+   * porte fermée.
+   */
+  function joinTable(table, { watch = false } = {}) {
+    const full = table.seats.length >= blackjack.SEATS && !table.seatOf(user.id);
+
+    if (watch || full) {
+      table.addWatcher(user, socket.id);
+      socket.join('bj:' + table.code);
+      socket.data.tableCode = table.code;
+      presence.setStatus(user.id, 'blackjack');
+      socket.emit('bj:joined', { code: table.code, watching: true });
+      if (full && !watch) {
+        socket.emit('toast', {
+          message: 'Les cinq sièges sont pris — tu regardes la partie. Une place se libère, tu pourras t’asseoir.',
+          kind: 'info',
+        });
+      }
+      table.broadcast();
+      broadcastLobby();
+      return true;
+    }
+
     const seat = table.addPlayer(user, profile, socket.id);
     if (!seat) {
       socket.emit('toast', { message: 'La table est pleine (5 sièges).', kind: 'error' });
       return false;
     }
+    table.removeWatcher(user.id);
     socket.join('bj:' + table.code);
     socket.data.tableCode = table.code;
     table.profiles.set(user.id, profile);
     presence.setStatus(user.id, 'blackjack');
     table.say('Croupier', `${user.name} rejoint la table.`);
-    socket.emit('bj:joined', { code: table.code });
+    socket.emit('bj:joined', { code: table.code, watching: false });
     table.broadcast();
     broadcastLobby();
     return true;
@@ -387,9 +459,11 @@ io.on('connection', async (socket) => {
     if (!table) return;
     socket.leave('bj:' + table.code);
     socket.data.tableCode = null;
+    const wasSeated = Boolean(table.seatOf(user.id));
     table.profiles.delete(user.id);
     table.removePlayer(user.id);
-    table.say('Croupier', `${user.name} quitte la table.`);
+    table.removeWatcher(user.id);
+    if (wasSeated) table.say('Croupier', `${user.name} quitte la table.`);
     presence.setStatus(user.id, 'home');
     table.broadcast();
     broadcastLobby();
@@ -413,11 +487,67 @@ io.on('connection', async (socket) => {
     joinTable(table);
   });
 
-  socket.on('bj:join', ({ code } = {}) => {
+  socket.on('bj:join', ({ code, watch } = {}) => {
     const table = blackjack.getTable(code);
     if (!table) return socket.emit('toast', { message: 'Table introuvable. Vérifie le code.', kind: 'error' });
     leaveTable();
-    joinTable(table);
+    joinTable(table, { watch: Boolean(watch) });
+  });
+
+  /** Un spectateur prend une des places libres. */
+  socket.on('bj:sit', () => {
+    const table = currentTable();
+    if (!table) return;
+    if (table.seatOf(user.id)) return;
+    if (table.seats.length >= blackjack.SEATS) {
+      return socket.emit('toast', { message: 'Toutes les places sont prises.', kind: 'warn' });
+    }
+    table.addPlayer(user, profile, socket.id);
+    table.removeWatcher(user.id);
+    table.profiles.set(user.id, profile);
+    table.say('Croupier', `${user.name} prend place à la table.`);
+    table.broadcast();
+    broadcastLobby();
+  });
+
+  /** Se lever sans quitter la table : on continue à regarder. */
+  socket.on('bj:stand-up', () => {
+    const table = currentTable();
+    if (!table) return;
+    const seat = table.seatOf(user.id);
+    if (!seat) return;
+    if (seat.bet >= blackjack.MIN_BET || (seat.hands && seat.hands.length)) {
+      return socket.emit('toast', { message: 'Tu as une mise en jeu : attends la fin de la main.', kind: 'warn' });
+    }
+    table.removePlayer(user.id);
+    table.profiles.delete(user.id);
+    table.addWatcher(user, socket.id);
+    table.say('Croupier', `${user.name} se lève et regarde.`);
+    table.broadcast();
+    broadcastLobby();
+  });
+
+  /** L'hôte libère une place occupée par quelqu'un qui ne joue pas. */
+  socket.on('bj:kick', ({ id } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    const result = table.kick(user.id, id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    // L'exclu reste dans la salle en spectateur : on lui retire sa place,
+    // pas la partie qu'il était en train de regarder.
+    const entry = presence.users.get(id);
+    if (entry) {
+      for (const socketId of entry.sockets) {
+        io.to(socketId).emit('toast', {
+          message: `${user.name} t’a retiré de la table. Tu peux continuer à regarder.`,
+          kind: 'warn',
+        });
+      }
+      table.addWatcher(entry.user, [...entry.sockets][0]);
+    }
+    table.broadcast();
+    broadcastLobby();
   });
 
   socket.on('bj:leave', () => leaveTable());
@@ -469,6 +599,11 @@ io.on('connection', async (socket) => {
     socket.emit('vault:state', vaultPayload());
   });
 
+  // L'accueil affiche le minuteur de la caisse offerte sans ouvrir la page :
+  // il lui faut l'état, mais surtout PAS le changement de statut, sinon la
+  // liste des joueurs en ligne dirait que tout le monde est aux caisses.
+  socket.on('vault:peek', () => socket.emit('vault:state', vaultPayload()));
+
   socket.on('vault:pull', async ({ caseId, count } = {}) => {
     const result = vault.open(profile, caseId, count);
     if (!result.ok) return socket.emit('vault:state', vaultPayload({ result }));
@@ -507,6 +642,17 @@ io.on('connection', async (socket) => {
         color: pull.color,
       });
       chat.system(`${user.name} sort ${pull.emoji} ${pull.name} — ${pull.rarity} !`, 'drop');
+    }
+
+    // Un objet maudit, c'est huit chances sur dix mille. Ça mérite mieux
+    // qu'une ligne de chat que tout le monde rate : tout le site s'arrête
+    // une seconde pour le regarder.
+    const legend = result.pulls.find((p) => p.r === 'cursed');
+    if (legend) {
+      io.emit('announce', {
+        text: `${user.name} vient de sortir ${legend.emoji} ${legend.name} — MAUDIT. Il est trop fort.`,
+        kind: 'jackpot',
+      });
     }
   });
 
@@ -591,9 +737,15 @@ io.on('connection', async (socket) => {
 
     const result = vault.open(profile, taken.gift.caseId, taken.gift.count, Date.now(), { free: true });
     if (!result.ok) {
-      // On remet le bon : rien ne doit se perdre en route.
-      profile.gifts.unshift(taken.gift);
+      // On remet le bon exactement comme il était : rien ne doit se perdre.
+      taken.restore();
       return socket.emit('toast', { message: result.message, kind: 'error' });
+    }
+    if (taken.left > 0) {
+      socket.emit('toast', {
+        message: `Il te reste ${taken.left} caisse${taken.left > 1 ? 's' : ''} de ce cadeau. Reclique pour continuer.`,
+        kind: 'info',
+      });
     }
 
     store.grantXp(profile, result.xp);
@@ -607,6 +759,106 @@ io.on('connection', async (socket) => {
     socket.emit('vault:state', vaultPayload({ result, medals: earned }));
     socket.emit('gift:list', gifts.view(profile));
     socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /* ══════════ RAKEBACK ══════════ */
+
+  /**
+   * Une part de tout ce qui est misé revient au joueur, gagné ou perdu.
+   * Le compteur monte tout seul dans `store.recordPlay` ; ici on ne fait que
+   * l'afficher et le verser.
+   */
+  const rakePayload = () => rakeback.view(profile, store.levelFromXp(profile.xp).level);
+
+  socket.on('rake:open', () => socket.emit('rake:state', rakePayload()));
+
+  socket.on('rake:claim', async () => {
+    const result = rakeback.claim(profile);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    await save();
+    socket.emit('rake:state', rakePayload());
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', { message: `Rakeback récolté : +${result.amount} ¤`, kind: 'success' });
+  });
+
+  /* ══════════ LE MARCHÉ ══════════ */
+
+  async function marketPayload(query = {}) {
+    const state = await store.siteState();
+    return market.view(profile, state, query);
+  }
+
+  socket.on('market:open', async (query = {}) => {
+    presence.setStatus(user.id, 'market');
+    socket.emit('market:state', await marketPayload(query));
+  });
+
+  socket.on('market:list', async ({ itemId, price, count } = {}) => {
+    const state = await store.siteState();
+    const result = market.list(profile, state, { itemId, price, count });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    socket.emit('market:state', await marketPayload());
+    socket.emit('vault:state', vaultPayload());
+    socket.emit('toast', { message: result.message, kind: 'success' });
+    io.emit('market:changed', {});
+  });
+
+  socket.on('market:cancel', async ({ id } = {}) => {
+    const state = await store.siteState();
+    const result = market.cancel(profile, state, id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    socket.emit('market:state', await marketPayload());
+    socket.emit('toast', { message: result.message, kind: 'info' });
+    io.emit('market:changed', {});
+  });
+
+  socket.on('market:buy', async ({ id } = {}) => {
+    const state = await store.siteState();
+    const listing = market.ensure(state).listings.find((l) => l.id === Number(id));
+    if (!listing) return socket.emit('toast', { message: 'Cette offre vient de partir.', kind: 'warn' });
+
+    // Le vendeur est peut-être déconnecté : on charge son profil pour le
+    // créditer quand même, et on l'enregistre séparément.
+    const seller = listing.sellerId === user.id ? profile : await store.findProfile(listing.sellerId);
+    const result = market.buy(profile, state, id, seller);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    if (seller && seller !== profile) await store.saveProfile(seller);
+
+    const earned = medals.check(profile, state.records);
+    if (earned.length) store.touchState();
+
+    socket.emit('market:state', await marketPayload());
+    socket.emit('vault:state', vaultPayload({ medals: earned }));
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', {
+      message: `${result.message} Le vendeur touche ${result.net} (commission ${result.fee}).`,
+      kind: 'success',
+    });
+
+    // Le vendeur, s'il est là, doit voir arriver ses pièces tout de suite.
+    if (seller) {
+      const entry = presence.users.get(seller.id);
+      if (entry) {
+        for (const socketId of entry.sockets) {
+          io.to(socketId).emit('profile:update', store.publicProfile(seller));
+          io.to(socketId).emit('toast', {
+            message: `💰 ${user.name} a acheté ton ${result.item.name} : +${result.net} ¤`,
+            kind: 'success',
+          });
+        }
+      }
+    }
+    io.emit('market:changed', {});
   });
 
   /* ══════════ ÉQUITÉ VÉRIFIABLE ══════════ */
@@ -679,9 +931,248 @@ io.on('connection', async (socket) => {
     }
   });
 
+  /* ══════════ PARTY ══════════ */
+
+  /**
+   * La section Party n'a rien de commun avec le casino : pas de pièces, pas
+   * de mise, pas de redistribution. On y gagne un rang à part, qui compte le
+   * fait de venir jouer avec les autres plutôt que la chance.
+   */
+
+  const GAMES = {
+    undercover: { build: () => new Undercover(io) },
+    poker: { build: () => new Poker(io) },
+    uno: { build: () => new Uno(io) },
+  };
+
+  const partyRoom = () => partyRooms.roomOf(user.id);
+
+  function broadcastPartyList() {
+    io.emit('party:list', { rooms: partyRooms.list() });
+  }
+
+  /** Un onglet se ferme : le salon décide lui-même si le joueur sort ou non. */
+  function leavePartySocket() {
+    const room = partyRoom();
+    if (!room) return;
+    room.leaveSocket(user.id, socket.id);
+    socket.leave(room.channel);
+    room.broadcast();
+    broadcastPartyList();
+  }
+
+  /** Sortie volontaire, définitive. */
+  function leaveParty() {
+    const room = partyRoom();
+    if (!room) return;
+    room.system(`${user.name} quitte le salon.`);
+    room.leave(user.id);
+    socket.leave(room.channel);
+    room.broadcast();
+    socket.emit('party:left', {});
+    broadcastPartyList();
+  }
+
+  function enterRoom(room) {
+    const result = room.join(user, profile, socket.id, { cosmetics: medals.publicCosmetics(profile) });
+    if (!result.ok) return result;
+    socket.join(room.channel);
+    if (!result.rejoined) room.system(`${user.name} rejoint le salon.`);
+    room.broadcast();
+    broadcastPartyList();
+    return result;
+  }
+
+  socket.on('party:open', () => {
+    presence.setStatus(user.id, 'party');
+    socket.emit('party:list', { rooms: partyRooms.list() });
+    socket.emit('party:rank', partyRank.view(profile));
+
+    // Reconnexion : si le joueur était déjà dans un salon, on l'y remet
+    // plutôt que de le laisser croire qu'il a perdu sa place.
+    const room = partyRoom();
+    if (room) {
+      socket.join(room.channel);
+      const player = room.playerOf(user.id);
+      if (player) { player.sockets.add(socket.id); player.connected = true; }
+      room.broadcast();
+    }
+  });
+
+  socket.on('party:create', ({ game } = {}) => {
+    const entry = GAMES[game];
+    if (!entry) return socket.emit('toast', { message: 'Ce jeu n’existe pas encore.', kind: 'error' });
+
+    const already = partyRoom();
+    if (already) leaveParty();
+
+    const room = entry.build();
+    // La partie peut s'achever sur un minuteur du salon, pas seulement sur
+    // un clic : on branche le crédit du rang directement sur la fin de
+    // partie, sinon les XP ne tomberaient que par hasard.
+    room.onEnd = (finished) => {
+      creditParty(finished).catch((e) => console.error('[party]', e.message));
+      broadcastPartyList();
+    };
+    const result = enterRoom(room);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    socket.emit('party:joined', { code: room.code, game: room.game });
+    // Et l'état APRÈS avoir dit où aller. `enterRoom` a déjà diffusé une
+    // fois, mais le client n'écoutait pas encore : sa page du jeu n'est
+    // branchée qu'au moment où il y arrive, c'est-à-dire sur ce
+    // `party:joined`. Sans ce second envoi, on tombe sur un salon vide qui
+    // ne se remplit qu'au premier coup joué.
+    room.broadcast();
+  });
+
+  socket.on('party:join', ({ code } = {}) => {
+    const room = partyRooms.get(code);
+    if (!room) return socket.emit('toast', { message: 'Aucun salon avec ce code.', kind: 'error' });
+
+    const already = partyRoom();
+    if (already && already !== room) leaveParty();
+
+    const result = enterRoom(room);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    socket.emit('party:joined', { code: room.code, game: room.game });
+    room.broadcast();   // même raison que ci-dessus
+  });
+
+  socket.on('party:leave', () => leaveParty());
+
+  socket.on('party:list', () => socket.emit('party:list', { rooms: partyRooms.list() }));
+
+  socket.on('party:say', ({ text } = {}) => {
+    const room = partyRoom();
+    if (!room) return;
+    const result = room.say(user, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  });
+
+  socket.on('party:start', () => {
+    const room = partyRoom();
+    if (!room) return;
+    room.credited = false; // une relance doit pouvoir créditer à nouveau
+    const result = room.start(user.id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    broadcastPartyList();
+  });
+
+  /**
+   * Une partie terminée crédite le rang de tous ceux qui y étaient — les
+   * perdants aussi, un peu moins. Le rang Party récompense la présence, pas
+   * la performance.
+   */
+  async function creditParty(room) {
+    if (!room.result || room.credited) return;
+    // Une partie ne crédite qu'une fois, même si deux chemins mènent à la fin.
+    room.credited = true;
+    const winners = new Set(room.winners());
+    const players = room.players;
+
+    for (const p of players) {
+      const target = p.id === user.id ? profile : await store.findProfile(p.id);
+      if (!target) continue;
+      const gain = partyRank.record(target, room.game, {
+        won: winners.has(p.id),
+        players: players.length,
+        rounds: room.round || room.hand || 1,
+      });
+      await store.saveProfile(target);
+
+      const entry = presence.users.get(p.id);
+      if (entry) {
+        for (const socketId of entry.sockets) {
+          io.to(socketId).emit('party:rank', partyRank.view(target));
+          io.to(socketId).emit('toast', {
+            message: `+${gain.gained} XP Party — ${gain.title} (niveau ${gain.level})`,
+            kind: winners.has(p.id) ? 'success' : 'info',
+          });
+        }
+      }
+    }
+  }
+
+  /* ─── Uno ─── */
+
+  /**
+   * Le salon du joueur, à condition que ce soit bien une table d'Uno.
+   *
+   * On revérifie le jeu à chaque message : sans ça, un client bricolé
+   * pourrait envoyer « uno:play » à une partie de poker et faire planter la
+   * soirée de tout le monde.
+   */
+  const unoRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'uno' ? room : null;
+  };
+
+  /** Renvoie le refus au joueur, sans rien dire aux autres. */
+  const unoDo = (fn) => {
+    const room = unoRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  };
+
+  socket.on('uno:configure', (payload = {}) => unoDo((r) => r.configure(user.id, payload)));
+  socket.on('uno:play', ({ cardId, color } = {}) => unoDo((r) => r.play(user.id, { cardId, color })));
+  socket.on('uno:draw', () => unoDo((r) => r.pick(user.id)));
+  socket.on('uno:keep', () => unoDo((r) => r.keep(user.id)));
+  socket.on('uno:challenge', () => unoDo((r) => r.challenge(user.id)));
+  socket.on('uno:say', () => unoDo((r) => r.sayUno(user.id)));
+  socket.on('uno:catch', ({ id } = {}) => unoDo((r) => r.catchUno(user.id, id)));
+
+  /* ─── Undercover ─── */
+
+  const ucRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'undercover' ? room : null;
+  };
+
+  socket.on('uc:configure', (payload = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.configure(user.id, payload);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:describe', ({ text } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.describe(user.id, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:vote', ({ id } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.vote(user.id, id);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:guess', ({ text } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.guess(user.id, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  /* ─── Poker ─── */
+
+  socket.on('pk:act', ({ move, amount } = {}) => {
+    const room = partyRoom();
+    if (!room || room.game !== 'poker') return;
+    const result = room.act(user.id, move, amount);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('party:rank', () => socket.emit('party:rank', partyRank.view(profile)));
+
   socket.on('disconnect', () => {
     clearTimeout(saveTimer);
     leaveTable();
+    leavePartySocket();
     presence.leave(socket, user.id);
     refreshAdmins();
     clicker.collect(profile);

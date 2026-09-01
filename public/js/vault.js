@@ -10,10 +10,12 @@
  *     Ce qui défile autour, c'est vraiment ce qu'on aurait pu avoir : la
  *     bande est tirée dans la même caisse, avec les mêmes probabilités.
  *
- *  2. La collection. On affiche les SOIXANTE memes, tout le temps. Ceux
- *     qu'on n'a pas encore sont grisés — on voit donc ce qu'il reste à
- *     trouver — et les noms sont écrits en entier, sur deux lignes si
- *     nécessaire.
+ *  2. La collection. On affiche les 518 objets, tout le temps. Ceux qu'on
+ *     n'a pas encore sont grisés — on voit donc ce qu'il reste à trouver —
+ *     et les noms sont écrits en entier, sur deux lignes si nécessaire.
+ *
+ *  3. Les cadeaux. Une caisse offerte arrive sous forme de bon : on l'ouvre
+ *     quand on veut, avec exactement la même animation.
  */
 
 (() => {
@@ -21,6 +23,7 @@
 
   let view = null;
   let filter = 'all';
+  let category = 'all';
   let freeTimer = null;
 
   /* ─── Bandeau du haut ─── */
@@ -39,7 +42,7 @@
     box.appendChild(stat(fmt(v.coins), 'pièces'));
     box.appendChild(stat(fmt(v.opened), 'caisses ouvertes'));
     box.appendChild(stat(`×${String(v.comboMult).replace('.', ',')}`, `combo ${v.combo}/${v.comboMax}`));
-    box.appendChild(stat(`${v.collection.have}/${v.collection.total}`, 'memes trouvés'));
+    box.appendChild(stat(`${v.collection.have}/${v.collection.total}`, 'objets trouvés'));
 
     const timer = el('div', 'vault-stat');
     timer.appendChild(el('b', 'free-timer', '—'));
@@ -62,8 +65,31 @@
     const box = $('#cases');
     box.replaceChildren();
 
-    v.cases.forEach((c) => {
-      const node = el('div', 'case');
+    // Deux familles : les caisses générales, qui piochent dans les 518 objets,
+    // et les caisses à thème, qui ne tirent que dans une catégorie. Les
+    // mélanger dans une seule grille rendrait le choix illisible.
+    const general = v.cases.filter((c) => !c.themed);
+    const themed = v.cases.filter((c) => c.themed);
+
+    const title = (text, hint) => {
+      const node = el('div', 'case-group');
+      node.appendChild(el('h3', null, text));
+      node.appendChild(el('span', 'fine', hint));
+      box.appendChild(node);
+    };
+
+    title('Caisses générales', 'Tout le catalogue, toutes catégories confondues.');
+    general.forEach((c) => box.appendChild(caseNode(c, v)));
+
+    if (themed.length) {
+      title('Caisses à thème', 'Même prix, mais elles ne tirent que dans leur catégorie — le moyen le plus rapide de compléter une ligne.');
+      themed.forEach((c) => box.appendChild(caseNode(c, v)));
+    }
+  }
+
+  function caseNode(c, v) {
+    {
+      const node = el('div', `case${c.themed ? ' themed' : ''}`);
       node.style.setProperty('--c', c.color);
 
       const isFree = c.id === v.freeCaseId && (v.freeReady || v.rescueReady);
@@ -97,9 +123,30 @@
       });
       node.appendChild(buy);
 
+      return node;
+    }
+  }
+
+  /* ─── Les catégories de la collection ─── */
+
+  function renderCats(v) {
+    const box = $('#coll-cats');
+    box.replaceChildren();
+
+    const all = el('button', `coll-cat${category === 'all' ? ' on' : ''}`);
+    all.appendChild(el('span', null, '🌐 Tout'));
+    all.appendChild(el('b', null, `${v.collection.have}/${v.collection.total}`));
+    all.addEventListener('click', () => { category = 'all'; renderCats(v); renderCollection(v); });
+    box.appendChild(all);
+
+    v.collection.byCategory.forEach((c) => {
+      const node = el('button', `coll-cat${category === c.id ? ' on' : ''}`);
+      node.appendChild(el('span', null, `${c.icon} ${c.name}`));
+      node.appendChild(el('b', null, `${c.have}/${c.total}`));
+      node.dataset.tip = `${c.name} — ${c.have} trouvé${c.have > 1 ? 's' : ''} sur ${c.total}`;
+      node.addEventListener('click', () => { category = c.id; renderCats(v); renderCollection(v); });
       box.appendChild(node);
     });
-
   }
 
   /** Compte à rebours de la caisse offerte, affiché dans le bandeau. */
@@ -344,18 +391,23 @@
     const box = $('#collection');
     box.replaceChildren();
 
-    // On parcourt les 60 memes, pas seulement ceux qu'on possède : c'est
+    // On parcourt les 518 objets, pas seulement ceux qu'on possède : c'est
     // toute la carte au trésor, avec les cases encore vides.
     const items = v.items.filter((m) => {
+      if (category !== 'all' && m.cat !== category) return false;
       if (filter === 'have') return m.count > 0;
       if (filter === 'miss') return m.count === 0;
       return true;
     });
 
     if (!items.length) {
-      box.appendChild(el('div', 'empty', filter === 'miss' ? 'Collection complète. Chapeau.' : 'Rien ici pour l’instant.'));
+      box.appendChild(el('div', 'empty', filter === 'miss' ? 'Rien ne manque ici. Chapeau.' : 'Rien ici pour l’instant.'));
       return;
     }
+
+    // 518 vignettes, c'est beaucoup de nœuds : on les assemble hors de la
+    // page et on ne touche au document qu'une seule fois à la fin.
+    const frag = document.createDocumentFragment();
 
     items.forEach((m) => {
       const owned = m.count > 0;
@@ -369,7 +421,84 @@
       node.dataset.tip = owned
         ? `${m.name} — ${m.rarity} · ${m.count} exemplaire${m.count > 1 ? 's' : ''}`
         : `${m.name} — ${m.rarity} · pas encore trouvé`;
-      box.appendChild(node);
+      frag.appendChild(node);
+    });
+
+    box.appendChild(frag);
+  }
+
+  /* ═══════════ LES CADEAUX ═══════════ */
+
+  function renderGifts(g) {
+    const panel = $('#gifts');
+    const list = $('#gift-list');
+    list.replaceChildren();
+
+    panel.classList.toggle('hidden', !g.gifts.length);
+
+    g.gifts.forEach((gift) => {
+      const node = el('button', `gift${gift.admin ? ' admin' : ''}`);
+      node.appendChild(el('span', 'g-emoji', gift.emoji));
+      node.appendChild(el('span', 'g-name', `${gift.count} × ${gift.caseName}`));
+      node.appendChild(el('span', 'g-from', gift.admin ? `de l’${gift.from}` : `de ${gift.from}`));
+      node.addEventListener('click', () => {
+        node.disabled = true;
+        SFX.chip();
+        PZ.socket.emit('gift:claim', { id: gift.id });
+      });
+      list.appendChild(node);
+    });
+
+    $('#gift-note').textContent =
+      `Tu paies le prix normal de la caisse. Plafond : ${fmt(g.dailyLimit)} pièces de cadeaux par jour ` +
+      `(${fmt(g.left)} restantes aujourd’hui), ${g.maxPerGift} caisses maximum d’un coup. ` +
+      `Ces limites existent pour qu’on ne puisse pas vider un compte dans un autre.`;
+  }
+
+  /** Le menu déroulant des caisses offrables, rempli depuis l'état du coffre. */
+  function fillGiftCases(v) {
+    const select = $('#gift-case');
+    const keep = select.value;
+    select.replaceChildren();
+    v.cases.forEach((c) => {
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙`);
+      opt.value = c.id;
+      select.appendChild(opt);
+    });
+    if (keep) select.value = keep;
+  }
+
+  $('#gift-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const to = $('#gift-to').value.trim();
+    if (!to) return PZ.toast('À qui veux-tu l’offrir ?', 'error');
+    PZ.socket.emit('gift:send', {
+      to,
+      caseId: $('#gift-case').value,
+      count: Math.max(1, Math.min(10, Number($('#gift-count').value) || 1)),
+    });
+    $('#gift-to').value = '';
+  });
+
+  /* ═══════════ LES PALIERS DÉCROCHÉS ═══════════ */
+
+  /**
+   * Une médaille tombe pendant une ouverture : on l'annonce ici, sur place,
+   * plutôt que d'attendre que le joueur pense à aller voir la page des
+   * médailles.
+   */
+  function celebrate(tiers) {
+    tiers.forEach((tier, i) => {
+      setTimeout(() => {
+        PZ.toast(
+          tier.first
+            ? `${tier.icon} ${tier.name} — et tu es le PREMIER du site à l’atteindre !`
+            : `${tier.icon} ${tier.name} débloqué : ${tier.need} objets trouvés.`,
+          'success'
+        );
+        SFX.fanfare();
+        PZ.confetti(tier.first ? 150 : 80);
+      }, 600 + i * 1400);
     });
   }
 
@@ -388,12 +517,14 @@
     if (!socket || socket.__vaultBound) return;
     socket.__vaultBound = true;
 
-    socket.on('vault:state', ({ vault, result }) => {
+    socket.on('vault:state', ({ vault, result, medals }) => {
       view = vault;
       renderBar(vault);
       renderCases(vault);
+      renderCats(vault);
       renderCollection(vault);
       startFreeTimer(vault);
+      fillGiftCases(vault);
 
       if (result && !result.ok) {
         PZ.toast(result.message, 'error');
@@ -401,17 +532,36 @@
       }
       if (result && result.pulls) queue.start(result.pulls);
       else if (result && result.coins) PZ.toast(`Doublons revendus : +${fmt(result.coins)} 🪙`, 'success');
+
+      if (medals && medals.length) celebrate(medals);
     });
+
+    socket.on('gift:list', renderGifts);
+
+    // L'annonce du cadeau est faite ailleurs (app.js, elle doit passer même
+    // hors de cette page) ; ici on se contente de rafraîchir la liste pour
+    // qu'il devienne ouvrable sans recharger.
+    socket.on('gift:received', () => PZ.socket.emit('gift:list'));
   }
 
   PZ.views.vault = {
     enter() {
       bind();
       PZ.socket.emit('vault:open');
+      PZ.socket.emit('gift:list');
     },
     leave() {
       if (freeTimer) clearInterval(freeTimer);
       freeTimer = null;
+
+      // On quitte la page pendant qu'un rouleau tourne : la fenêtre suivrait
+      // le joueur jusque sur la roulette. On coupe la file et on ferme.
+      if (queue.running || queue.pulls.length) {
+        clearTimeout(queue.autoTimer);
+        queue.pulls = [];
+        queue.running = false;
+        PZ.closeModal();
+      }
     },
   };
 })();

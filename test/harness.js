@@ -40,7 +40,8 @@ async function makeGuest(name) {
     name, socket, cookie,
     profile: null, user: null,
     mine: null, plinko: null, roulette: null, table: null, vault: null,
-    lastPlinko: null, lastVault: null, toasts: [],
+    medals: null, season: null, slots: null, gifts: null,
+    lastPlinko: null, lastVault: null, lastSlots: null, toasts: [],
   };
 
   socket.on('me', ({ user, profile }) => { p.user = user; p.profile = profile; });
@@ -53,6 +54,11 @@ async function makeGuest(name) {
   socket.on('bj:state', (s) => { p.table = s; });
   socket.on('vault:state', ({ vault, result }) => { p.vault = vault; p.lastVault = result; });
   socket.on('roulette:setups', ({ setups }) => { p.setups = setups; });
+  socket.on('medals:state', (s2) => { p.medals = s2; });
+  socket.on('season:state', (s2) => { p.season = s2; });
+  socket.on('slots:state', ({ config }) => { p.slots = config; });
+  socket.on('slots:result', (r) => { p.lastSlots = r; });
+  socket.on('gift:list', (g) => { p.gifts = g; });
   socket.on('chat:message', (m) => { p.chat = [...(p.chat || []), m]; });
 
   await new Promise((resolve, reject) => {
@@ -329,12 +335,15 @@ async function topUp(player, target) {
   await wait(400);
 
   /* ── Caisses ── */
-  section('Caisses à memes');
+  section('Caisses et collection');
   await topUp(alice, 20000);
   alice.socket.emit('vault:open');
   const vault = await waitFor(() => alice.vault, 4000, 'état du coffre');
-  check('soixante memes au catalogue', vault.items.length === 60);
-  check('quatre caisses proposées', vault.cases.length === 4);
+  check('518 objets au catalogue', vault.items.length === 518, `${vault.items.length} objets`);
+  check('treize caisses proposées', vault.cases.length === 13, `${vault.cases.length} caisses`);
+  check('huit caisses à thème', vault.cases.filter((c) => c.themed).length === 8);
+  check('chaque catégorie a son compte', vault.collection.byCategory.length === 8
+    && vault.collection.byCategory.reduce((s2, c) => s2 + c.total, 0) === 518);
 
   // Les probabilités affichées doivent faire 100 %.
   for (const box of vault.cases) {
@@ -344,7 +353,7 @@ async function topUp(player, target) {
 
   const vBefore = alice.profile.coins;
   alice.lastVault = null;
-  alice.socket.emit('vault:pull', { caseId: 'meme', count: 5 });
+  alice.socket.emit('vault:pull', { caseId: 'boost', count: 5 });
   const pull = await waitFor(() => alice.lastVault, 5000, 'ouverture de caisse');
   check('cinq tirages retournés', pull.ok && pull.pulls.length === 5);
   check('chaque tirage a sa bande de 58 vignettes',
@@ -380,6 +389,123 @@ async function topUp(player, target) {
     check('doublons revendus contre des pièces', alice.profile.coins > dupBefore,
       `+${alice.profile.coins - dupBefore} pièces`);
   }
+
+  // Une caisse à thème ne doit jamais sortir d'objet d'une autre catégorie.
+  await topUp(alice, 30000);
+  alice.lastVault = null;
+  alice.socket.emit('vault:pull', { caseId: 'cat-gaming', count: 10 });
+  const themed = await waitFor(() => alice.lastVault, 6000, 'caisse à thème');
+  check('la caisse à thème ne tire que dans sa catégorie',
+    themed.ok && themed.pulls.every((x) => x.cat === 'gaming'),
+    themed.ok ? [...new Set(themed.pulls.map((x) => x.cat))].join(', ') : 'échec');
+
+  /* ── Médailles et parures ── */
+  section('Médailles et parures');
+  alice.socket.emit('medals:open');
+  const med = await waitFor(() => alice.medals, 4000, 'état des médailles');
+  // Un palier tous les cinquante objets, plus un dernier pour la collection
+  // complète — 518 ne tombant pas rond, le onzième vaut 518 et non 550.
+  const last = med.tiers[med.tiers.length - 1];
+  check('paliers tous les cinquante objets, plus la collection complète',
+    med.tiers.slice(0, -1).every((t, i2) => t.need === (i2 + 1) * 50) && last.need === med.total,
+    `${med.tiers.length} paliers, jusqu'à ${last.need}`);
+  check('le compte d’objets correspond à la collection', med.collected === alice.vault.collection.have,
+    `${med.collected} vs ${alice.vault.collection.have}`);
+
+  const unlocked = med.cosmetics.filter((c) => c.unlocked);
+  check('les parures non méritées restent verrouillées',
+    med.cosmetics.some((c) => !c.unlocked), `${unlocked.length} débloquée(s) sur ${med.cosmetics.length}`);
+
+  if (unlocked.length) {
+    const wanted = unlocked[0];
+    alice.socket.emit('medals:equip', { kind: wanted.kind, id: wanted.id });
+    await waitFor(() => alice.profile.cosmetics && alice.profile.cosmetics[wanted.kind], 4000, 'parure équipée');
+    check('parure équipée et visible dans le profil public', Boolean(alice.profile.cosmetics[wanted.kind]));
+  }
+
+  alice.toasts = [];
+  alice.socket.emit('medals:equip', { kind: 'frame', id: 'frame-mythe' });
+  await wait(400);
+  check('parure verrouillée refusée', alice.toasts.some((t) => t.kind === 'error' || t.kind === 'warn'));
+
+  /* ── Machine à sous ── */
+  section('Machine à sous');
+  alice.socket.emit('slots:open');
+  const slots = await waitFor(() => alice.slots, 4000, 'config de la machine');
+  check('cinq rouleaux, trois rangées, dix lignes',
+    slots.reels === 5 && slots.rows === 3 && slots.lines === 10);
+  check('redistribution mesurée et annoncée', slots.rtp > 90 && slots.rtp < 100,
+    `${slots.rtp} % sur ${slots.measuredOn.toLocaleString('fr-FR')} tours`);
+
+  await topUp(alice, 60000);
+  let slStaked = 0;
+  let slPaid = 0;
+  let bonusSeen = 0;
+  for (let i = 0; i < 40; i++) {
+    alice.lastSlots = null;
+    alice.socket.emit('slots:spin', { bet: 10 });
+    const r = await waitFor(() => alice.lastSlots, 5000, 'tour de machine');
+    if (!r.ok) break;
+    slStaked += r.staked;
+    slPaid += r.payout;
+    if (r.bonus.length) bonusSeen++;
+  }
+  check('grille complète à chaque tour', alice.lastSlots.spin.grid.length === 5
+    && alice.lastSlots.spin.grid.every((c) => c.length === 3));
+  check('la mise est bien de dix fois la mise par ligne', alice.lastSlots.staked === alice.lastSlots.perLine * 10);
+  check('les tours offerts sont joués par le serveur',
+    alice.lastSlots.bonus.every((b) => Array.isArray(b.grid)));
+  console.log(`     ${slStaked} misés, ${slPaid} rendus (${((slPaid / slStaked) * 100).toFixed(1)} %), ${bonusSeen} bonus sur 40 tours`);
+
+  /* ── Cadeaux ── */
+  section('Cadeaux');
+  alice.socket.emit('gift:list');
+  const giftView = await waitFor(() => alice.gifts, 4000, 'liste des cadeaux');
+  check('plafond quotidien annoncé', giftView.dailyLimit > 0 && giftView.left <= giftView.dailyLimit,
+    `${giftView.left} pièces offrables aujourd'hui`);
+
+  alice.toasts = [];
+  alice.socket.emit('gift:send', { to: alice.name, caseId: 'starter', count: 1 });
+  await wait(500);
+  check('on ne s’offre pas de cadeau à soi-même', alice.toasts.some((t) => t.kind === 'error'));
+
+  // Bob vient d'être créé : il est trop récent pour recevoir.
+  alice.toasts = [];
+  alice.socket.emit('gift:send', { to: bob.name, caseId: 'starter', count: 2 });
+  await wait(600);
+  const tooYoung = alice.toasts.some((t) => /récent/i.test(t.message || ''));
+  check('un compte tout neuf ne peut pas recevoir', tooYoung,
+    tooYoung ? 'refusé comme prévu' : (alice.toasts[0] || {}).message || 'aucun refus');
+
+  // La distribution par l'administration, elle, passe toujours.
+  bob.gifts = null;
+  alice.socket.emit('admin:action', {
+    action: 'grant-case',
+    payload: { id: bob.user.id, caseId: 'viral', count: 2 },
+  });
+  await wait(700);
+  bob.socket.emit('gift:list');
+  const bobGifts = await waitFor(() => bob.gifts, 4000, 'cadeaux de Bob');
+  check('l’administration peut distribuer des caisses', bobGifts.gifts.length > 0,
+    `${bobGifts.gifts.length} bon(s) en attente`);
+
+  if (bobGifts.gifts.length) {
+    const coinsBefore = bob.profile.coins;
+    bob.lastVault = null;
+    bob.socket.emit('gift:claim', { id: bobGifts.gifts[0].id });
+    const claimed = await waitFor(() => bob.lastVault, 5000, 'ouverture du cadeau');
+    check('le cadeau s’ouvre sans rien coûter', claimed.ok && bob.profile.coins >= coinsBefore,
+      `${claimed.pulls.length} objets, solde ${coinsBefore} → ${bob.profile.coins}`);
+  }
+
+  /* ── Classement du mois ── */
+  section('Classement du mois');
+  alice.socket.emit('season:open');
+  const season = await waitFor(() => alice.season, 4000, 'classement du mois');
+  check('le mois en cours est identifié', Boolean(season.label && season.endsAt > Date.now()));
+  check('le classement compte le bénéfice net, pas le solde',
+    season.ranking.every((p, i2, a) => i2 === 0 || a[i2 - 1].coins >= p.coins));
+  check('le lot du mois est annoncé', Boolean(season.prize));
 
   /* ── Équité vérifiable ── */
   section('Équité vérifiable');

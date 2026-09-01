@@ -13,6 +13,7 @@
  */
 const crypto = require('crypto');
 const fair = require('./fair');
+const medals = require('./medals');
 
 const BETTING_MS = 20000;
 const SPIN_MS = 7000;
@@ -198,7 +199,14 @@ class Roulette {
 
     let entry = this.bets.get(profile.id);
     if (!entry) {
-      entry = { name: profile.name, avatar: profile.avatar, bets: [], staked: 0 };
+      entry = {
+        name: profile.name,
+        avatar: profile.avatar,
+        // Les parures suivent le joueur jusque sur le tapis.
+        cosmetics: medals.publicCosmetics(profile),
+        bets: [],
+        staked: 0,
+      };
       this.bets.set(profile.id, entry);
     }
 
@@ -286,6 +294,7 @@ class Roulette {
         id,
         name: entry.name,
         avatar: entry.avatar,
+        cosmetics: entry.cosmetics || null,
         staked: entry.staked,
         you: id === userId,
       });

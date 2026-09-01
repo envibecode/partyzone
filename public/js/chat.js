@@ -38,7 +38,11 @@
     const body = el('div', 'msg-body');
     const head = el('div', 'msg-head');
     head.appendChild(el('span', 'msg-lvl', m.admin ? 'ADMIN' : `N${m.level}`));
-    head.appendChild(el('span', 'msg-name', m.name));
+    const nameNode = el('span', 'msg-name', m.name);
+    head.appendChild(nameNode);
+    // Contour d'avatar, pseudo en flammes, icône : les parures décrochées aux
+    // paliers de collection se voient ici comme partout ailleurs.
+    if (PZ.applyCosmetics) PZ.applyCosmetics(wrap, m.cosmetics, { avatar: img, name: nameNode });
     head.appendChild(el('span', 'msg-at', timeOf(m.at)));
 
     // Un administrateur peut retirer un message directement depuis le chat.

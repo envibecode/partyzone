@@ -15,10 +15,14 @@ const fs = require('fs');
 const path = require('path');
 const { blankVault } = require('./vault');
 const { blankClicker } = require('./clicker');
+const medals = require('./medals');
+const partyRank = require('./party/rank');
+const season = require('./season');
 const fairness = require('./fair');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'profiles.json');
+const STATE_FILE = path.join(DATA_DIR, 'site.json');
 const MAX_LEVEL = 99;
 
 /* ─── Courbe d'expérience ──────────────────────────────── */
@@ -78,6 +82,13 @@ function blankProfile(user, now = Date.now()) {
     clicker: blankClicker(now),
     fair: fairness.blankFair(),
     setups: [],       // configurations de mises à la roulette
+    medals: medals.blankMedals(),
+    season: season.blankSeason(now),
+    cosmetics: medals.blankCosmetics(),
+    unlocked: [],     // cosmétiques débloqués par les paliers
+    gifts: [],        // caisses offertes, en attente d'ouverture
+    giftDay: null,    // plafond quotidien de cadeaux
+    party: partyRank.blank(), // rang de la section Party, séparé du casino
     admin: false,
     banned: false,
     banReason: '',
@@ -98,6 +109,13 @@ function migrate(profile, now = Date.now()) {
     clicker: { ...fresh.clicker, ...(profile.clicker || {}) },
     fair: profile.fair && profile.fair.serverSeed ? profile.fair : fresh.fair,
     setups: Array.isArray(profile.setups) ? profile.setups : [],
+    medals: { ...fresh.medals, ...(profile.medals || {}) },
+    season: profile.season && profile.season.month ? profile.season : fresh.season,
+    cosmetics: { ...fresh.cosmetics, ...(profile.cosmetics || {}) },
+    unlocked: Array.isArray(profile.unlocked) ? profile.unlocked : [],
+    gifts: Array.isArray(profile.gifts) ? profile.gifts : [],
+    giftDay: profile.giftDay || null,
+    party: { ...fresh.party, ...(profile.party || {}) },
   };
   merged.vault.items = { ...(merged.vault.items || {}) };
   merged.clicker.upgrades = { ...fresh.clicker.upgrades, ...(merged.clicker.upgrades || {}) };
@@ -136,6 +154,26 @@ class FileBackend {
       console.error('[store] écriture impossible :', err.message);
     }
   }
+
+  loadState() {
+    try {
+      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    } catch {
+      return {};
+    }
+  }
+
+  saveState(state) {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(STATE_FILE, JSON.stringify(state), 'utf8');
+    } catch (err) {
+      console.error('[store] état du site non enregistré :', err.message);
+    }
+  }
+
+  async getState() { return this.loadState(); }
+  async putState(state) { this.saveState(state); }
 
   async ready() {}
   async get(id) {
@@ -180,6 +218,13 @@ class PostgresBackend {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`);
     await this.pool.query('CREATE INDEX IF NOT EXISTS profiles_xp_idx ON profiles (xp DESC)');
+    // L'état partagé du site : les records « premier à… », le mois en cours.
+    // Une seule ligne, mise à jour en place.
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS site_state (
+        id   TEXT PRIMARY KEY,
+        data JSONB NOT NULL
+      )`);
     console.log('[store] PostgreSQL prêt');
   }
 
@@ -213,6 +258,19 @@ class PostgresBackend {
   async remove(id) {
     this.cache.delete(id);
     await this.pool.query('DELETE FROM profiles WHERE id = $1', [id]);
+  }
+
+  async getState() {
+    const { rows } = await this.pool.query(`SELECT data FROM site_state WHERE id = 'main'`);
+    return rows.length ? rows[0].data : {};
+  }
+
+  async putState(state) {
+    await this.pool.query(
+      `INSERT INTO site_state (id, data) VALUES ('main', $1)
+       ON CONFLICT (id) DO UPDATE SET data = $1`,
+      [JSON.stringify(state)]
+    );
   }
 
   async close() {
@@ -272,6 +330,11 @@ function publicProfile(profile) {
     stats: profile.stats,
     coins: profile.vault.coins,
     collected: Object.values(profile.vault.items || {}).filter((n) => n > 0).length,
+    collectionTotal: require('./data/collection').TOTAL,
+    cosmetics: medals.publicCosmetics(profile),
+    medals: { tiers: profile.medals.tiers.length, firsts: profile.medals.firsts.length },
+    season: profile.season,
+    party: partyRank.view(profile),
     fair: fairness.publicFair(profile.fair),
   };
 }
@@ -284,7 +347,11 @@ function publicProfile(profile) {
 async function leaderboard(limit = 20, sort = 'coins') {
   await backend.ready();
   const all = await backend.all();
-  const key = sort === 'xp' ? (p) => p.xp : (p) => p.vault.coins;
+  // Le classement Party est à part : il ne compte ni pièces ni mises, mais
+  // l'XP gagnée en jouant avec les autres.
+  const key = sort === 'party' ? (p) => partyRank.ensure(p).xp
+    : sort === 'xp' ? (p) => p.xp
+      : (p) => p.vault.coins;
   return all
     .filter((p) => key(p) > 0 && !p.banned)
     .sort((a, b) => key(b) - key(a) || a.createdAt - b.createdAt)
@@ -303,6 +370,11 @@ function recordPlay(profile, staked, returned) {
   s.returned += returned;
   s.rounds += 1;
   s.biggestWin = Math.max(s.biggestWin, returned);
+
+  // Le classement du mois compte le BÉNÉFICE net, pas le solde : sinon il
+  // suffirait de miser gros et de tout récupérer pour grimper.
+  season.record(profile, { profit: returned - staked, staked, rounds: 1 });
+
   const xp = Math.max(1, Math.floor(staked / 20));
   grantXp(profile, xp);
   return xp;
@@ -337,7 +409,43 @@ async function close() {
   await backend.close();
 }
 
+/* ─── L'état partagé du site ───────────────────────────── */
+
+/**
+ * Les records « premier à décrocher tel palier » et le suivi du mois en
+ * cours. C'est du contenu de site, pas de profil : il vit à part et n'est
+ * jamais recalculé — une course ne se rejoue pas.
+ */
+let stateCache = null;
+let stateDirty = false;
+
+async function siteState() {
+  if (stateCache) return stateCache;
+  await backend.ready();
+  const raw = await backend.getState().catch(() => ({}));
+  stateCache = {
+    records: raw.records || {},   // palier → { id, name, at }
+    month: raw.month || null,     // le mois en cours, pour le classement mensuel
+    hallOfFame: raw.hallOfFame || [], // les vainqueurs des mois passés
+    ...raw,
+  };
+  return stateCache;
+}
+
+function touchState() {
+  stateDirty = true;
+}
+
+async function flushState() {
+  if (!stateDirty || !stateCache) return;
+  stateDirty = false;
+  await backend.putState(stateCache).catch((e) => console.error('[store] état :', e.message));
+}
+
+setInterval(() => { flushState(); }, 4000).unref();
+
 module.exports = {
+  siteState, touchState, flushState,
   loadProfile,
   saveProfile,
   publicProfile,

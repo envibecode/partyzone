@@ -32,10 +32,22 @@
       cta: 'LÂCHER', ctaClass: 'btn-green',
     },
     {
+      id: 'slots', name: 'LES COPAINS', kind: 'machine à sous', icon: '🎰', art: '🎰',
+      colour: '#ff9f1c', tag: 'BONUS', cost: 100, rating: '95,4',
+      sub: 'Cinq rouleaux, dix lignes. Trois pings ouvrent huit tours offerts.',
+      cta: 'LANCER', ctaClass: 'btn-gold',
+    },
+    {
       id: 'vault', name: 'CAISSES', kind: 'collection', icon: '📦', art: '🎁',
       colour: '#3fd6ff', tag: 'TOP', cost: 0, rating: '—',
-      sub: 'Soixante memes à trouver. Les doublons se revendent.',
+      sub: '518 objets de culture internet à trouver. Les doublons se revendent.',
       cta: 'OUVRIR', ctaClass: 'btn-green',
+    },
+    {
+      id: 'medals', name: 'MÉDAILLES', kind: 'progression', icon: '🏅', art: '🏅',
+      colour: '#ffd166', tag: 'PARURES', cost: 0, rating: '—',
+      sub: 'Un palier tous les cinquante objets. Le premier du site garde la version dorée.',
+      cta: 'VOIR', ctaClass: 'btn-soft',
     },
     {
       id: 'mine', name: 'LA MINE', kind: 'gratuit', icon: '⛏️', art: '💎',

@@ -18,6 +18,7 @@
 const crypto = require('crypto');
 const fair = require('./fair');
 const sidebets = require('./sidebets');
+const medals = require('./medals');
 
 const DECKS = 6;
 const SEATS = 5;
@@ -138,6 +139,7 @@ class Table {
       seat.connected = true;
       seat.name = user.name;
       seat.avatar = user.avatar;
+      seat.cosmetics = medals.publicCosmetics(profile);
       return seat;
     }
     if (this.seats.length >= SEATS) return null;
@@ -145,6 +147,8 @@ class Table {
       id: user.id,
       name: user.name,
       avatar: user.avatar,
+      // Les parures du joueur, pour que la table ait la même tête que le reste.
+      cosmetics: profile ? medals.publicCosmetics(profile) : null,
       socketId,
       connected: true,
       bet: 0,
@@ -592,6 +596,7 @@ class Table {
         id: s.id,
         name: s.name,
         avatar: s.avatar,
+        cosmetics: s.cosmetics || null,
         connected: s.connected,
         isYou: s.id === userId,
         bet: s.bet,

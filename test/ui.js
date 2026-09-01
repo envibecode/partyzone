@@ -11,6 +11,16 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   p.on('console',m=>{ if(m.type()==='error' && !/favicon|ERR_TUNNEL/.test(m.text())) errs.push('CON '+m.text()); });
 
   await p.goto('http://localhost:3000',{waitUntil:'networkidle'});
+
+  // ── L'INTRO ──
+  // Elle se joue à la première visite d'un onglet, et masque tout le reste :
+  // on vérifie qu'elle est là, puis on la passe.
+  check('intro de la taverne au premier chargement', await p.isVisible('#intro'));
+  check('la signature est affichée', /Titiss/.test(await p.textContent('#intro')));
+  await p.screenshot({path:OUT+'/intro.png'});
+  await p.click('#intro-skip'); await wait(1000);
+  check('l’intro se passe', (await p.$('#intro'))===null);
+
   await p.fill('#guest-name','Mattis'); await p.click('#form-guest button');
   await p.waitForSelector('#app.active'); await p.waitForFunction(()=>window.PZ&&window.PZ.profile);
   check('lobby chargé', true);
@@ -87,6 +97,89 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   await wait(900);
   check('bandeau des gagnants', await p.isVisible('#rl-ticker.on') || true);
   await p.screenshot({path:OUT+'/roulette-resultat.png'});
+
+  // ── MACHINE À SOUS ──
+  await p.evaluate(()=>{location.hash='#slots';}); await wait(900);
+  const reels = (await p.$$('#slots .reel')).length;
+  check('cinq rouleaux à l’écran', reels === 5, `${reels} rouleaux`);
+  await p.fill('#sl-bet','50');
+  await p.click('#sl-spin'); await wait(4000);
+  const symbols = await p.evaluate(()=>[...document.querySelectorAll('#slots .cell')].filter(c=>c.dataset.id).length);
+  check('les rouleaux se posent sur des symboles', symbols === 15, `${symbols}/15 cases posées`);
+  check('historique des tours', (await p.$$('#sl-history .pk-hrow')).length >= 1);
+  await p.screenshot({path:OUT+'/slots.png'});
+  await p.click('#sl-table'); await p.waitForSelector('.sl-paytable'); await wait(400);
+  check('table des gains avec la redistribution mesurée',
+    /9[0-9],\d+ %/.test(await p.textContent('.sl-paytable')));
+  await p.screenshot({path:OUT+'/slots-paytable.png'});
+  await p.click('.modal-close'); await wait(300);
+
+  // ── CAISSES ET COLLECTION ──
+  await p.evaluate(()=>{location.hash='#vault';}); await wait(1200);
+  const cats = (await p.$$('#coll-cats .coll-cat')).length;
+  check('filtres par catégorie', cats === 9, `${cats} boutons (tout + 8 catégories)`);
+  const collAll = (await p.$$('#collection .coll-item')).length;
+  check('les 518 objets sont tous affichés, trouvés ou non', collAll === 518, `${collAll} vignettes`);
+  const locked = (await p.$$('#collection .coll-item.locked')).length;
+  check('ce qu’il reste à trouver est grisé', locked > 0, `${locked} verrouillés`);
+  const noms = await p.evaluate(()=>{
+    return [...document.querySelectorAll('#collection .coll-item .n')]
+      .filter(n=>n.scrollHeight > n.clientHeight + 2).length;
+  });
+  check('aucun nom coupé', noms === 0, `${noms} nom(s) tronqué(s)`);
+  await p.click('#coll-cats .coll-cat:nth-child(3)'); await wait(400);
+  const filtered = (await p.$$('#collection .coll-item')).length;
+  check('le filtre de catégorie réduit la liste', filtered > 0 && filtered < 518, `${filtered} vignettes`);
+  const groups = (await p.$$('#cases .case-group')).length;
+  check('caisses générales et caisses à thème séparées', groups === 2);
+  await p.screenshot({path:OUT+'/collection.png'});
+
+  // ── UN CADEAU ──
+  await p.evaluate(()=>window.PZ.socket.emit('admin:action',{action:'grant-case',payload:{id:window.PZ.profile.id,caseId:'viral',count:2}}));
+  await wait(1200);
+  check('le cadeau apparaît sans rechargement', await p.isVisible('#gifts'));
+  const giftCards = (await p.$$('#gift-list .gift')).length;
+  check('bon de caisse affiché', giftCards >= 1, `${giftCards} bon(s)`);
+  await p.screenshot({path:OUT+'/cadeaux.png'});
+  await p.click('#gift-list .gift'); await wait(1500);
+  check('le cadeau s’ouvre avec le rouleau', await p.isVisible('.reel-modal'));
+  await wait(5200);
+  const close = await p.$('.modal-close'); if (close) await close.click();
+  await wait(600);
+
+  // ── ON REMPLIT LA COLLECTION ──
+  // Pour voir un palier tomber il faut cinquante objets distincts. On ouvre
+  // donc en masse par une connexion de service, avec le même compte : le
+  // rouleau du navigateur ne saurait pas enchaîner cent cinquante animations.
+  {
+    const { io: nodeIo } = require('socket.io-client');
+    const cookie = (await ctx.cookies()).map(c=>`${c.name}=${c.value}`).join('; ');
+    const side = nodeIo('http://localhost:3000',{extraHeaders:{Cookie:cookie},transports:['websocket']});
+    await new Promise(r=>side.on('connect',r));
+    for (let i=0;i<15;i++) {
+      await new Promise(r=>{ side.once('vault:state',r); side.emit('vault:pull',{caseId:'starter',count:10}); });
+    }
+    side.close();
+  }
+
+  // ── MÉDAILLES ──
+  await p.evaluate(()=>{location.hash='#medals';}); await wait(1000);
+  const tiers = (await p.$$('#tiers .tier')).length;
+  check('onze paliers affichés', tiers === 11, `${tiers} paliers`);
+  check('les paliers atteints sont marqués', (await p.$$('#tiers .tier.done')).length >= 1,
+    `${await p.textContent('#med-have')} objets trouvés`);
+  check('le prochain palier est annoncé', /Prochain palier/.test(await p.textContent('#med-next')));
+  const cos = (await p.$$('#cosmetics .cos')).length;
+  check('les parures sont proposées', cos >= 12, `${cos} vignettes`);
+  check('classement du mois affiché', /Fin dans/.test(await p.textContent('#season-body')));
+  await p.screenshot({path:OUT+'/medailles.png', fullPage:true});
+  const free = await p.$('#cosmetics .cos:not(.locked):not(.on)');
+  if (free) { await free.click(); await wait(700); }
+  check('parure équipée visible dans le bandeau du haut',
+    await p.evaluate(()=>{
+      const a=document.querySelector('#me-avatar'), n=document.querySelector('#me-name');
+      return a.className.includes('cos-') || n.className.includes('cos-') || Boolean(document.querySelector('.cos-badge'));
+    }));
 
   // ── ANNONCE ──
   await p.evaluate(()=>window.PZ.socket.emit('admin:action',{action:'announce',payload:{text:'Tournoi ce soir 21 h, ramenez vos pièces !'}}));

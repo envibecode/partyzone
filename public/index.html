@@ -14,6 +14,23 @@
 </head>
 <body>
 
+<!-- ══════════════ L'INTRO ══════════════ -->
+<div id="intro" class="intro" hidden>
+  <button class="intro-skip" id="intro-skip">passer ›</button>
+  <div class="intro-stage">
+    <div class="intro-door" aria-hidden="true">
+      <span class="door left"></span>
+      <span class="door right"></span>
+      <span class="door-glow"></span>
+    </div>
+    <div class="intro-sign" aria-hidden="true">🍀</div>
+    <p class="intro-line l1">Bienvenue</p>
+    <p class="intro-line l2">dans la <em>Taverne</em></p>
+    <p class="intro-line l3">directed by <b>Titiss</b> &amp; <b>Faboz</b></p>
+    <div class="intro-sparks" aria-hidden="true"></div>
+  </div>
+</div>
+
 <!-- ══════════════ CONNEXION ══════════════ -->
 <section id="screen-auth" class="screen active auth-screen">
   <div class="auth-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
@@ -64,6 +81,7 @@
     <nav class="topnav left" id="nav-left">
       <button class="topnav-btn vip" data-go="mine"><i>⛏️</i> LA MINE</button>
       <button class="topnav-btn" data-go="home">LOBBY</button>
+      <button class="topnav-btn party" data-go="party"><i>🎈</i> PARTY</button>
       <button class="topnav-btn" data-go="leaderboard">CLASSEMENT</button>
     </nav>
 
@@ -73,6 +91,7 @@
 
     <nav class="topnav right" id="nav-right">
       <button class="topnav-btn" data-go="vault">CAISSES</button>
+      <button class="topnav-btn" data-go="medals">MÉDAILLES</button>
       <button class="topnav-btn" data-go="fair">ÉQUITÉ</button>
       <button class="topnav-btn hidden" id="nav-admin" data-go="admin">ADMIN</button>
     </nav>
@@ -166,7 +185,8 @@
     <section class="view" id="view-leaderboard">
       <div class="view-head">
         <h1>🏆 Classement</h1>
-        <p>Qui a le plus de pièces, et qui a le plus joué. Deux façons de lire la même soirée.</p>
+        <p>Qui a le plus de pièces, qui a le plus joué, et qui vient le plus souvent
+           en Party. Trois façons de lire la même soirée.</p>
       </div>
       <div class="lb-grid">
         <div class="panel">
@@ -175,6 +195,7 @@
             <div class="segs" id="lb-sort">
               <button class="seg active" data-sort="coins">Pièces</button>
               <button class="seg" data-sort="xp">Niveau</button>
+              <button class="seg" data-sort="party">Party</button>
             </div>
           </div>
           <ol class="lb" id="leaderboard"><li class="empty">Chargement…</li></ol>
@@ -266,6 +287,46 @@
           <div class="pk-history" id="pk-history">
             <div class="empty">Lâche une bille pour commencer.</div>
           </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ MACHINE À SOUS ══════ -->
+    <section class="view" id="view-slots">
+      <div class="game-layout three">
+        <aside class="betpanel">
+          <div class="bet-tabs"><button class="bet-tab active">Les Copains</button></div>
+          <label class="field">
+            <span>Mise par ligne <i>🪙</i></span>
+            <div class="bet-input">
+              <input type="number" id="sl-bet" value="20" min="10" step="10">
+              <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
+            </div>
+          </label>
+          <div class="sl-total">
+            <span>10 lignes fixes · total misé</span>
+            <b id="sl-total">200</b>
+          </div>
+          <button class="btn btn-green btn-block big" id="sl-spin">TOURNER</button>
+          <button class="btn btn-mini btn-block" id="sl-auto">Auto : off</button>
+          <div class="bet-meta">
+            <div><span>Redistribution</span><b id="sl-rtp">—</b></div>
+            <div><span>Tour bonus</span><b id="sl-bonus">—</b></div>
+            <div><span>Dernier gain</span><b id="sl-last">—</b></div>
+          </div>
+          <button class="link" id="sl-table">voir la table des gains</button>
+        </aside>
+
+        <div class="stage sl-stage">
+          <div class="sl-banner" id="sl-banner"></div>
+          <div class="slots" id="slots"></div>
+          <div class="sl-lines" id="sl-lines"></div>
+        </div>
+
+        <aside class="panel pk-side">
+          <div class="panel-head"><h2>Derniers tours</h2></div>
+          <div class="pk-hhead"><span>tour</span><span>net</span><span>reçu</span></div>
+          <div class="pk-history" id="sl-history"><div class="empty">Lance un tour.</div></div>
         </aside>
       </div>
     </section>
@@ -438,23 +499,78 @@
     <!-- ══════ CAISSES ══════ -->
     <section class="view" id="view-vault">
       <div class="view-head">
-        <h1>📦 Caisses à memes</h1>
-        <p>Soixante memes à trouver, du commun au maudit. Les doublons se revendent en pièces.</p>
+        <h1>📦 Caisses</h1>
+        <p>518 objets de culture internet à trouver, du commun au maudit. Les doublons se
+           revendent en pièces, et les caisses à thème ne piochent que dans leur catégorie.</p>
       </div>
       <div class="vault-bar" id="vault-bar"></div>
+
+      <div class="gifts panel hidden" id="gifts">
+        <div class="panel-head"><h2>Tes cadeaux</h2></div>
+        <div class="gift-list" id="gift-list"></div>
+      </div>
+
+      <div class="panel gift-send">
+        <div class="panel-head"><h2>Offrir une caisse</h2></div>
+        <form class="gift-form" id="gift-form">
+          <input class="input" id="gift-to" maxlength="24" placeholder="Pseudo du copain" autocomplete="off">
+          <select class="input" id="gift-case"></select>
+          <input class="input" id="gift-count" type="number" value="1" min="1" max="10">
+          <button class="btn btn-gold" type="submit">Offrir</button>
+        </form>
+        <p class="fine" id="gift-note">—</p>
+      </div>
+
       <div class="cases" id="cases"></div>
 
       <div class="panel collection-panel">
         <div class="panel-head">
-          <h2>Collection <b id="coll-count">0/60</b></h2>
+          <h2>Collection <b id="coll-count">0/518</b></h2>
           <div class="segs" id="coll-filter">
             <button class="seg active" data-r="all">Tout</button>
             <button class="seg" data-r="have">Obtenus</button>
             <button class="seg" data-r="miss">Manquants</button>
           </div>
         </div>
+        <div class="coll-cats" id="coll-cats"></div>
         <div class="coll-rarities" id="coll-rarities"></div>
         <div class="collection" id="collection"></div>
+      </div>
+    </section>
+
+    <!-- ══════ MÉDAILLES ══════ -->
+    <section class="view" id="view-medals">
+      <div class="view-head">
+        <h1>🏅 Médailles &amp; parures</h1>
+        <p>Tous les cinquante objets trouvés, un palier tombe. Le premier joueur du site
+           à l’atteindre décroche la version dorée — et elle ne se redonne jamais.</p>
+      </div>
+
+      <div class="med-top">
+        <div class="panel med-progress">
+          <div class="panel-head"><h2>Ta collection</h2></div>
+          <div class="med-count"><b id="med-have">0</b><span>/ <em id="med-total">518</em> objets</span></div>
+          <div class="med-bar"><span id="med-fill"></span></div>
+          <div class="med-next fine" id="med-next">—</div>
+        </div>
+
+        <div class="panel med-season" id="med-season">
+          <div class="panel-head"><h2>Le mois en cours</h2></div>
+          <div id="season-body" class="fine">Chargement…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Les paliers</h2></div>
+        <div class="tiers" id="tiers"></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head"><h2>Ta parure</h2></div>
+        <p class="fine" style="margin-bottom:14px">
+          Ce que tu portes se voit partout : dans le chat, au classement, à la table.
+        </p>
+        <div class="cosmetics" id="cosmetics"></div>
       </div>
     </section>
 
@@ -494,6 +610,131 @@
       </div>
     </section>
 
+    <!-- ══════ PARTY — LE HALL ══════ -->
+    <section class="view" id="view-party">
+      <div class="view-head">
+        <h1>🎈 Party</h1>
+        <p>Les jeux entre amis, à côté du casino. <b>Aucune pièce ne se mise ici</b> —
+           on ne peut ni gagner ni perdre quoi que ce soit. La section a son propre rang,
+           qui compte les soirées passées à jouer ensemble.</p>
+      </div>
+
+      <div class="party-top">
+        <div class="panel party-rank" id="party-rank"></div>
+        <div class="panel party-join">
+          <div class="panel-head"><h2>Rejoindre un salon</h2></div>
+          <form class="join-form" id="party-join-form">
+            <input class="input code" id="party-code" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+            <button class="btn btn-green" type="submit">Rejoindre</button>
+          </form>
+          <p class="fine">Quatre lettres, données par celui qui a ouvert le salon.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Les jeux</h2></div>
+        <div class="party-games" id="party-games"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Salons ouverts</h2>
+          <span class="fine" id="party-count">—</span>
+        </div>
+        <div class="party-rooms" id="party-rooms"><div class="empty">Aucun salon ouvert. Ouvre le premier.</div></div>
+      </div>
+    </section>
+
+    <!-- ══════ UNDERCOVER ══════ -->
+    <section class="view" id="view-uc">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game">🕵️ Undercover</span>
+          <button class="room-code" id="uc-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="uc-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="uc-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="uc-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="uc-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>Joueurs</h2></div>
+          <div id="uc-players"></div>
+          <div class="uc-settings hidden" id="uc-settings">
+            <h3>Réglages</h3>
+            <div class="segs" id="uc-level">
+              <button class="seg" data-level="facile">Facile</button>
+              <button class="seg active" data-level="melange">Mélange</button>
+              <button class="seg" data-level="difficile">Difficile</button>
+            </div>
+            <label class="check"><input type="checkbox" id="uc-white" checked> Monsieur Blanc (5 joueurs et plus)</label>
+          </div>
+        </aside>
+
+        <div class="stage uc-stage">
+          <div class="uc-word" id="uc-word"></div>
+          <div class="uc-board" id="uc-board"></div>
+          <div class="uc-action" id="uc-action"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="uc-chat"></div>
+          <form class="chat-form" id="uc-chat-form">
+            <input class="input" id="uc-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ POKER ══════ -->
+    <section class="view" id="view-pk">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game">♠️ Poker</span>
+          <button class="room-code" id="pk-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="pk-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="pk-start">Lancer le tournoi</button>
+          <button class="btn btn-soft" id="pk-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="pk-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>Tapis</h2></div>
+          <div id="pk-stacks"></div>
+          <div class="pk-blinds" id="pk-blinds"></div>
+        </aside>
+
+        <div class="stage pk-stage">
+          <div class="pk-table">
+            <div class="pk-pot" id="pk-pot"></div>
+            <div class="pk-board" id="pk-board"></div>
+            <div class="pk-seats" id="pk-seats"></div>
+          </div>
+          <div class="pk-you" id="pk-you"></div>
+          <div class="pk-actions" id="pk-actions"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="pk-chat"></div>
+          <form class="chat-form" id="pk-chat-form">
+            <input class="input" id="pk-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
     <!-- ══════ ADMIN ══════ -->
     <section class="view" id="view-admin">
       <div class="view-head"><h1>🛠️ Administration</h1></div>
@@ -518,7 +759,12 @@
 <script src="/js/plinko.js"></script>
 <script src="/js/roulette.js"></script>
 <script src="/js/blackjack.js"></script>
+<script src="/js/slots.js"></script>
+<script src="/js/medals.js"></script>
 <script src="/js/vault.js"></script>
+<script src="/js/party.js"></script>
+<script src="/js/undercover.js"></script>
+<script src="/js/poker.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

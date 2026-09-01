@@ -280,7 +280,9 @@
       img.src = PZ.avatarUrl(seat);
       img.alt = '';
       who.appendChild(img);
-      who.appendChild(el('span', null, seat.name));
+      const nameNode = el('span', null, seat.name);
+      who.appendChild(nameNode);
+      if (PZ.applyCosmetics) PZ.applyCosmetics(node, seat.cosmetics, { avatar: img, name: nameNode });
       node.appendChild(who);
 
       const group = el('div', 'hand-group');

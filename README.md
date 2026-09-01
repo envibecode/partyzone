@@ -26,6 +26,7 @@ virtuelles uniquement**.
 | 🎁 **Cadeaux** | Offrir une caisse à un copain (le donneur paie, plafond quotidien) ou en distribuer depuis le panel admin. |
 | 🏆 **Classements** | Général par pièces ou par niveau, plus un **classement du mois** sur le bénéfice net. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
+| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Deux jeux dedans pour l'instant — **Undercover** (3 à 12 joueurs, avec Monsieur Blanc) et **Poker** Texas Hold'em en tournoi (2 à 8, jetons de tournoi, blindes qui montent, pots secondaires). Loup-garou, Uno, Belote et Monopoly sont annoncés dans le hall mais pas encore jouables. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
 | 🛠️ **Panel admin** | Joueurs, pièces, XP, caisses offertes, bannissements, tables ouvertes, annonces animées, journal des actions. La page se rafraîchit toute seule. |
 
@@ -176,8 +177,10 @@ Le navigateur ne fait qu'afficher. Il ne calcule aucun résultat.
 Le serveur doit tourner (`npm start`) dans un autre terminal.
 
 ```bash
-npm test         # joue vraiment à tout, en Socket.IO, et vérifie l'économie
-npm run test:ui  # parcours complet dans un vrai navigateur + captures d'écran
+npm test             # joue vraiment à tout, en Socket.IO, et vérifie l'économie
+npm run test:party   # une partie d'Undercover et une main de poker, à 4 clients
+npm run test:poker   # 60 tournois simulés : aucun jeton créé ni perdu
+npm run test:ui      # parcours complet dans un vrai navigateur + captures d'écran
 ```
 
 `npm test` vérifie entre autres que le RTP observé du Plinko sur 600 billes
@@ -189,6 +192,11 @@ sur l'objet gagné, que la collection affiche les 518 objets avec les
 manquants grisés, qu'aucun nom n'est tronqué, que les rouleaux de la machine
 à sous se posent sur leurs quinze symboles, et que le panel admin se met à
 jour sans qu'on recharge la page.
+
+`npm run test:poker` ne demande pas de serveur : il joue soixante tournois
+entiers au hasard, avec beaucoup de tapis pour fabriquer des pots secondaires,
+et vérifie **après chaque action** que la somme des jetons de la table n'a pas
+bougé d'un iota. C'est ce test qui a trouvé les trois vrais bugs du moteur.
 
 Les captures atterrissent dans `shots/`.
 
@@ -217,14 +225,23 @@ server/
   admin.js       panel d'administration
   data/collection.js  les 518 objets
   data/cases.js       les 13 caisses et leurs probabilités
+  party/rooms.js      les salons à code, communs à tous les jeux Party
+  party/rank.js       le rang Party, séparé du casino
+  party/undercover.js les rôles, les manches, les votes
+  party/words.js      les paires de mots, par difficulté
+  party/poker.js      la table de Hold'em : blindes, tapis, pots secondaires
+  party/holdem.js     l'évaluation d'une main de sept cartes
 public/
   index.html     la coquille
   css/style.css  toute la direction artistique
   js/            app, lobby, chat, mine, plinko, roulette, blackjack,
-                 slots, medals, vault, admin, sfx
+                 slots, medals, vault, party, undercover, poker, admin, sfx
 test/
-  harness.js     banc d'essai Socket.IO
-  ui.js          parcours navigateur
+  harness.js     banc d'essai Socket.IO du casino
+  party.js       banc d'essai de la section Party
+  poker-sim.js   60 tournois simulés, sans réseau
+  ui.js          parcours navigateur du casino
+  ui-party.js    parcours navigateur de la Party
 ```
 
 Aucune étape de compilation : ce que tu lis dans `public/` est exactement

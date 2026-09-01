@@ -13,11 +13,19 @@ const fairness = require('./fair');
 const vault = require('./vault');
 const clicker = require('./clicker');
 const plinko = require('./plinko');
+const slots = require('./slots');
+const medals = require('./medals');
+const season = require('./season');
+const gifts = require('./gifts');
 const blackjack = require('./blackjack');
 const { Roulette } = require('./roulette');
 const { Presence } = require('./presence');
 const { Chat } = require('./chat');
 const admin = require('./admin');
+const partyRooms = require('./party/rooms');
+const partyRank = require('./party/rank');
+const { Undercover } = require('./party/undercover');
+const { Poker } = require('./party/poker');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,7 +47,7 @@ app.get('/api/admin-config', (req, res) => res.json({ keyConfigured: admin.admin
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const limit = Math.min(50, Math.max(3, Number(req.query.limit) || 12));
-    const sort = req.query.sort === 'xp' ? 'xp' : 'coins';
+    const sort = ['xp', 'party'].includes(req.query.sort) ? req.query.sort : 'coins';
     res.json({ leaderboard: await store.leaderboard(limit, sort), sort });
   } catch (err) {
     console.error('[leaderboard]', err.message);
@@ -119,6 +127,39 @@ function refreshAdmins() {
   }, 700);
 }
 
+/**
+ * Bascule de mois.
+ *
+ * Personne ne remet le lot automatiquement : le site désigne le vainqueur,
+ * l'annonce à tout le monde, et laisse une trace dans le panel admin. La
+ * remise se fait à la main, en dehors du site.
+ */
+let seasonChecking = false;
+async function checkSeason() {
+  if (seasonChecking) return;
+  seasonChecking = true;
+  try {
+    const state = await store.siteState();
+    const profiles = await store.allProfiles();
+    const winner = season.rollover(state, profiles);
+    if (winner) {
+      store.touchState();
+      await store.flushState();
+      io.emit('announce', {
+        text: `${winner.name} remporte le mois de ${winner.label} avec ${winner.coins.toLocaleString('fr-FR')} pièces de bénéfice — ${winner.prize} !`,
+      });
+      chat.system(`🏆 ${winner.name} termine premier de ${winner.label}. Le lot est remis à la main par un administrateur.`, 'announce');
+      console.log(`[saison] ${winner.label} remporté par ${winner.name} (${winner.coins})`);
+    }
+  } finally {
+    seasonChecking = false;
+  }
+}
+
+// On revérifie toutes les heures, pour que la bascule tombe même si personne
+// ne se connecte au bon moment.
+setInterval(() => checkSeason().catch(() => {}), 3600 * 1000).unref();
+
 /* ─── Socket.IO ────────────────────────────────────────── */
 
 io.use((socket, next) => {
@@ -148,6 +189,10 @@ io.on('connection', async (socket) => {
   socket.data.profile = profile;
   presence.join(socket, user, profile);
   refreshAdmins();
+
+  // Le mois a-t-il tourné depuis la dernière connexion ? Le premier joueur
+  // qui arrive après minuit le 1er déclenche le bilan.
+  checkSeason().catch((e) => console.error('[saison]', e.message));
 
   const sendMe = () => socket.emit('me', { user, profile: store.publicProfile(profile) });
   const save = () => store.saveProfile(profile).catch((e) => console.error('[store]', e.message));
@@ -215,6 +260,37 @@ io.on('connection', async (socket) => {
         amount: result.payout,
       });
       chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} 🪙 !`, 'win');
+    }
+  });
+
+  /* ══════════ MACHINE À SOUS ══════════ */
+
+  socket.on('slots:open', () => {
+    presence.setStatus(user.id, 'slots');
+    socket.emit('slots:state', { config: slots.view(), me: store.publicProfile(profile) });
+  });
+
+  socket.on('slots:spin', async (payload = {}) => {
+    const result = slots.play(profile, payload);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.recordPlay(profile, result.staked, result.payout);
+    await save();
+
+    socket.emit('slots:result', { ...result, me: store.publicProfile(profile) });
+    socket.emit('profile:update', store.publicProfile(profile));
+
+    if (result.bonus.length) {
+      io.emit('feed', {
+        name: user.name, avatar: user.avatar, game: 'Machine à sous',
+        text: 'tour bonus déclenché', amount: result.payout,
+      });
+      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} 🪙 !`, 'win');
+    } else if (result.profit >= result.staked * 15) {
+      io.emit('feed', {
+        name: user.name, avatar: user.avatar, game: 'Machine à sous',
+        text: `×${Math.round(result.payout / result.staked)}`, amount: result.payout,
+      });
     }
   });
 
@@ -403,10 +479,27 @@ io.on('connection', async (socket) => {
 
     store.grantXp(profile, result.xp);
     profile.stats.cases += result.pulls.length;
+
+    // Les paliers de collection se contrôlent ici, juste après le tirage.
+    const state = await store.siteState();
+    const earned = medals.check(profile, state.records);
+    if (earned.length) store.touchState();
+
     await save();
 
-    socket.emit('vault:state', vaultPayload({ result }));
+    socket.emit('vault:state', vaultPayload({ result, medals: earned }));
     socket.emit('profile:update', store.publicProfile(profile));
+
+    for (const tier of earned) {
+      if (tier.first) {
+        io.emit('announce', {
+          text: `${user.name} est le PREMIER du site à atteindre ${tier.need} objets — ${tier.icon} ${tier.name} !`,
+        });
+        chat.system(`🥇 ${user.name} décroche « ${tier.name} » en premier — ${tier.need} objets !`, 'win');
+      } else {
+        chat.system(`${tier.icon} ${user.name} atteint ${tier.need} objets : ${tier.name}.`, 'drop');
+      }
+    }
 
     for (const pull of result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r))) {
       io.emit('feed', {
@@ -426,6 +519,98 @@ io.on('connection', async (socket) => {
     if (result.ok) await save();
     socket.emit('vault:state', vaultPayload({ result }));
     if (result.ok) socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /* ══════════ MÉDAILLES ET COSMÉTIQUES ══════════ */
+
+  async function sendMedals() {
+    const state = await store.siteState();
+    socket.emit('medals:state', medals.view(profile, state.records));
+  }
+
+  socket.on('medals:open', () => { sendMedals(); });
+
+  socket.on('medals:equip', async ({ kind, id } = {}) => {
+    const result = medals.equip(profile, kind, id);
+    socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
+    if (result.ok) {
+      await save();
+      sendMe();
+      sendMedals();
+      // Les cosmétiques se voient partout : on prévient les autres écrans.
+      presence.schedule();
+    }
+  });
+
+  /* ══════════ SAISON ══════════ */
+
+  socket.on('season:open', async () => {
+    const state = await store.siteState();
+    const profiles = await store.allProfiles();
+    socket.emit('season:state', {
+      ...season.view(state),
+      ranking: season.ranking(profiles, 20),
+      you: profile.season,
+    });
+  });
+
+  /* ══════════ CADEAUX ══════════ */
+
+  /**
+   * Offrir une caisse à quelqu'un.
+   *
+   * C'est un transfert de pièces déguisé, donc on le traite comme tel : le
+   * donneur paie le prix réel de la caisse, le receveur reçoit un bon à
+   * ouvrir. Un plafond quotidien évite qu'on se serve du cadeau pour
+   * contourner les limites du jeu ou blanchir un gros gain sur un autre
+   * compte.
+   */
+  socket.on('gift:send', async ({ to, caseId, count } = {}) => {
+    const result = await gifts.send(profile, { to, caseId, count }, store);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', { message: result.message, kind: 'success' });
+
+    // On prévient le destinataire s'il est là.
+    const entry = presence.users.get(result.target.id);
+    if (entry) {
+      for (const socketId of entry.sockets) {
+        io.to(socketId).emit('gift:received', result.gift);
+        io.to(socketId).emit('profile:update', store.publicProfile(result.target));
+      }
+    }
+    chat.system(`🎁 ${user.name} offre ${result.gift.count} × ${result.gift.caseName} à ${result.target.name}.`, 'drop');
+  });
+
+  socket.on('gift:list', () => {
+    socket.emit('gift:list', gifts.view(profile));
+  });
+
+  /** Ouvrir un cadeau : c'est une ouverture de caisse normale, mais gratuite. */
+  socket.on('gift:claim', async ({ id } = {}) => {
+    const taken = gifts.claim(profile, id);
+    if (!taken.ok) return socket.emit('toast', { message: taken.message, kind: 'error' });
+
+    const result = vault.open(profile, taken.gift.caseId, taken.gift.count, Date.now(), { free: true });
+    if (!result.ok) {
+      // On remet le bon : rien ne doit se perdre en route.
+      profile.gifts.unshift(taken.gift);
+      return socket.emit('toast', { message: result.message, kind: 'error' });
+    }
+
+    store.grantXp(profile, result.xp);
+    profile.stats.cases += result.pulls.length;
+
+    const state = await store.siteState();
+    const earned = medals.check(profile, state.records);
+    if (earned.length) store.touchState();
+
+    await save();
+    socket.emit('vault:state', vaultPayload({ result, medals: earned }));
+    socket.emit('gift:list', gifts.view(profile));
+    socket.emit('profile:update', store.publicProfile(profile));
   });
 
   /* ══════════ ÉQUITÉ VÉRIFIABLE ══════════ */
@@ -498,9 +683,210 @@ io.on('connection', async (socket) => {
     }
   });
 
+  /* ══════════ PARTY ══════════ */
+
+  /**
+   * La section Party n'a rien de commun avec le casino : pas de pièces, pas
+   * de mise, pas de redistribution. On y gagne un rang à part, qui compte le
+   * fait de venir jouer avec les autres plutôt que la chance.
+   */
+
+  const GAMES = {
+    undercover: { build: () => new Undercover(io) },
+    poker: { build: () => new Poker(io) },
+  };
+
+  const partyRoom = () => partyRooms.roomOf(user.id);
+
+  function broadcastPartyList() {
+    io.emit('party:list', { rooms: partyRooms.list() });
+  }
+
+  /** Un onglet se ferme : le salon décide lui-même si le joueur sort ou non. */
+  function leavePartySocket() {
+    const room = partyRoom();
+    if (!room) return;
+    room.leaveSocket(user.id, socket.id);
+    socket.leave(room.channel);
+    room.broadcast();
+    broadcastPartyList();
+  }
+
+  /** Sortie volontaire, définitive. */
+  function leaveParty() {
+    const room = partyRoom();
+    if (!room) return;
+    room.system(`${user.name} quitte le salon.`);
+    room.leave(user.id);
+    socket.leave(room.channel);
+    room.broadcast();
+    socket.emit('party:left', {});
+    broadcastPartyList();
+  }
+
+  function enterRoom(room) {
+    const result = room.join(user, profile, socket.id, { cosmetics: medals.publicCosmetics(profile) });
+    if (!result.ok) return result;
+    socket.join(room.channel);
+    if (!result.rejoined) room.system(`${user.name} rejoint le salon.`);
+    room.broadcast();
+    broadcastPartyList();
+    return result;
+  }
+
+  socket.on('party:open', () => {
+    presence.setStatus(user.id, 'party');
+    socket.emit('party:list', { rooms: partyRooms.list() });
+    socket.emit('party:rank', partyRank.view(profile));
+
+    // Reconnexion : si le joueur était déjà dans un salon, on l'y remet
+    // plutôt que de le laisser croire qu'il a perdu sa place.
+    const room = partyRoom();
+    if (room) {
+      socket.join(room.channel);
+      const player = room.playerOf(user.id);
+      if (player) { player.sockets.add(socket.id); player.connected = true; }
+      room.broadcast();
+    }
+  });
+
+  socket.on('party:create', ({ game } = {}) => {
+    const entry = GAMES[game];
+    if (!entry) return socket.emit('toast', { message: 'Ce jeu n’existe pas encore.', kind: 'error' });
+
+    const already = partyRoom();
+    if (already) leaveParty();
+
+    const room = entry.build();
+    // La partie peut s'achever sur un minuteur du salon, pas seulement sur
+    // un clic : on branche le crédit du rang directement sur la fin de
+    // partie, sinon les XP ne tomberaient que par hasard.
+    room.onEnd = (finished) => {
+      creditParty(finished).catch((e) => console.error('[party]', e.message));
+      broadcastPartyList();
+    };
+    const result = enterRoom(room);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    socket.emit('party:joined', { code: room.code, game: room.game });
+  });
+
+  socket.on('party:join', ({ code } = {}) => {
+    const room = partyRooms.get(code);
+    if (!room) return socket.emit('toast', { message: 'Aucun salon avec ce code.', kind: 'error' });
+
+    const already = partyRoom();
+    if (already && already !== room) leaveParty();
+
+    const result = enterRoom(room);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    socket.emit('party:joined', { code: room.code, game: room.game });
+  });
+
+  socket.on('party:leave', () => leaveParty());
+
+  socket.on('party:list', () => socket.emit('party:list', { rooms: partyRooms.list() }));
+
+  socket.on('party:say', ({ text } = {}) => {
+    const room = partyRoom();
+    if (!room) return;
+    const result = room.say(user, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  });
+
+  socket.on('party:start', () => {
+    const room = partyRoom();
+    if (!room) return;
+    room.credited = false; // une relance doit pouvoir créditer à nouveau
+    const result = room.start(user.id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    broadcastPartyList();
+  });
+
+  /**
+   * Une partie terminée crédite le rang de tous ceux qui y étaient — les
+   * perdants aussi, un peu moins. Le rang Party récompense la présence, pas
+   * la performance.
+   */
+  async function creditParty(room) {
+    if (!room.result || room.credited) return;
+    // Une partie ne crédite qu'une fois, même si deux chemins mènent à la fin.
+    room.credited = true;
+    const winners = new Set(room.winners());
+    const players = room.players;
+
+    for (const p of players) {
+      const target = p.id === user.id ? profile : await store.findProfile(p.id);
+      if (!target) continue;
+      const gain = partyRank.record(target, room.game, {
+        won: winners.has(p.id),
+        players: players.length,
+        rounds: room.round || room.hand || 1,
+      });
+      await store.saveProfile(target);
+
+      const entry = presence.users.get(p.id);
+      if (entry) {
+        for (const socketId of entry.sockets) {
+          io.to(socketId).emit('party:rank', partyRank.view(target));
+          io.to(socketId).emit('toast', {
+            message: `+${gain.gained} XP Party — ${gain.title} (niveau ${gain.level})`,
+            kind: winners.has(p.id) ? 'success' : 'info',
+          });
+        }
+      }
+    }
+  }
+
+  /* ─── Undercover ─── */
+
+  const ucRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'undercover' ? room : null;
+  };
+
+  socket.on('uc:configure', (payload = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.configure(user.id, payload);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:describe', ({ text } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.describe(user.id, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:vote', ({ id } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.vote(user.id, id);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('uc:guess', ({ text } = {}) => {
+    const room = ucRoom();
+    if (!room) return;
+    const result = room.guess(user.id, text);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  /* ─── Poker ─── */
+
+  socket.on('pk:act', ({ move, amount } = {}) => {
+    const room = partyRoom();
+    if (!room || room.game !== 'poker') return;
+    const result = room.act(user.id, move, amount);
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'error' });
+  });
+
+  socket.on('party:rank', () => socket.emit('party:rank', partyRank.view(profile)));
+
   socket.on('disconnect', () => {
     clearTimeout(saveTimer);
     leaveTable();
+    leavePartySocket();
     presence.leave(socket, user.id);
     refreshAdmins();
     clicker.collect(profile);

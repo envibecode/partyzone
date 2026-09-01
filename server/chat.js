@@ -13,6 +13,7 @@
  */
 const crypto = require('crypto');
 const store = require('./store');
+const medals = require('./medals');
 
 const HISTORY = 60;          // messages gardés et envoyés aux arrivants
 const MAX_LENGTH = 240;
@@ -128,6 +129,9 @@ class Chat {
       level: level.level,
       title: store.rankTitle(level.level),
       admin: Boolean(isAdmin),
+      // Les parures voyagent avec le message : une médaille qu'on est seul à
+      // voir ne sert à rien, et le chat est l'endroit le plus regardé du site.
+      cosmetics: medals.publicCosmetics(profile),
       // Les liens sont conservés mais neutralisés : le client les affiche
       // en texte, jamais en lien cliquable.
       text: clean.replace(LINK, (m) => m.replace(/\./g, '·')),

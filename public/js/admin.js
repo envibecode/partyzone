@@ -53,8 +53,11 @@
     return node;
   }
 
+  let cases = [];
+
   function render(data) {
     const s = data.stats;
+    if (data.cases) cases = data.cases;
     root.replaceChildren();
 
     const grid = el('div', 'adm-grid');
@@ -154,6 +157,7 @@
 
     act('+1k 🪙', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
     act('+500 XP', '', () => send('grant-xp', { id: p.id, amount: 500 }));
+    act('🎁 Caisses', '', () => giveCases(p));
     act(p.banned ? 'Débannir' : 'Bannir', p.banned ? '' : 'danger', () => {
       if (p.banned) return send('unban', { id: p.id });
       const reason = prompt(`Raison du bannissement de ${p.name} ?`, 'Comportement inapproprié.');
@@ -173,6 +177,67 @@
     acts.appendChild(box);
     row.appendChild(acts);
     return row;
+  }
+
+  /**
+   * Distribuer des caisses à un joueur.
+   *
+   * L'administration ne paie rien — c'est le principe — donc la fenêtre
+   * rappelle ce que ça vaut, histoire qu'on sache ce qu'on injecte dans
+   * l'économie du site avant de valider.
+   */
+  function giveCases(p) {
+    const box = el('div', 'adm-give');
+    box.appendChild(el('h2', null, `Offrir des caisses à ${p.name}`));
+
+    const select = el('select', 'input');
+    cases.forEach((c) => {
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙 pièce`);
+      opt.value = c.id;
+      select.appendChild(opt);
+    });
+
+    const count = el('input', 'input');
+    count.type = 'number';
+    count.value = '1';
+    count.min = '1';
+    count.max = '50';
+
+    const row = el('div', 'gift-form');
+    row.appendChild(select);
+    row.appendChild(count);
+    box.appendChild(row);
+
+    const worth = el('p', 'fine', '');
+    const refresh = () => {
+      const c = cases.find((x) => x.id === select.value);
+      const n = Math.max(1, Math.min(50, Number(count.value) || 1));
+      worth.textContent = c
+        ? `Soit ${fmt(c.price * n)} pièces offertes, créées de rien. Le joueur reçoit un bon et l’ouvre quand il veut.`
+        : '';
+    };
+    select.addEventListener('change', refresh);
+    count.addEventListener('input', refresh);
+    refresh();
+    box.appendChild(worth);
+
+    const actions = el('div', 'adm-give-acts');
+    const ok = el('button', 'btn btn-gold', 'Envoyer');
+    ok.addEventListener('click', () => {
+      send('grant-case', {
+        id: p.id,
+        caseId: select.value,
+        count: Math.max(1, Math.min(50, Number(count.value) || 1)),
+      });
+      PZ.closeModal();
+    });
+    const cancel = el('button', 'btn btn-soft', 'Annuler');
+    cancel.addEventListener('click', PZ.closeModal);
+    actions.appendChild(ok);
+    actions.appendChild(cancel);
+    box.appendChild(actions);
+
+    PZ.openModal(box);
   }
 
   /* ─── Tables de blackjack ─── */

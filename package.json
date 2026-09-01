@@ -8,6 +8,8 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "test": "node test/harness.js",
+    "test:party": "node test/party.js",
+    "test:poker": "node test/poker-sim.js",
     "test:ui": "node test/ui.js"
   },
   "engines": {

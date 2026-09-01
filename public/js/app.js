@@ -126,7 +126,9 @@ PZ.closeModal = closeModal;
 
 const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
-  blackjack: 'blackjack', vault: 'vault', admin: 'admin',
+  blackjack: 'blackjack', vault: 'vault', slots: 'slots',
+  medals: 'medals', admin: 'admin',
+  party: 'party', uc: 'undercover', pk: 'poker',
 };
 
 function go(name) {
@@ -192,6 +194,9 @@ document.addEventListener('click', (e) => {
 
 /* ─── Profil ───────────────────────────────────────────── */
 
+/** Les classes posées par une parure — les seules qu'on ait le droit de retirer. */
+const COSMETIC_CLASS = /^(cos-|frame-|name-|badge-)/;
+
 function applyProfile(profile) {
   const before = PZ.profile ? PZ.profile.coins : null;
   PZ.profile = profile;
@@ -201,6 +206,18 @@ function applyProfile(profile) {
   $('#me-name').textContent = PZ.me ? PZ.me.name : '';
   $('#me-title').textContent = profile.title;
   $('#me-avatar').src = avatarUrl(PZ.me);
+
+  // Ses propres parures, dans le bandeau du haut : c'est là qu'on les regarde
+  // le plus souvent. On repart à zéro à chaque fois, sinon changer de parure
+  // empilerait les classes de l'ancienne et de la nouvelle.
+  const avatar = $('#me-avatar');
+  const nameSlot = $('#me-name');
+  [avatar, nameSlot].forEach((node) => {
+    [...node.classList].filter((c) => COSMETIC_CLASS.test(c)).forEach((c) => node.classList.remove(c));
+  });
+  const oldBadge = nameSlot.parentNode && nameSlot.parentNode.querySelector('.cos-badge');
+  if (oldBadge) oldBadge.remove();
+  if (PZ.applyCosmetics) PZ.applyCosmetics(null, profile.cosmetics, { avatar, name: nameSlot });
 
   if (profile.fair) {
     $('#fair-hash').textContent = profile.fair.serverSeedHash || '—';
@@ -332,7 +349,9 @@ async function loadLeaderboard() {
     const rows = data.leaderboard || [];
     list.replaceChildren();
     if (!rows.length) {
-      list.appendChild(el('li', 'empty', 'Personne au tableau. Va miner.'));
+      list.appendChild(el('li', 'empty', lbSort === 'party'
+        ? 'Personne n’a encore joué en Party. Ouvre un salon.'
+        : 'Personne au tableau. Va miner.'));
       return;
     }
     rows.forEach((p, i) => {
@@ -346,11 +365,20 @@ async function loadLeaderboard() {
       li.appendChild(img);
 
       const who = el('div', 'who');
-      who.appendChild(el('b', 'n', p.name));
-      who.appendChild(el('span', 't', `Niv. ${p.level} · ${p.title}`));
+      const nameNode = el('b', 'n', p.name);
+      who.appendChild(nameNode);
+      if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
+      // Le classement Party affiche le rang Party, pas celui du casino :
+      // ce sont deux progressions séparées et les mélanger n'aurait aucun sens.
+      who.appendChild(el('span', 't', lbSort === 'party' && p.party
+        ? `Party niv. ${p.party.level} · ${p.party.title}`
+        : `Niv. ${p.level} · ${p.title}`));
       li.appendChild(who);
 
-      li.appendChild(el('span', 'v', lbSort === 'xp' ? `${fmt(p.xp)} XP` : `${fmt(p.coins)} 🪙`));
+      li.appendChild(el('span', 'v',
+        lbSort === 'party' ? `${fmt(p.party ? p.party.xp : 0)} XP 🎈`
+          : lbSort === 'xp' ? `${fmt(p.xp)} XP`
+            : `${fmt(p.coins)} 🪙`));
       list.appendChild(li);
     });
   } catch {
@@ -458,7 +486,52 @@ $('#fair-form').addEventListener('submit', (e) => {
 
 /* ══════════════ CONNEXION ══════════════ */
 
+/* ═══════════ L'INTRO ═══════════ */
+
+/**
+ * « Bienvenue dans la Taverne ». Les portes s'ouvrent, les braises montent,
+ * et on entre.
+ *
+ * Une seule fois par session d'onglet : la première visite, c'est une
+ * arrivée ; à la dixième actualisation de la page, c'est un obstacle. Le
+ * bouton « passer » coupe court à tout moment, et l'intro est sautée
+ * d'office quand on arrive directement sur le panel admin.
+ *
+ * Volontairement muette : les navigateurs bloquent le son tant que la page
+ * n'a pas été cliquée, donc une fanfare ici ne se déclencherait qu'une fois
+ * sur deux — ce qui est pire que pas de fanfare du tout.
+ */
+const INTRO_SEEN = 'pz.intro.seen';
+
+function playIntro() {
+  const node = $('#intro');
+  if (!node) return Promise.resolve();
+
+  let seen = false;
+  try { seen = sessionStorage.getItem(INTRO_SEEN) === '1'; } catch { /* navigation privée */ }
+  if (seen || location.hash === '#admin') { node.remove(); return Promise.resolve(); }
+
+  try { sessionStorage.setItem(INTRO_SEEN, '1'); } catch { /* tant pis */ }
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      node.classList.add('leaving');
+      setTimeout(() => { node.remove(); resolve(); }, 800);
+    };
+
+    node.hidden = false;
+    $('#intro-skip').addEventListener('click', finish);
+    // Les portes finissent de s'ouvrir à 4,1 s ; on laisse respirer un instant.
+    setTimeout(finish, 4600);
+  });
+}
+
 async function boot() {
+  const intro = playIntro();
+
   try {
     const cfg = await (await fetch('/api/config')).json();
     if (!cfg.discord) {
@@ -472,6 +545,10 @@ async function boot() {
     const res = await fetch('/api/me');
     if (res.ok) session = await res.json();
   } catch { /* non connecté */ }
+
+  // On laisse l'intro se terminer avant de découvrir le site : les deux
+  // choses se chargent en parallèle, mais s'affichent l'une après l'autre.
+  await intro;
 
   if (session && session.user) start(session.user);
   else showAuth();
@@ -516,6 +593,14 @@ function start(user) {
   socket.on('toast', ({ message, kind }) => toast(message, kind));
   socket.on('feed', pushFeed);
   socket.on('announce', ({ text }) => announce(text));
+
+  // Un cadeau peut arriver n'importe quand : on écoute ici, pas dans la page
+  // des caisses, sinon on ne le saurait qu'en allant y faire un tour.
+  socket.on('gift:received', (gift) => {
+    const who = gift.admin ? `L’administration (${gift.from})` : gift.from;
+    toast(`🎁 ${who} t’offre ${gift.count} × ${gift.caseName} ! Ouvre-la dans les caisses.`, 'success');
+    if (window.SFX) SFX.fanfare();
+  });
 
   socket.on('kicked', ({ reason }) => {
     const box = el('div');

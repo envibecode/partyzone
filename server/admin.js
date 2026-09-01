@@ -17,7 +17,9 @@
  */
 const store = require('./store');
 const blackjack = require('./blackjack');
-const { MEMES } = require('./data/memes');
+const collection = require('./data/collection');
+const gifts = require('./gifts');
+const { CASES } = require('./data/cases');
 
 const MAX_LOG = 60;
 const log = [];
@@ -116,6 +118,9 @@ async function snapshot(presence) {
     }),
     online,
     log,
+    // La liste des caisses distribuables, pour que le panel puisse proposer
+    // un menu déroulant plutôt que de faire taper un identifiant à la main.
+    cases: CASES.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji, price: c.price })),
   };
 }
 
@@ -154,7 +159,7 @@ async function players({ query = '', sort = 'xp', limit = 40 } = {}) {
           coins: p.vault.coins,
           opened: p.vault.opened,
           collected,
-          collectionTotal: MEMES.length,
+          collectionTotal: collection.TOTAL,
           rounds: p.stats.rounds || 0,
           wagered: p.stats.wagered || 0,
           returned: p.stats.returned || 0,
@@ -293,6 +298,24 @@ async function act(actor, action, payload = {}, ctx = {}) {
       return { ok: true, message: 'Annonce envoyée.' };
     }
 
+    case 'grant-case': {
+      const target = await loadTarget();
+      const result = gifts.grant(target, payload.caseId, payload.count, actor.name);
+      if (!result.ok) return result;
+      await store.saveProfile(target);
+      record(actor, 'caisses', target.name, `${result.gift.count} × ${result.gift.caseName}`);
+      pushProfile(io, presence, target);
+      if (io && presence) {
+        const entry = presence.users.get(target.id);
+        if (entry) {
+          for (const socketId of entry.sockets) {
+            io.to(socketId).emit('gift:received', result.gift);
+          }
+        }
+      }
+      return result;
+    }
+
     /* ── Modération du chat ── */
 
     case 'mute': {
@@ -369,4 +392,8 @@ function kick(io, presence, target, reason) {
   }
 }
 
-module.exports = { isAdmin, claim, adminKeyConfigured, snapshot, players, act, record, log };
+module.exports = {
+  isAdmin, claim, adminKeyConfigured, snapshot, players, act, record, log,
+  // La liste des caisses distribuables, pour le menu du panel.
+  giftableCases: () => CASES.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji, price: c.price })),
+};

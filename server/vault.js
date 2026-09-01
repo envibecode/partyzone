@@ -12,7 +12,10 @@
  *
  * Tout est calculé ici, côté serveur. Le navigateur ne fait qu'afficher.
  */
-const { MEMES, BY_ID, RARITIES, RARITY_ORDER, CASES, CASE_BY_ID, odds } = require('./data/memes');
+const collection = require('./data/collection');
+const { CASES, CASE_BY_ID, odds } = require('./data/cases');
+
+const { ITEMS, BY_ID, RARITIES, RARITY_ORDER, CATEGORIES, COUNTS, BY_CATEGORY } = collection;
 
 const COMBO_WINDOW_MS = 90 * 1000; // au-delà, le combo retombe
 const COMBO_MAX = 25;
@@ -26,7 +29,7 @@ const MAX_BATCH = 10;
 
 function blankVault(now = Date.now()) {
   return {
-    coins: 300, // de quoi ouvrir quelques caisses tout de suite
+    coins: 400, // de quoi ouvrir quelques caisses tout de suite
     items: {}, // memeId → nombre possédés
     opened: 0,
     dustEarned: 0,
@@ -55,9 +58,27 @@ function rollRarity(box) {
   return 'common';
 }
 
+/* Les réservoirs sont préparés une fois pour toutes : à 518 objets, refiltrer
+   la liste à chaque tirage coûterait cher sur une ouverture ×10. */
+const POOLS = {};
+for (const r of RARITY_ORDER) POOLS[r] = ITEMS.filter((m) => m.r === r);
+
+const THEMED_POOLS = {};
+for (const cat of Object.keys(CATEGORIES)) {
+  THEMED_POOLS[cat] = {};
+  for (const r of RARITY_ORDER) {
+    THEMED_POOLS[cat][r] = ITEMS.filter((m) => m.r === r && m.cat === cat);
+  }
+}
+
 function rollItem(box) {
   const rarity = rollRarity(box);
-  const pool = MEMES.filter((m) => m.r === rarity);
+  // Une caisse thématique ne pioche que dans sa catégorie. Si le thème n'a
+  // rien dans cette rareté, on retombe sur le réservoir général plutôt que
+  // de renvoyer du vide.
+  const pool = box.themed
+    ? (THEMED_POOLS[box.themed][rarity].length ? THEMED_POOLS[box.themed][rarity] : POOLS[rarity])
+    : POOLS[rarity];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -107,7 +128,7 @@ function buildReel(box, winner) {
  * Ouvre `count` caisses. Retourne le détail de chaque tirage, l'XP à créditer
  * au profil, et l'état du combo après coup.
  */
-function open(profile, caseId, count = 1, now = Date.now()) {
+function open(profile, caseId, count = 1, now = Date.now(), { free = false } = {}) {
   const vault = profile.vault;
   const box = CASE_BY_ID.get(caseId);
   if (!box) return { ok: false, message: 'Caisse inconnue.' };
@@ -122,7 +143,8 @@ function open(profile, caseId, count = 1, now = Date.now()) {
   const rescueFree = isStarter && !timerFree && vault.coins < box.price && now >= (vault.rescueAt || 0);
   const freeReady = timerFree || rescueFree;
 
-  const paidCount = freeReady ? n - 1 : n;
+  // Une caisse reçue en cadeau est déjà payée par celui qui l'a offerte.
+  const paidCount = free ? 0 : freeReady ? n - 1 : n;
   const cost = box.price * paidCount;
 
   if (cost > vault.coins) {
@@ -133,8 +155,10 @@ function open(profile, caseId, count = 1, now = Date.now()) {
   }
 
   vault.coins -= cost;
-  if (timerFree) vault.freeAt = now + FREE_CASE_MS;
-  if (rescueFree) vault.rescueAt = now + RESCUE_MS;
+  // Un cadeau ne consomme ni la caisse offerte du minuteur ni le filet de
+  // secours : ce serait le punir d'avoir reçu quelque chose.
+  if (!free && timerFree) vault.freeAt = now + FREE_CASE_MS;
+  if (!free && rescueFree) vault.rescueAt = now + RESCUE_MS;
 
   let combo = currentCombo(vault, now);
   const pulls = [];
@@ -220,11 +244,21 @@ function view(profile, now = Date.now()) {
   const combo = currentCombo(vault, now);
 
   const owned = Object.entries(vault.items).filter(([, n]) => n > 0);
-  const byRarity = RARITY_ORDER.map((r) => {
-    const total = MEMES.filter((m) => m.r === r).length;
-    const have = owned.filter(([id]) => BY_ID.get(id) && BY_ID.get(id).r === r).length;
-    return { rarity: r, name: RARITIES[r].name, color: RARITIES[r].color, have, total };
-  });
+  const ownedItems = owned.map(([id]) => BY_ID.get(id)).filter(Boolean);
+
+  const byRarity = RARITY_ORDER.map((r) => ({
+    rarity: r,
+    name: RARITIES[r].name,
+    color: RARITIES[r].color,
+    have: ownedItems.filter((m) => m.r === r).length,
+    total: COUNTS[r],
+  }));
+
+  const byCategory = Object.values(CATEGORIES).map((c) => ({
+    ...c,
+    have: ownedItems.filter((m) => m.cat === c.id).length,
+    total: BY_CATEGORY[c.id],
+  }));
 
   return {
     coins: vault.coins,
@@ -243,8 +277,9 @@ function view(profile, now = Date.now()) {
     duplicates: owned.reduce((sum, [, n]) => sum + Math.max(0, n - 1), 0),
     collection: {
       have: owned.length,
-      total: MEMES.length,
+      total: ITEMS.length,
       byRarity,
+      byCategory,
     },
     best: vault.best ? { ...BY_ID.get(vault.best.id), color: RARITIES[vault.best.r].color, rarity: RARITIES[vault.best.r].name } : null,
     cases: CASES.map((c) => ({
@@ -254,9 +289,12 @@ function view(profile, now = Date.now()) {
       price: c.price,
       color: c.color,
       blurb: c.blurb,
+      themed: c.themed || null,
       odds: odds(c).map((o) => ({ ...o, percent: Number(o.percent.toFixed(o.percent < 1 ? 2 : 1)) })),
     })),
-    items: MEMES.map((m) => ({
+    // Les 518 objets, toujours tous envoyés : c'est ce qui permet d'afficher
+    // en grisé ce qu'il reste à trouver.
+    items: ITEMS.map((m) => ({
       ...m,
       rarity: RARITIES[m.r].name,
       color: RARITIES[m.r].color,

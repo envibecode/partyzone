@@ -378,7 +378,9 @@
       img.src = PZ.avatarUrl(p);
       img.alt = '';
       li.appendChild(img);
-      li.appendChild(el('span', 'n', p.name));
+      const nameNode = el('span', 'n', p.name);
+      li.appendChild(nameNode);
+      if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
       li.appendChild(el('b', null, `${fmt(p.staked)} 🪙`));
       list.appendChild(li);
     });

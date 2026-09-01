@@ -14,7 +14,12 @@ const STATUS_LABEL = {
   plinko: 'Au Plinko',
   roulette: 'À la roulette',
   blackjack: 'Au blackjack',
-  vault: 'Au MemeVault',
+  vault: 'Aux caisses',
+  slots: 'À la machine à sous',
+  medals: 'Au mur des médailles',
+  party: 'Dans le hall Party',
+  undercover: 'À l’Undercover',
+  poker: 'Au poker',
   admin: 'Au panel admin',
 };
 

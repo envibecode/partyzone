@@ -128,7 +128,7 @@ const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
   blackjack: 'blackjack', vault: 'vault', slots: 'slots',
   medals: 'medals', admin: 'admin',
-  party: 'party', uc: 'undercover', pk: 'poker',
+  party: 'party', uc: 'undercover', pk: 'poker', market: 'market', soon: 'home',
 };
 
 function go(name) {
@@ -447,9 +447,14 @@ const STICKERS = [
   { emoji: '🔥', anim: 'flame',  colour: '#ff8a3d' },
 ];
 
-function announce(text) {
-  const pick = STICKERS[(Math.random() * STICKERS.length) | 0];
-  const box = el('div', 'announce');
+function announce(text, kind = 'info') {
+  // Un jackpot n'a pas la même tête qu'une annonce de l'administration : il
+  // est doré, il dure plus longtemps, et il ne demande pas la permission.
+  const jackpot = kind === 'jackpot';
+  const pick = jackpot
+    ? { emoji: '👑', colour: '#ffc23d', anim: 'an-pop' }
+    : STICKERS[(Math.random() * STICKERS.length) | 0];
+  const box = el('div', `announce${jackpot ? ' jackpot' : ''}`);
   box.style.setProperty('--c', pick.colour);
 
   const scene = el('div', 'announce-scene');
@@ -461,16 +466,17 @@ function announce(text) {
   }
   box.appendChild(scene);
 
-  box.appendChild(el('div', 'announce-kicker', 'Annonce'));
+  box.appendChild(el('div', 'announce-kicker', jackpot ? 'JACKPOT' : 'Annonce'));
   box.appendChild(el('p', 'announce-text', text));
 
-  const close = el('button', 'btn btn-gold modal-close', 'Compris');
+  const close = el('button', 'btn btn-gold modal-close', jackpot ? 'Chapeau' : 'Compris');
   close.addEventListener('click', closeModal);
   box.appendChild(close);
 
   openModal(box);
   SFX.fanfare();
-  confetti(70);
+  confetti(jackpot ? 220 : 70);
+  if (jackpot) setTimeout(() => confetti(160), 700);
 }
 PZ.announce = announce;
 
@@ -575,7 +581,48 @@ $('#form-guest').addEventListener('submit', async (e) => {
   start(data.user);
 });
 
-$('#me-chip').addEventListener('click', () => go('fair'));
+/* ─── Le menu du compte ─── */
+
+const meMenu = $('#me-menu');
+$('#me-chip').addEventListener('click', (e) => {
+  e.stopPropagation();
+  meMenu.hidden = !meMenu.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!meMenu.hidden && !e.target.closest('.me-wrap')) meMenu.hidden = true;
+});
+meMenu.addEventListener('click', () => { meMenu.hidden = true; });
+
+/**
+ * Changer de compte.
+ *
+ * Se connecter avec le mauvais compte Discord arrive tout le temps, et sans
+ * ce bouton il faut aller vider ses cookies pour s'en sortir. On efface la
+ * session côté serveur puis on recharge : on retombe sur l'écran d'accueil.
+ */
+$('#btn-logout').addEventListener('click', async () => {
+  const box = el('div');
+  box.appendChild(el('h2', null, 'Changer de compte ?'));
+  box.appendChild(el('p', 'fine',
+    'Ta progression est enregistrée sur ce compte : tu la retrouveras en te ' +
+    'reconnectant avec. Si tu joues en invité en revanche, ce compte-là ne ' +
+    'sera plus accessible — un invité n’a pas de mot de passe pour revenir.'));
+
+  const actions = el('div', 'modal-actions');
+  const ok = el('button', 'btn btn-danger', 'Me déconnecter');
+  ok.addEventListener('click', async () => {
+    ok.disabled = true;
+    try { await fetch('/auth/logout', { method: 'POST' }); } catch { /* on recharge quand même */ }
+    location.href = '/';
+  });
+  const cancel = el('button', 'btn btn-soft', 'Rester connecté');
+  cancel.addEventListener('click', closeModal);
+  actions.appendChild(ok);
+  actions.appendChild(cancel);
+  box.appendChild(actions);
+
+  openModal(box);
+});
 
 function start(user) {
   PZ.me = user;
@@ -592,7 +639,13 @@ function start(user) {
   socket.on('profile:update', applyProfile);
   socket.on('toast', ({ message, kind }) => toast(message, kind));
   socket.on('feed', pushFeed);
-  socket.on('announce', ({ text }) => announce(text));
+  socket.on('announce', ({ text, kind }) => announce(text, kind));
+
+  // Un renommage par l'administration : le pseudo change sous nos yeux.
+  socket.on('me:renamed', ({ name }) => {
+    if (PZ.me) PZ.me.name = name;
+    if (PZ.profile) applyProfile(PZ.profile);
+  });
 
   // Un cadeau peut arriver n'importe quand : on écoute ici, pas dans la page
   // des caisses, sinon on ne le saurait qu'en allant y faire un tour.

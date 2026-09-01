@@ -16,7 +16,9 @@ virtuelles uniquement**.
 
 | | |
 |---|---|
-| ⛏️ **La Mine** | Le seul robinet à pièces. Un clicker avec cinq améliorations, des coups critiques, une **endurance** qui se vide et un plafond serveur à 12 clics/seconde : un autoclic tape dans le vide. Aucun revenu hors ligne. |
+| ⛏️ **La Mine** | Le robinet de secours, volontairement chiche : une barre d'endurance pleine vaut **environ 60 pièces**, et elle met 85 secondes à se refaire. De quoi poser une mise quand on est fauché, pas de quoi s'enrichir. Autoclic inutile par construction. |
+| 💸 **Rakeback** | **1 à 1,8 % de tout ce qui est misé** revient au joueur, gagné ou perdu. Comme les jeux détruisent 3 à 5 % du volume, l'ensemble reste déflationniste. C'est la vraie source de revenus d'un joueur régulier. |
+| 🛒 **Marché** | Revente de doublons entre joueurs, au prix qu'on veut. Commission de 8 % **détruite** (pas redistribuée), prix plancher et plafond, et le dernier exemplaire d'un objet n'est jamais vendable. |
 | 🃏 **Blackjack** | Table à 5 sièges, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot** : on voit les salons ouverts et on rejoint ses potes. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
 | 🎡 **Roulette** | Roue européenne à 37 cases, **partagée par tout le site**. On voit les mises des autres case par case, les pseudos des gagnants du dernier tour défilent, et le solde est gelé pendant la rotation pour ne pas dévoiler le résultat. Remise, mises automatiques, configurations enregistrées. |
 | 🔻 **Plinko** | 8, 12 ou 16 rangées, trois niveaux de risque. Multiplicateurs calculés à partir des vraies probabilités binomiales. Historique bille par bille sur le côté. |
@@ -24,7 +26,8 @@ virtuelles uniquement**.
 | 📦 **Caisses** | **518 objets de culture internet** à collectionner, six raretés, huit catégories. 5 caisses générales + 8 caisses à thème. Rouleau horizontal façon CS:GO qui montre ce que tu aurais pu avoir. Les doublons se revendent. |
 | 🏅 **Médailles & parures** | Un palier tous les 50 objets. Le **premier joueur du site** à l'atteindre garde la version dorée, pour toujours. On y débloque des contours d'avatar, des pseudos en flammes et des icônes animées, visibles partout sur le site. |
 | 🎁 **Cadeaux** | Offrir une caisse à un copain (le donneur paie, plafond quotidien) ou en distribuer depuis le panel admin. |
-| 🏆 **Classements** | Général par pièces ou par niveau, plus un **classement du mois** sur le bénéfice net. |
+| 🏆 **Classements** | Général par pièces, par niveau ou par rang Party, plus un **classement du mois** sur le bénéfice net. |
+| 🗺️ **À venir** | Une page qui dit franchement ce qui est en chantier, ce qui reste à décider (publicité, abonnements) et ce qui est déjà en ligne. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
 | 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Deux jeux dedans pour l'instant — **Undercover** (3 à 12 joueurs, avec Monsieur Blanc) et **Poker** Texas Hold'em en tournoi (2 à 8, jetons de tournoi, blindes qui montent, pots secondaires). Loup-garou, Uno, Belote et Monopoly sont annoncés dans le hall mais pas encore jouables. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
@@ -165,6 +168,11 @@ Le navigateur ne fait qu'afficher. Il ne calcule aucun résultat.
   la mécanique du jeu, pas par une détection qu'on peut contourner.
 - Les cadeaux entre joueurs ont un plafond quotidien : on ne peut pas vider
   un compte dans un autre pour fausser le classement du mois.
+- Le marché prélève 8 % qui sont **détruits**. Faire tourner un objet entre
+  deux comptes complices coûte donc de l'argent à chaque aller-retour, au
+  lieu d'en fabriquer.
+- Un cadeau de cinquante caisses s'ouvre par fournées de dix, et le reste
+  est conservé — rien ne se perd en route.
 - Le rouleau des caisses est envoyé **déjà tiré** : l'animation ne fait que
   rejouer un résultat décidé avant.
 - Le panel admin revérifie les droits à chaque action. Masquer un bouton
@@ -177,10 +185,12 @@ Le navigateur ne fait qu'afficher. Il ne calcule aucun résultat.
 Le serveur doit tourner (`npm start`) dans un autre terminal.
 
 ```bash
-npm test             # joue vraiment à tout, en Socket.IO, et vérifie l'économie
-npm run test:party   # une partie d'Undercover et une main de poker, à 4 clients
-npm run test:poker   # 60 tournois simulés : aucun jeton créé ni perdu
-npm run test:ui      # parcours complet dans un vrai navigateur + captures d'écran
+npm test               # joue vraiment à tout, en Socket.IO, et vérifie l'économie
+npm run test:economy   # marché, rakeback, récompenses Party, gros cadeaux
+npm run test:party     # une partie d'Undercover et une main de poker, à 4 clients
+npm run test:poker     # 60 tournois simulés : aucun jeton créé ni perdu
+npm run test:ui        # parcours navigateur du casino + captures d'écran
+npm run test:ui-party  # parcours navigateur de la section Party
 ```
 
 `npm test` vérifie entre autres que le RTP observé du Plinko sur 600 billes
@@ -218,6 +228,8 @@ server/
   medals.js      paliers, premiers du site, parures
   season.js      classement du mois et palmarès
   gifts.js       cadeaux entre joueurs et distribution admin
+  market.js      le marché de revente et sa commission détruite
+  rakeback.js    la part des mises rendue au joueur
   chat.js        la salle de discussion
   store.js       profils et état du site (fichier JSON ou PostgreSQL)
   auth.js        Discord OAuth2 + invités
@@ -235,13 +247,15 @@ public/
   index.html     la coquille
   css/style.css  toute la direction artistique
   js/            app, lobby, chat, mine, plinko, roulette, blackjack,
-                 slots, medals, vault, party, undercover, poker, admin, sfx
+                 slots, medals, vault, market, party, undercover, poker,
+                 admin, sfx
 test/
   harness.js     banc d'essai Socket.IO du casino
   party.js       banc d'essai de la section Party
   poker-sim.js   60 tournois simulés, sans réseau
   ui.js          parcours navigateur du casino
   ui-party.js    parcours navigateur de la Party
+  economy.js     marché, rakeback, récompenses, gros cadeaux
 ```
 
 Aucune étape de compilation : ce que tu lis dans `public/` est exactement

@@ -47,12 +47,26 @@ function title(level) {
   return 'NOUVEAU';
 }
 
+/**
+ * La récompense d'un passage de niveau, en pièces du casino.
+ *
+ * C'est la passerelle entre les deux sections : on ne mise rien en Party,
+ * mais y venir jouer finance les soirées casino. Le montant monte avec le
+ * niveau, sans jamais devenir une meilleure source que le jeu lui-même —
+ * atteindre le niveau 10 rapporte à peu près ce qu'une bonne main de
+ * blackjack rapporte, et il faut une dizaine de parties pour y arriver.
+ */
+function levelReward(level) {
+  return 300 + Math.round(Math.pow(level, 1.55) * 55);
+}
+
 function blank() {
   return {
     xp: 0,
     played: 0,
     won: 0,
     games: {}, // gameId → { played, won }
+    rewarded: 1, // dernier niveau déjà payé
   };
 }
 
@@ -64,6 +78,7 @@ function ensure(profile) {
   if (typeof p.played !== 'number') p.played = 0;
   if (typeof p.won !== 'number') p.won = 0;
   if (!p.games || typeof p.games !== 'object') p.games = {};
+  if (typeof p.rewarded !== 'number') p.rewarded = levelFromXp(p.xp).level;
   return p;
 }
 
@@ -75,6 +90,8 @@ function ensure(profile) {
  */
 function record(profile, gameId, { won = false, players = 3, rounds = 1 } = {}) {
   const p = ensure(profile);
+  const before = levelFromXp(p.xp).level;
+
   const base = 18 + Math.min(9, players) * 6 + Math.min(12, rounds) * 3;
   const gained = Math.round(won ? base * 1.6 : base);
 
@@ -87,7 +104,27 @@ function record(profile, gameId, { won = false, players = 3, rounds = 1 } = {}) 
   if (won) p.games[gameId].won += 1;
 
   const lvl = levelFromXp(p.xp);
-  return { gained, level: lvl.level, title: title(lvl.level) };
+
+  // Chaque niveau franchi paie une fois, et une seule. On boucle plutôt que
+  // de payer le dernier niveau : un gros gain d'XP peut en franchir deux.
+  let coins = 0;
+  const levelsGained = [];
+  while (p.rewarded < lvl.level) {
+    p.rewarded += 1;
+    const reward = levelReward(p.rewarded);
+    coins += reward;
+    levelsGained.push({ level: p.rewarded, coins: reward });
+  }
+  if (coins > 0) profile.vault.coins += coins;
+
+  return {
+    gained,
+    level: lvl.level,
+    title: title(lvl.level),
+    levelUp: lvl.level > before,
+    coins,
+    levelsGained,
+  };
 }
 
 function view(profile) {
@@ -103,7 +140,8 @@ function view(profile) {
     played: p.played,
     won: p.won,
     games: p.games,
+    nextReward: lvl.level >= MAX_LEVEL ? null : levelReward(lvl.level + 1),
   };
 }
 
-module.exports = { blank, ensure, record, view, levelFromXp, title, MAX_LEVEL };
+module.exports = { blank, ensure, record, view, levelFromXp, title, levelReward, MAX_LEVEL };

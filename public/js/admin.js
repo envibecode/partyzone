@@ -158,6 +158,11 @@
     act('+1k 🪙', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
     act('+500 XP', '', () => send('grant-xp', { id: p.id, amount: 500 }));
     act('🎁 Caisses', '', () => giveCases(p));
+    act('✏️ Renommer', '', () => {
+      const wanted = prompt(`Nouveau pseudo pour ${p.name} ?`, p.name);
+      if (wanted === null) return;
+      send('rename', { id: p.id, name: wanted.trim() });
+    });
     act(p.banned ? 'Débannir' : 'Bannir', p.banned ? '' : 'danger', () => {
       if (p.banned) return send('unban', { id: p.id });
       const reason = prompt(`Raison du bannissement de ${p.name} ?`, 'Comportement inapproprié.');

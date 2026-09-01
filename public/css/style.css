@@ -2311,3 +2311,180 @@ select.input { cursor: pointer; }
   font-size: 12px; color: var(--muted); font-weight: 600;
 }
 .pk-blinds b { font-size: 12px; color: var(--gold); font-weight: 800; }
+
+/* ═══════════ L'OUVERTURE MULTIPLE ═══════════ */
+/* Cinq à dix rouleaux empilés qui tournent ensemble, une seule aiguille qui
+   les traverse tous. C'est la mise en scène des caisses ×5 et ×10. */
+
+.multi-modal { display: flex; flex-direction: column; gap: 14px; width: min(720px, 92vw); }
+.multi-rows { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.multi-needle {
+  position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; z-index: 3;
+  background: linear-gradient(180deg, transparent, var(--green) 12%, var(--green) 88%, transparent);
+  box-shadow: 0 0 14px rgba(46, 230, 107, .9);
+  transform: translateX(-50%); pointer-events: none;
+}
+.mreel {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  border-radius: 10px; transition: background .3s, box-shadow .3s;
+}
+.mreel.landed { background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px var(--rc, var(--line)); }
+.reel-window.mini { height: 64px; }
+.reel-item.mini { width: 78px; height: 56px; gap: 1px; padding: 5px; }
+.reel-item.mini .e { font-size: 20px; }
+.reel-item.mini .n { font-size: 8.5px; line-height: 1.15; -webkit-line-clamp: 2; }
+.mreel-tag {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 4;
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(6, 10, 18, .9); border: 1px solid var(--rc);
+  animation: an-pop .34s cubic-bezier(.2, 1.4, .4, 1) backwards;
+}
+.mreel-tag b { font-size: 12.5px; font-weight: 800; }
+.mreel-tag span { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--rc); }
+.mreel-tag .new-dot { font-style: normal; font-size: 9px; font-weight: 800; color: var(--green); }
+.multi-prize { text-align: center; opacity: 0; transition: opacity .4s; }
+.multi-prize.show { opacity: 1; }
+.multi-prize .g { font-size: 14px; color: var(--muted); font-weight: 600; }
+.multi-prize .g b { color: var(--text); font-weight: 800; }
+@media (max-width: 620px) {
+  .reel-item.mini { width: 60px; height: 48px; }
+  .mreel-tag { position: static; transform: none; }
+}
+
+/* L'annonce dorée d'un objet maudit. */
+.announce.jackpot { border-color: rgba(255, 194, 61, .6); box-shadow: 0 0 80px -20px rgba(255, 194, 61, .8); }
+.announce.jackpot .announce-kicker { color: var(--gold); letter-spacing: .3em; }
+
+/* Une case si rare qu'on la croit décorative : on la souligne discrètement
+   pour dire qu'elle tombe vraiment (la cote exacte est dans l'infobulle). */
+.pk-bucket.rare { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+
+/* ═══════════ LE RAKEBACK ═══════════ */
+
+.rake { margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+.rake-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rake-head h2 { font-size: 14px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.rake-rate { font-size: 12.5px; font-weight: 700; color: var(--gold); }
+.rake-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.rake-amount { display: flex; align-items: baseline; gap: 6px; }
+.rake-amount b { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rake-amount span { font-size: 12px; color: var(--dim); font-weight: 700; }
+.rake-bar { height: 8px; border-radius: 999px; background: rgba(0, 0, 0, .4); overflow: hidden; }
+.rake-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ffc23d, #ffd98a); transition: width .5s ease; }
+@media (max-width: 700px) { .rake-row { grid-template-columns: 1fr auto; } .rake-bar { grid-column: 1 / -1; } }
+
+/* ═══════════ LE MENU DU COMPTE ═══════════ */
+
+.me-wrap { position: relative; }
+.me-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60;
+  min-width: 226px; padding: 6px; border-radius: 14px;
+  background: rgba(12, 17, 28, .98); border: 1px solid var(--line-firm);
+  box-shadow: 0 20px 50px -18px rgba(0, 0, 0, .95);
+  animation: an-menu .16s ease;
+}
+@keyframes an-menu { from { opacity: 0; transform: translateY(-6px); } }
+.me-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border-radius: 9px; text-align: left;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.me-item i { font-style: normal; font-size: 15px; }
+.me-item:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
+.me-item.danger:hover { background: rgba(255, 77, 106, .12); color: #ff8ea3; }
+.me-sep { height: 1px; margin: 5px 8px; background: var(--line); }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.modal-actions .btn { flex: 1; }
+
+/* ═══════════ LE MARCHÉ ═══════════ */
+
+.mk-top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 900px) { .mk-top { grid-template-columns: 1fr; } }
+.mk-form { display: grid; grid-template-columns: minmax(0, 2fr) 120px 80px auto; gap: 8px; }
+@media (max-width: 760px) { .mk-form { grid-template-columns: 1fr 1fr; } }
+.mk-figures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+.mk-figures > div {
+  background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
+  border-radius: 12px; padding: 11px; text-align: center;
+}
+.mk-figures b { display: block; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mk-figures span { display: block; font-size: 10.5px; color: var(--dim); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
+
+.mk-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.mk-tools .input { padding: 8px 12px; font-size: 12.5px; }
+.mk-tools #mk-search { width: 190px; }
+
+.mk-list { display: flex; flex-direction: column; gap: 7px; }
+.mk-row {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) 62px 110px 108px;
+  align-items: center; gap: 12px;
+  padding: 9px 14px; border-radius: 12px;
+  background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
+  border-left: 3px solid var(--rc, var(--line));
+  transition: border-color .15s, background .15s;
+}
+.mk-row:hover { background: rgba(255, 255, 255, .035); }
+.mk-row.mine { background: rgba(255, 194, 61, .06); border-color: rgba(255, 194, 61, .3); }
+.mk-emoji { font-size: 24px; text-align: center; }
+.mk-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mk-info b { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-meta { display: flex; gap: 8px; font-size: 11px; color: var(--dim); font-weight: 600; }
+.mk-rarity { font-style: normal; color: var(--rc); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.mk-ratio {
+  font-size: 12px; font-weight: 800; text-align: center;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, .06); color: var(--muted);
+}
+.mk-ratio.good { background: rgba(46, 230, 107, .14); color: var(--green); }
+.mk-ratio.steep { background: rgba(255, 77, 106, .14); color: #ff8ea3; }
+.mk-price { font-size: 14.5px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 800px) {
+  .mk-row { grid-template-columns: 34px 1fr auto; row-gap: 8px; }
+  .mk-ratio, .mk-price { grid-column: 2; justify-self: start; }
+  .mk-row .btn { grid-column: 3; grid-row: 2; }
+}
+
+.mk-history { display: flex; flex-direction: column; gap: 5px; }
+.mk-sale { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 5px 0; }
+.mk-sale b { font-weight: 700; }
+.mk-sale i { font-style: normal; font-size: 10.5px; color: var(--dim); margin-left: auto; }
+.mk-net { font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }
+
+/* ═══════════ LA FEUILLE DE ROUTE ═══════════ */
+
+.road { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .road { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .road { grid-template-columns: 1fr; } }
+.road-col { display: flex; flex-direction: column; gap: 10px; }
+.road-title {
+  font-size: 11.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+  padding: 8px 0 2px; color: var(--dim);
+  display: flex; align-items: center; gap: 8px;
+}
+.road-title::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.road-title.building { color: var(--gold); }
+.road-title.thinking { color: #8b6bff; }
+.road-title.done { color: var(--green); }
+.road-card {
+  padding: 15px; border-radius: 14px;
+  background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.road-card header { display: flex; align-items: center; gap: 10px; }
+.road-icon { font-size: 22px; }
+.road-card h3 { font-size: 15px; font-weight: 800; }
+.road-card p { font-size: 12.5px; line-height: 1.6; color: var(--muted); font-weight: 500; }
+.road-card b { color: var(--text); font-weight: 800; }
+.road-note {
+  font-size: 12px; line-height: 1.6; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255, 194, 61, .07); border-left: 2px solid rgba(255, 194, 61, .5);
+  color: var(--muted);
+}
+.road-card.flagged { border-color: rgba(255, 194, 61, .35); }
+.road-done { display: flex; flex-direction: column; gap: 7px; }
+.road-done li {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 12.5px; color: var(--muted); font-weight: 600; line-height: 1.5;
+}
+.road-done li::before { content: '✓'; color: var(--green); font-weight: 800; flex: none; }

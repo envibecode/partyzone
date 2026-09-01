@@ -215,6 +215,55 @@ async function act(actor, action, payload = {}, ctx = {}) {
       return { ok: true, message: `${target.name} : ${amount > 0 ? '+' : ''}${amount} pièces.` };
     }
 
+    /**
+     * Renommer un joueur.
+     *
+     * Le pseudo voyage dans les salons, le chat et les tables déjà ouverts,
+     * qui en gardent chacun une copie ; on ne peut donc pas se contenter de
+     * changer le profil. Les endroits qui affichent un pseudo se remettent à
+     * jour à la prochaine diffusion, sauf les tables en cours — d'où la
+     * mise à jour explicite des sièges.
+     */
+    case 'rename': {
+      const target = await loadTarget();
+      const wanted = String(payload.name || '').replace(/\s+/g, ' ').trim();
+
+      if (wanted.length < 2 || wanted.length > 18) {
+        return { ok: false, message: 'Un pseudo fait entre 2 et 18 caractères.' };
+      }
+      const all = await store.allProfiles();
+      const taken = all.some((p) => p.id !== target.id && p.name.toLowerCase() === wanted.toLowerCase());
+      if (taken) return { ok: false, message: `« ${wanted} » est déjà pris.` };
+
+      const before = target.name;
+      if (before === wanted) return { ok: false, message: 'C’est déjà son pseudo.' };
+
+      target.name = wanted;
+      await store.saveProfile(target);
+
+      for (const table of blackjack.tables.values()) {
+        const seat = table.seats.find((s) => s.id === target.id);
+        if (seat) { seat.name = wanted; table.broadcast(); }
+      }
+
+      record(actor, 'renommage', before, `devient « ${wanted} »`);
+      pushProfile(io, presence, target);
+
+      // Le joueur concerné doit voir son nouveau nom sans recharger.
+      if (io && presence) {
+        const entry = presence.users.get(target.id);
+        if (entry) {
+          entry.user.name = wanted;
+          for (const socketId of entry.sockets) {
+            io.to(socketId).emit('me:renamed', { name: wanted });
+            io.to(socketId).emit('toast', { message: `Tu t’appelles maintenant ${wanted}.`, kind: 'info' });
+          }
+          presence.schedule();
+        }
+      }
+      return { ok: true, message: `${before} s’appelle maintenant ${wanted}.` };
+    }
+
     case 'ban': {
       const target = await loadTarget();
       if (isAdmin(target)) return { ok: false, message: 'On ne bannit pas un administrateur.' };

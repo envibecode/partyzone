@@ -91,8 +91,10 @@
 
     <nav class="topnav right" id="nav-right">
       <button class="topnav-btn" data-go="vault">CAISSES</button>
+      <button class="topnav-btn" data-go="market">MARCHÉ</button>
       <button class="topnav-btn" data-go="medals">MÉDAILLES</button>
       <button class="topnav-btn" data-go="fair">ÉQUITÉ</button>
+      <button class="topnav-btn" data-go="soon">À VENIR</button>
       <button class="topnav-btn hidden" id="nav-admin" data-go="admin">ADMIN</button>
     </nav>
 
@@ -101,14 +103,23 @@
         <span class="bal-coins"><i>🪙</i><b id="coins">0</b></span>
         <button class="bal-mine" data-go="mine">Miner</button>
       </div>
-      <button class="me-chip" id="me-chip">
-        <img id="me-avatar" alt="" width="34" height="34">
-        <span class="me-text">
-          <b id="me-name">…</b>
-          <small id="me-title">…</small>
-        </span>
-        <span class="lvl" id="me-level">1</span>
-      </button>
+      <div class="me-wrap">
+        <button class="me-chip" id="me-chip">
+          <img id="me-avatar" alt="" width="34" height="34">
+          <span class="me-text">
+            <b id="me-name">…</b>
+            <small id="me-title">…</small>
+          </span>
+          <span class="lvl" id="me-level">1</span>
+        </button>
+        <div class="me-menu" id="me-menu" hidden>
+          <button class="me-item" data-go="fair"><i>🛡️</i> Équité &amp; graines</button>
+          <button class="me-item" data-go="medals"><i>🏅</i> Médailles &amp; parures</button>
+          <button class="me-item" data-go="market"><i>🛒</i> Marché</button>
+          <div class="me-sep"></div>
+          <button class="me-item danger" id="btn-logout"><i>🚪</i> Changer de compte</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -211,8 +222,13 @@
     <section class="view" id="view-mine">
       <div class="view-head">
         <h1>⛏️ La Mine</h1>
-        <p>Tape sur le filon. C’est la seule source de pièces avec les gains du casino — et c’est gratuit, pour toujours.</p>
+        <p>Tape sur le filon. Une barre pleine, c’est une soixantaine de pièces : de quoi
+           poser une mise, pas de quoi s’enrichir. Pour le reste, il y a le rakeback, le
+           marché et le rang Party.</p>
       </div>
+
+      <div class="panel rake" id="rake"></div>
+
       <div class="mine-grid">
         <div class="panel mine-stage">
           <div class="mine-readout">
@@ -735,6 +751,144 @@
       </div>
     </section>
 
+    <!-- ══════ MARCHÉ ══════ -->
+    <section class="view" id="view-market">
+      <div class="view-head">
+        <h1>🛒 Marché</h1>
+        <p>Revends tes doublons aux autres joueurs, au prix que tu veux. Le site prélève
+           une commission de <b id="mk-fee">8</b> %, qui est <b>détruite</b> — c'est ce qui
+           empêche le marché de fabriquer des pièces à l'infini.</p>
+      </div>
+
+      <div class="mk-top">
+        <div class="panel mk-sell">
+          <div class="panel-head"><h2>Mettre en vente</h2></div>
+          <form class="mk-form" id="mk-form">
+            <select class="input" id="mk-item"></select>
+            <input class="input" id="mk-price" type="number" min="1" placeholder="Prix">
+            <input class="input" id="mk-count" type="number" min="1" max="20" value="1">
+            <button class="btn btn-green" type="submit">Vendre</button>
+          </form>
+          <p class="fine" id="mk-hint">—</p>
+        </div>
+
+        <div class="panel mk-stats" id="mk-stats"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Offres <b id="mk-count-label">0</b></h2>
+          <div class="mk-tools">
+            <input class="input" id="mk-search" placeholder="Chercher un objet…" autocomplete="off">
+            <select class="input" id="mk-rarity">
+              <option value="all">Toutes raretés</option>
+              <option value="common">Commun</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Épique</option>
+              <option value="legendary">Légendaire</option>
+              <option value="mythic">Mythique</option>
+              <option value="cursed">Maudit</option>
+            </select>
+            <select class="input" id="mk-sort">
+              <option value="recent">Plus récentes</option>
+              <option value="cheap">Moins chères</option>
+              <option value="deal">Meilleures affaires</option>
+              <option value="expensive">Plus chères</option>
+            </select>
+          </div>
+        </div>
+        <div class="mk-list" id="mk-list"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Tes ventes</h2></div>
+        <div class="mk-history" id="mk-history"><div class="empty">Aucune vente pour l’instant.</div></div>
+      </div>
+    </section>
+
+    <!-- ══════ À VENIR ══════ -->
+    <section class="view" id="view-soon">
+      <div class="view-head">
+        <h1>🗺️ À venir</h1>
+        <p>Ce qui est prévu, ce qui est en chantier, et ce qui demande encore réflexion.
+           Rien de tout ça n’est en ligne : cette page dit où va le site, pas ce qu’il fait.</p>
+      </div>
+
+      <div class="road">
+        <div class="road-col">
+          <h2 class="road-title building">En chantier</h2>
+
+          <article class="road-card">
+            <header><span class="road-icon">🐺</span><h3>Loup-garou</h3></header>
+            <p>Le village, la nuit, les rôles. Avec le vocal : micro coupé ou ouvert selon
+               ce qu’on est, et le casque qui se coupe pendant la nuit.</p>
+            <p class="road-note">Le vocal a besoin d’un serveur relais dédié (TURN). C’est le
+               seul point de la liste qui bute sur une contrainte technique réelle et non sur
+               du temps : il n’existe pas d’option gratuite fiable pour ça.</p>
+          </article>
+
+          <article class="road-card">
+            <header><span class="road-icon">🎨</span><h3>Skins de Loup-garou</h3></header>
+            <p>Des apparences de personnage à débloquer par le rang Party ou à trouver dans
+               les caisses — décoratives uniquement, comme les parures actuelles.</p>
+          </article>
+
+          <article class="road-card">
+            <header><span class="road-icon">🎴</span><h3>Uno · Belote · Monopoly</h3></header>
+            <p>Trois jeux complets, à faire dans cet ordre. Uno d’abord, c’est le plus court
+               à écrire et le plus joué.</p>
+          </article>
+        </div>
+
+        <div class="road-col">
+          <h2 class="road-title thinking">À décider ensemble</h2>
+
+          <article class="road-card">
+            <header><span class="road-icon">📢</span><h3>Publicité</h3></header>
+            <p>Une bannière discrète, ou une pub à regarder pour une caisse offerte de plus.
+               C’est la façon la plus simple de financer l’hébergement sans toucher à
+               l’économie du jeu.</p>
+            <p class="road-note">À faire attention : une régie qui cible les mineurs ou qui
+               diffuse des pubs de paris en argent réel sur un site fréquenté par des jeunes,
+               c’est non. Il faudra choisir la régie et bloquer ces catégories.</p>
+          </article>
+
+          <article class="road-card flagged">
+            <header><span class="road-icon">💳</span><h3>Abonnements 2 € / 5 € / 10 €</h3></header>
+            <p>L’idée fonctionne, mais <b>ce qu’ils donnent change tout</b>, et c’est la seule
+               décision du projet qui ne se rattrape pas après coup.</p>
+            <p><b>Ce qui va sans problème</b> — du décoratif et du confort : parures et contours
+               exclusifs, un badge dans le chat, un pseudo coloré, des thèmes de site, un salon
+               Party privé, plus de configurations de mises enregistrées.</p>
+            <p><b>Ce qui pose un vrai problème</b> — tout ce qui donne des pièces ou en fait
+               gagner plus vite : pièces mensuelles, rakeback augmenté, mine plus rapide,
+               caisses offertes en plus.</p>
+            <p class="road-note">Pourquoi : aujourd’hui les pièces ne s’achètent pas, et c’est
+               précisément ce qui fait de PartyZone un jouet plutôt qu’un site de jeu d’argent.
+               Dès qu’un paiement permet d’obtenir plus de pièces, on paie pour jouer — et on
+               tombe dans une réglementation qui varie d’un pays à l’autre, avec vérification
+               d’âge, licence, et des obligations que ni toi ni moi n’avons envie de gérer pour
+               un site entre potes. Un abonnement purement cosmétique évite tout ça et rapporte
+               en pratique presque autant.</p>
+          </article>
+        </div>
+
+        <div class="road-col">
+          <h2 class="road-title done">Déjà en ligne</h2>
+          <ul class="road-done">
+            <li>Blackjack, roulette, Plinko, machine à sous</li>
+            <li>518 objets à collectionner, 13 caisses</li>
+            <li>Médailles, parures, classement du mois</li>
+            <li>Marché de revente entre joueurs</li>
+            <li>Rakeback sur tout ce qui est misé</li>
+            <li>Section Party : Undercover et Poker</li>
+            <li>Cadeaux de caisses, chat, panel admin</li>
+          </ul>
+          <p class="fine">Une idée qui n’est pas là ? Dis-la, elle finira dans cette colonne.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ══════ ADMIN ══════ -->
     <section class="view" id="view-admin">
       <div class="view-head"><h1>🛠️ Administration</h1></div>
@@ -762,6 +916,7 @@
 <script src="/js/slots.js"></script>
 <script src="/js/medals.js"></script>
 <script src="/js/vault.js"></script>
+<script src="/js/market.js"></script>
 <script src="/js/party.js"></script>
 <script src="/js/undercover.js"></script>
 <script src="/js/poker.js"></script>

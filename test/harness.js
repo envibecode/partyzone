@@ -26,7 +26,19 @@ function section(title) {
 
 /* ─── Un joueur ────────────────────────────────────────── */
 
-async function makeGuest(name) {
+/*
+ * Chaque exécution crée des pseudos NEUFS.
+ *
+ * Avec des noms fixes, la deuxième exécution retombait sur les profils de la
+ * première : « Bob » avait alors plus d'une heure d'ancienneté et passait la
+ * garde anti-comptes-jetables des cadeaux, et « Alice » désignait deux profils
+ * différents — deux vérifications qui échouaient sans qu'aucun code ne soit
+ * en cause. Un suffixe suffit à isoler chaque campagne.
+ */
+const RUN = Date.now().toString(36).slice(-4);
+
+async function makeGuest(baseName) {
+  const name = baseName + RUN;
   const res = await fetch(`${BASE}/auth/guest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -37,7 +49,7 @@ async function makeGuest(name) {
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
 
   const p = {
-    name, socket, cookie,
+    name, socket, cookie, baseName,
     profile: null, user: null,
     mine: null, plinko: null, roulette: null, table: null, vault: null,
     medals: null, season: null, slots: null, gifts: null,

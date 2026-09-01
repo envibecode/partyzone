@@ -18,8 +18,12 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   check('intro de la taverne au premier chargement', await p.isVisible('#intro'));
   check('la signature est affichée', /Titiss/.test(await p.textContent('#intro')));
   await p.screenshot({path:OUT+'/intro.png'});
-  await p.click('#intro-skip'); await wait(1000);
-  check('l’intro se passe', (await p.$('#intro'))===null);
+  // Elle se termine toute seule au bout de 4,6 s : si la capture d'écran a
+  // pris ce temps-là, le bouton n'existe plus, et c'est très bien.
+  const introSkip = await p.$('#intro-skip');
+  if (introSkip) await introSkip.click();
+  await p.waitForFunction(()=>!document.querySelector('#intro'), null, {timeout:8000});
+  check('l’intro se termine', (await p.$('#intro'))===null);
 
   await p.fill('#guest-name','Mattis'); await p.click('#form-guest button');
   await p.waitForSelector('#app.active'); await p.waitForFunction(()=>window.PZ&&window.PZ.profile);
@@ -142,8 +146,11 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   check('bon de caisse affiché', giftCards >= 1, `${giftCards} bon(s)`);
   await p.screenshot({path:OUT+'/cadeaux.png'});
   await p.click('#gift-list .gift'); await wait(1500);
-  check('le cadeau s’ouvre avec le rouleau', await p.isVisible('.reel-modal'));
-  await wait(5200);
+  // Un cadeau de deux caisses ouvre la fenêtre multi-rouleaux ; une seule
+  // caisse garde le grand rouleau plein écran. Les deux sont valables.
+  check('le cadeau s’ouvre avec le rouleau',
+    (await p.isVisible('.multi-modal')) || (await p.isVisible('.reel-modal')));
+  await wait(6500);
   const close = await p.$('.modal-close'); if (close) await close.click();
   await wait(600);
 

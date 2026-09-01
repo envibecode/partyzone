@@ -156,6 +156,72 @@
     tickTimer = null;
   }
 
+  /* ═══════════ LE RAKEBACK ═══════════ */
+
+  /**
+   * Une part de tout ce qu'on mise revient, gagné ou perdu.
+   *
+   * Il est affiché ici, dans la mine, et pas dans un coin caché : c'est la
+   * deuxième source de pièces du site, et de loin la plus rentable dès qu'on
+   * joue un peu. Autant que ça se voie.
+   */
+  let rakeTimer = null;
+
+  function renderRake(r) {
+    const box = $('#rake');
+    box.replaceChildren();
+
+    const head = el('div', 'rake-head');
+    head.appendChild(el('h2', null, 'Rakeback'));
+    head.appendChild(el('span', 'rake-rate', `${String(r.rate).replace('.', ',')} % de tout ce que tu mises`));
+    box.appendChild(head);
+
+    const row = el('div', 'rake-row');
+
+    const amount = el('div', 'rake-amount');
+    amount.appendChild(el('b', null, fmt(r.pending)));
+    amount.appendChild(el('span', null, '🪙 en attente'));
+    row.appendChild(amount);
+
+    const bar = el('div', 'rake-bar');
+    const fill = el('span');
+    fill.style.width = `${Math.min(100, (r.pending / r.minClaim) * 100)}%`;
+    bar.appendChild(fill);
+    row.appendChild(bar);
+
+    const btn = el('button', 'btn btn-gold', 'Récolter');
+    btn.disabled = !r.canClaim;
+    btn.addEventListener('click', () => PZ.socket.emit('rake:claim'));
+    row.appendChild(btn);
+    box.appendChild(row);
+
+    const note = el('p', 'fine');
+    if (r.pending < r.minClaim) {
+      note.textContent = `Récolte possible à partir de ${fmt(r.minClaim)} pièces — encore ${fmt(r.minClaim - r.pending)}. `
+        + `Total déjà récolté : ${fmt(r.claimed)}, sur ${fmt(r.wagered)} misés.`;
+    } else if (r.cooldownLeft > 0) {
+      note.textContent = `Prochaine récolte dans ${Math.ceil(r.cooldownLeft / 60000)} minutes.`;
+    } else {
+      note.textContent = `Prêt à récolter. Total déjà touché : ${fmt(r.claimed)} pièces sur ${fmt(r.wagered)} misés.`;
+    }
+    box.appendChild(note);
+
+    box.appendChild(el('p', 'fine',
+      'Le taux monte avec ton niveau, jusqu’à ' + String(r.nextRate).replace('.', ',') + ' %. '
+      + 'Perdre une soirée rapporte donc quand même quelque chose — c’est fait pour.'));
+
+    // Le compte à rebours doit descendre sous les yeux, pas au rechargement.
+    clearInterval(rakeTimer);
+    if (r.cooldownLeft > 0) {
+      const until = Date.now() + r.cooldownLeft;
+      rakeTimer = setInterval(() => {
+        const left = until - Date.now();
+        if (left <= 0) { clearInterval(rakeTimer); PZ.socket.emit('rake:open'); return; }
+        note.textContent = `Prochaine récolte dans ${Math.ceil(left / 60000)} minutes.`;
+      }, 20000);
+    }
+  }
+
   /* ─── Messages du serveur ─── */
 
   document.addEventListener('pz:profile', (e) => {
@@ -176,6 +242,8 @@
         if (result.ok) SFX.upgrade();
       }
     });
+
+    socket.on('rake:state', renderRake);
 
     socket.on('mine:hit', (result) => {
       // Le serveur dit exactement combien de clics il a retenus : on met
@@ -206,11 +274,13 @@
     enter() {
       bind();
       PZ.socket.emit('mine:open');
+      PZ.socket.emit('rake:open');
       startTick();
     },
     leave() {
       flush();
       stopTick();
+      clearInterval(rakeTimer);
     },
   };
 })();

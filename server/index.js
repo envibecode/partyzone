@@ -17,6 +17,8 @@ const slots = require('./slots');
 const medals = require('./medals');
 const season = require('./season');
 const gifts = require('./gifts');
+const market = require('./market');
+const rakeback = require('./rakeback');
 const blackjack = require('./blackjack');
 const { Roulette } = require('./roulette');
 const { Presence } = require('./presence');
@@ -512,6 +514,17 @@ io.on('connection', async (socket) => {
       });
       chat.system(`${user.name} sort ${pull.emoji} ${pull.name} — ${pull.rarity} !`, 'drop');
     }
+
+    // Un objet maudit, c'est huit chances sur dix mille. Ça mérite mieux
+    // qu'une ligne de chat que tout le monde rate : tout le site s'arrête
+    // une seconde pour le regarder.
+    const legend = result.pulls.find((p) => p.r === 'cursed');
+    if (legend) {
+      io.emit('announce', {
+        text: `${user.name} vient de sortir ${legend.emoji} ${legend.name} — MAUDIT. Il est trop fort.`,
+        kind: 'jackpot',
+      });
+    }
   });
 
   socket.on('vault:sell', async () => {
@@ -595,9 +608,15 @@ io.on('connection', async (socket) => {
 
     const result = vault.open(profile, taken.gift.caseId, taken.gift.count, Date.now(), { free: true });
     if (!result.ok) {
-      // On remet le bon : rien ne doit se perdre en route.
-      profile.gifts.unshift(taken.gift);
+      // On remet le bon exactement comme il était : rien ne doit se perdre.
+      taken.restore();
       return socket.emit('toast', { message: result.message, kind: 'error' });
+    }
+    if (taken.left > 0) {
+      socket.emit('toast', {
+        message: `Il te reste ${taken.left} caisse${taken.left > 1 ? 's' : ''} de ce cadeau. Reclique pour continuer.`,
+        kind: 'info',
+      });
     }
 
     store.grantXp(profile, result.xp);
@@ -611,6 +630,106 @@ io.on('connection', async (socket) => {
     socket.emit('vault:state', vaultPayload({ result, medals: earned }));
     socket.emit('gift:list', gifts.view(profile));
     socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /* ══════════ RAKEBACK ══════════ */
+
+  /**
+   * Une part de tout ce qui est misé revient au joueur, gagné ou perdu.
+   * Le compteur monte tout seul dans `store.recordPlay` ; ici on ne fait que
+   * l'afficher et le verser.
+   */
+  const rakePayload = () => rakeback.view(profile, store.levelFromXp(profile.xp).level);
+
+  socket.on('rake:open', () => socket.emit('rake:state', rakePayload()));
+
+  socket.on('rake:claim', async () => {
+    const result = rakeback.claim(profile);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    await save();
+    socket.emit('rake:state', rakePayload());
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', { message: `Rakeback récolté : +${result.amount} 🪙`, kind: 'success' });
+  });
+
+  /* ══════════ LE MARCHÉ ══════════ */
+
+  async function marketPayload(query = {}) {
+    const state = await store.siteState();
+    return market.view(profile, state, query);
+  }
+
+  socket.on('market:open', async (query = {}) => {
+    presence.setStatus(user.id, 'market');
+    socket.emit('market:state', await marketPayload(query));
+  });
+
+  socket.on('market:list', async ({ itemId, price, count } = {}) => {
+    const state = await store.siteState();
+    const result = market.list(profile, state, { itemId, price, count });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    socket.emit('market:state', await marketPayload());
+    socket.emit('vault:state', vaultPayload());
+    socket.emit('toast', { message: result.message, kind: 'success' });
+    io.emit('market:changed', {});
+  });
+
+  socket.on('market:cancel', async ({ id } = {}) => {
+    const state = await store.siteState();
+    const result = market.cancel(profile, state, id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    socket.emit('market:state', await marketPayload());
+    socket.emit('toast', { message: result.message, kind: 'info' });
+    io.emit('market:changed', {});
+  });
+
+  socket.on('market:buy', async ({ id } = {}) => {
+    const state = await store.siteState();
+    const listing = market.ensure(state).listings.find((l) => l.id === Number(id));
+    if (!listing) return socket.emit('toast', { message: 'Cette offre vient de partir.', kind: 'warn' });
+
+    // Le vendeur est peut-être déconnecté : on charge son profil pour le
+    // créditer quand même, et on l'enregistre séparément.
+    const seller = listing.sellerId === user.id ? profile : await store.findProfile(listing.sellerId);
+    const result = market.buy(profile, state, id, seller);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    store.touchState();
+    await save();
+    if (seller && seller !== profile) await store.saveProfile(seller);
+
+    const earned = medals.check(profile, state.records);
+    if (earned.length) store.touchState();
+
+    socket.emit('market:state', await marketPayload());
+    socket.emit('vault:state', vaultPayload({ medals: earned }));
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', {
+      message: `${result.message} Le vendeur touche ${result.net} (commission ${result.fee}).`,
+      kind: 'success',
+    });
+
+    // Le vendeur, s'il est là, doit voir arriver ses pièces tout de suite.
+    if (seller) {
+      const entry = presence.users.get(seller.id);
+      if (entry) {
+        for (const socketId of entry.sockets) {
+          io.to(socketId).emit('profile:update', store.publicProfile(seller));
+          io.to(socketId).emit('toast', {
+            message: `💰 ${user.name} a acheté ton ${result.item.name} : +${result.net} 🪙`,
+            kind: 'success',
+          });
+        }
+      }
+    }
+    io.emit('market:changed', {});
   });
 
   /* ══════════ ÉQUITÉ VÉRIFIABLE ══════════ */

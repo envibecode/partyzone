@@ -17,6 +17,7 @@ const STATUS_LABEL = {
   vault: 'Aux caisses',
   slots: 'À la machine à sous',
   medals: 'Au mur des médailles',
+  market: 'Au marché',
   party: 'Dans le hall Party',
   undercover: 'À l’Undercover',
   poker: 'Au poker',

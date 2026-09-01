@@ -179,8 +179,29 @@ async function guest(name) {
     players.every((p) => p.rank.xp > 0), players.map((p) => `${p.rank.xp}`).join(', '));
   check('le vainqueur gagne plus que les autres',
     new Set(players.map((p) => p.rank.xp)).size > 1);
-  check('aucune pièce du casino n’a bougé',
-    players.every((p) => p.profile.coins === 400), players.map((p) => p.profile.coins).join(', '));
+  // Rien n'est misé en Party, mais monter de niveau paie en pièces : c'est la
+  // passerelle assumée entre les deux sections.
+  const gained = players.map((p) => p.profile.coins - 400);
+  check('personne n’a MISÉ de pièces en Party', gained.every((g) => g >= 0),
+    players.map((p) => p.profile.coins).join(', '));
+
+  // Le versement se fait au passage de niveau, qui demande deux parties : on
+  // le vérifie donc directement sur le module plutôt qu'en rejouant une
+  // partie entière par socket.
+  const rank = require('../server/party/rank');
+  const dummy = { vault: { coins: 0 } };
+  let levels = 0;
+  for (let i = 0; i < 8 && levels < 2; i++) {
+    const r = rank.record(dummy, 'undercover', { won: true, players: 4, rounds: 3 });
+    if (r.levelUp) levels++;
+  }
+  check('monter de niveau en Party paie en pièces', dummy.vault.coins > 0,
+    `${dummy.vault.coins} pièces après ${levels} niveaux`);
+  const twice = { vault: { coins: 0 }, party: { ...dummy.party } };
+  twice.party = JSON.parse(JSON.stringify(dummy.party));
+  rank.record(twice, 'undercover', { won: false, players: 3, rounds: 1 });
+  check('un niveau déjà payé ne repaie pas', twice.vault.coins === 0,
+    `${twice.vault.coins} pièces`);
 
   for (const p of players) p.socket.emit('party:leave');
   await wait(400);

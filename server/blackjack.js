@@ -108,6 +108,7 @@ class Table {
     this.hand = 0;
     this.log = [];
     this.emptySince = Date.now();
+    this.lastActivityAt = Date.now(); // dernière vraie mise posée à cette table
     this.newShoe();
   }
 
@@ -185,6 +186,11 @@ class Table {
 
   /* ── Cycle ── */
 
+  /** Marque la table comme vivante : une mise vient d'être posée. */
+  touch() {
+    this.lastActivityAt = Date.now();
+  }
+
   async setBet(profile, amount, rawSide) {
     if (this.phase !== 'betting' && this.phase !== 'waiting') {
       return { ok: false, message: 'La main est déjà lancée, attends la suivante.' };
@@ -223,6 +229,7 @@ class Table {
     seat.bet = stake;
     seat.side = side.side;
     seat.chips = profile.vault.coins;
+    this.touch();
 
     this.broadcast();
     return { ok: true, coins: profile.vault.coins };
@@ -688,17 +695,39 @@ function closeTable(code) {
   return true;
 }
 
-/** Ferme les tables vides depuis plus de dix minutes. */
+const EMPTY_MS = 90 * 1000;      // plus personne de connecté
+const IDLE_MS = 8 * 60 * 1000;   // du monde, mais plus une seule mise
+
+/**
+ * Ferme les tables qui ne servent plus.
+ *
+ * Deux cas, et le second compte autant que le premier : une table vide, et
+ * une table où trois personnes sont restées connectées sans miser depuis huit
+ * minutes. La seconde tournait en boucle pour rien — une manche toutes les
+ * vingt secondes, indéfiniment — et encombrait la liste des salons ouverts
+ * en faisant croire qu'il s'y passait quelque chose.
+ */
 function startJanitor() {
   setInterval(() => {
     const now = Date.now();
     for (const [code, table] of tables) {
-      if (table.emptySince && now - table.emptySince > 10 * 60 * 1000) {
+      const empty = table.emptySince && now - table.emptySince > EMPTY_MS;
+      const idle = !table.emptySince
+        && table.lastActivityAt
+        && now - table.lastActivityAt > IDLE_MS;
+
+      if (empty || idle) {
+        if (idle) {
+          table.io.to('bj:' + code).emit('toast', {
+            message: 'Table fermée : plus aucune mise depuis huit minutes.',
+            kind: 'warn',
+          });
+        }
         table.stop();
         tables.delete(code);
       }
     }
-  }, 60000).unref();
+  }, 30000).unref();
 }
 
 module.exports = {

@@ -132,15 +132,38 @@ function grant(target, caseId, count = 1, by = 'administration') {
   return { ok: true, message: `${n} × ${box.name} pour ${target.name}.`, gift };
 }
 
-/** Consomme un bon : renvoie la caisse à ouvrir. */
-function claim(profile, giftId) {
+const OPEN_AT_ONCE = 10; // ce qu'une animation peut montrer d'un coup
+
+/**
+ * Consomme tout ou partie d'un bon.
+ *
+ * Un cadeau de cinquante caisses ne s'ouvre pas d'un bloc : l'animation en
+ * montre dix au maximum. On en prélève donc dix, on laisse les quarante
+ * autres dans le bon, et le joueur reclique. Avant, le reste était
+ * silencieusement perdu — quarante caisses envolées.
+ */
+function claim(profile, giftId, want = OPEN_AT_ONCE) {
   const list = profile.gifts || [];
   const index = list.findIndex((g) => g.id === giftId);
   if (index < 0) return { ok: false, message: 'Cadeau introuvable.' };
 
   const gift = list[index];
-  list.splice(index, 1);
-  return { ok: true, gift };
+  const take = Math.max(1, Math.min(OPEN_AT_ONCE, Math.floor(Number(want) || OPEN_AT_ONCE), gift.count));
+  const left = gift.count - take;
+
+  if (left > 0) gift.count = left;
+  else list.splice(index, 1);
+
+  return {
+    ok: true,
+    gift: { ...gift, count: take },
+    left,
+    // De quoi remettre le bon en place si l'ouverture échoue.
+    restore: () => {
+      if (left > 0) gift.count = left + take;
+      else list.splice(index, 0, { ...gift, count: take });
+    },
+  };
 }
 
 function view(profile) {
@@ -154,4 +177,4 @@ function view(profile) {
   };
 }
 
-module.exports = { send, grant, claim, view, DAILY_LIMIT, MAX_PER_GIFT };
+module.exports = { send, grant, claim, view, DAILY_LIMIT, MAX_PER_GIFT, OPEN_AT_ONCE };

@@ -155,7 +155,7 @@
       box.appendChild(btn);
     };
 
-    act('+1k 🪙', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
+    act('+1k ¤', '', () => send('grant-coins', { id: p.id, amount: 1000 }));
     act('+500 XP', '', () => send('grant-xp', { id: p.id, amount: 500 }));
     act('🎁 Caisses', '', () => giveCases(p));
     act('✏️ Renommer', '', () => {
@@ -197,7 +197,7 @@
 
     const select = el('select', 'input');
     cases.forEach((c) => {
-      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙 pièce`);
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} ¤ pièce`);
       opt.value = c.id;
       select.appendChild(opt);
     });

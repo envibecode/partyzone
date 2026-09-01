@@ -53,6 +53,16 @@ function avatarUrl(user) {
 PZ.avatarUrl = avatarUrl;
 
 const timeOf = (at) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+/*
+ * LE SIGNE MONÉTAIRE.
+ *
+ * L'interface écrit « 1 200 ¤ ». Le caractère ¤ (symbole monétaire
+ * générique) a la même graisse et la même hauteur que les chiffres, il est
+ * présent dans toutes les polices, et il est stylé en champagne par le CSS.
+ * L'emoji 🪙 qu'on utilisait avant changeait de dessin d'un appareil à
+ * l'autre et décalait la ligne de base d'un demi-pixel partout.
+ */
 PZ.timeOf = timeOf;
 
 /* ─── Notifications ────────────────────────────────────── */
@@ -167,10 +177,17 @@ addEventListener('hashchange', () => {
 
 const menuBtn = $('#btn-menu');
 if (menuBtn) {
-  menuBtn.addEventListener('click', () => {
-    const nav = $('#nav-left');
+  // Le tiroir de navigation mobile. Il se referme dès qu'on choisit une
+  // destination : rester ouvert par-dessus la page qu'on vient d'ouvrir
+  // n'aide personne.
+  const nav = $('#nav-left');
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     nav.classList.toggle('open');
-    $('#nav-right').classList.toggle('open');
+  });
+  nav.addEventListener('click', () => nav.classList.remove('open'));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.topbar')) nav.classList.remove('open');
   });
 }
 
@@ -215,6 +232,14 @@ function applyProfile(profile) {
   [avatar, nameSlot].forEach((node) => {
     [...node.classList].filter((c) => COSMETIC_CLASS.test(c)).forEach((c) => node.classList.remove(c));
   });
+  const menuName = $('#menu-name');
+  const menuSub = $('#menu-sub');
+  if (menuName) menuName.textContent = PZ.me ? PZ.me.name : '';
+  if (menuSub) {
+    menuSub.textContent = `Niveau ${profile.level} · ${profile.title}`
+      + (profile.party ? ` — Party niveau ${profile.party.level}` : '');
+  }
+
   const oldBadge = nameSlot.parentNode && nameSlot.parentNode.querySelector('.cos-badge');
   if (oldBadge) oldBadge.remove();
   if (PZ.applyCosmetics) PZ.applyCosmetics(null, profile.cosmetics, { avatar, name: nameSlot });
@@ -378,7 +403,7 @@ async function loadLeaderboard() {
       li.appendChild(el('span', 'v',
         lbSort === 'party' ? `${fmt(p.party ? p.party.xp : 0)} XP 🎈`
           : lbSort === 'xp' ? `${fmt(p.xp)} XP`
-            : `${fmt(p.coins)} 🪙`));
+            : `${fmt(p.coins)} ¤`));
       list.appendChild(li);
     });
   } catch {

@@ -99,7 +99,7 @@
       top.appendChild(el('span', 'case-emoji', c.emoji));
       const names = el('div');
       names.appendChild(el('div', 'case-name', c.name));
-      names.appendChild(el('div', 'fine', isFree ? 'Gratuite maintenant' : `${fmt(c.price)} 🪙`));
+      names.appendChild(el('div', 'fine', isFree ? 'Gratuite maintenant' : `${fmt(c.price)} ¤`));
       top.appendChild(names);
       node.appendChild(top);
 
@@ -273,7 +273,7 @@
       gains.appendChild(el('b', null, `${fmt(pull_.xp)} XP`));
       if (pull_.dust) {
         gains.appendChild(document.createTextNode(' · doublon revendu +'));
-        gains.appendChild(el('b', null, `${fmt(pull_.dust)} 🪙`));
+        gains.appendChild(el('b', null, `${fmt(pull_.dust)} ¤`));
       }
       if (pull_.mult > 1) gains.appendChild(document.createTextNode(` · combo ×${String(pull_.mult).replace('.', ',')}`));
       prize.appendChild(gains);
@@ -387,7 +387,7 @@
       line.appendChild(el('b', null, `${fmt(xp)} XP`));
       if (dust) {
         line.appendChild(document.createTextNode(' · doublons revendus +'));
-        line.appendChild(el('b', null, `${fmt(dust)} 🪙`));
+        line.appendChild(el('b', null, `${fmt(dust)} ¤`));
       }
       const news = pulls.filter((x) => x.isNew).length;
       if (news) {
@@ -522,7 +522,7 @@
     g.appendChild(el('b', null, `${fmt(xp)} XP`));
     if (dust) {
       g.appendChild(document.createTextNode(' · doublons revendus +'));
-      g.appendChild(el('b', null, `${fmt(dust)} 🪙`));
+      g.appendChild(el('b', null, `${fmt(dust)} ¤`));
     }
     line.appendChild(g);
     wrap.appendChild(line);
@@ -623,7 +623,7 @@
     const keep = select.value;
     select.replaceChildren();
     v.cases.forEach((c) => {
-      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} 🪙`);
+      const opt = el('option', null, `${c.emoji} ${c.name} — ${fmt(c.price)} ¤`);
       opt.value = c.id;
       select.appendChild(opt);
     });
@@ -693,7 +693,7 @@
         return;
       }
       if (result && result.pulls) queue.start(result.pulls);
-      else if (result && result.coins) PZ.toast(`Doublons revendus : +${fmt(result.coins)} 🪙`, 'success');
+      else if (result && result.coins) PZ.toast(`Doublons revendus : +${fmt(result.coins)} ¤`, 'success');
 
       if (medals && medals.length) celebrate(medals);
     });

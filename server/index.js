@@ -261,7 +261,7 @@ io.on('connection', async (socket) => {
         text: `×${best}`,
         amount: result.payout,
       });
-      chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} 🪙 !`, 'win');
+      chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} ¤ !`, 'win');
     }
   });
 
@@ -287,7 +287,7 @@ io.on('connection', async (socket) => {
         name: user.name, avatar: user.avatar, game: 'Machine à sous',
         text: 'tour bonus déclenché', amount: result.payout,
       });
-      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} 🪙 !`, 'win');
+      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} ¤ !`, 'win');
     } else if (result.profit >= result.staked * 15) {
       io.emit('feed', {
         name: user.name, avatar: user.avatar, game: 'Machine à sous',
@@ -475,6 +475,11 @@ io.on('connection', async (socket) => {
     socket.emit('vault:state', vaultPayload());
   });
 
+  // L'accueil affiche le minuteur de la caisse offerte sans ouvrir la page :
+  // il lui faut l'état, mais surtout PAS le changement de statut, sinon la
+  // liste des joueurs en ligne dirait que tout le monde est aux caisses.
+  socket.on('vault:peek', () => socket.emit('vault:state', vaultPayload()));
+
   socket.on('vault:pull', async ({ caseId, count } = {}) => {
     const result = vault.open(profile, caseId, count);
     if (!result.ok) return socket.emit('vault:state', vaultPayload({ result }));
@@ -650,7 +655,7 @@ io.on('connection', async (socket) => {
     await save();
     socket.emit('rake:state', rakePayload());
     socket.emit('profile:update', store.publicProfile(profile));
-    socket.emit('toast', { message: `Rakeback récolté : +${result.amount} 🪙`, kind: 'success' });
+    socket.emit('toast', { message: `Rakeback récolté : +${result.amount} ¤`, kind: 'success' });
   });
 
   /* ══════════ LE MARCHÉ ══════════ */
@@ -723,7 +728,7 @@ io.on('connection', async (socket) => {
         for (const socketId of entry.sockets) {
           io.to(socketId).emit('profile:update', store.publicProfile(seller));
           io.to(socketId).emit('toast', {
-            message: `💰 ${user.name} a acheté ton ${result.item.name} : +${result.net} 🪙`,
+            message: `💰 ${user.name} a acheté ton ${result.item.name} : +${result.net} ¤`,
             kind: 'success',
           });
         }

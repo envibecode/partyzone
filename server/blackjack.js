@@ -560,7 +560,7 @@ class Table {
           if (this.onProfile) this.onProfile(profile);
         }
         const won = [result.pairs, result.trio].filter((r) => r && r.payout > 0);
-        for (const w of won) this.say('Croupier', `${seat.name} touche ${w.name} : +${w.payout} 🪙`);
+        for (const w of won) this.say('Croupier', `${seat.name} touche ${w.name} : +${w.payout} ¤`);
       }
     }
   }

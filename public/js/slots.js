@@ -169,7 +169,7 @@
     const row = el('div', `pk-hrow ${up ? 'up' : 'down'}`);
     row.appendChild(el('span', 'm', result.bonus.length ? `#${round} 📣` : `#${round}`));
     row.appendChild(el('span', 'g', `${up ? '+' : ''}${fmt(result.profit)}`));
-    row.appendChild(el('span', 'p', `${fmt(result.payout)} 🪙`));
+    row.appendChild(el('span', 'p', `${fmt(result.payout)} ¤`));
     history.prepend(row);
     while (history.children.length > 40) history.lastElementChild.remove();
   }
@@ -195,7 +195,7 @@
     if (result.spin.wins.length) {
       highlight(result.spin.wins);
       const best = result.spin.wins.reduce((a, b) => (b.gain > a.gain ? b : a));
-      say(`${best.emoji} ${best.name} ×${best.count} — +${fmt(result.spin.total)} 🪙`, 'win');
+      say(`${best.emoji} ${best.name} ×${best.count} — +${fmt(result.spin.total)} ¤`, 'win');
       SFX.win(Math.min(1, result.spin.total / Math.max(1, result.staked * 3)));
     }
 
@@ -209,7 +209,7 @@
 
       for (let i = 0; i < result.bonus.length; i++) {
         const b = result.bonus[i];
-        say(`Tour offert ${i + 1}/${result.bonus.length}${b.gain ? ` — +${fmt(b.gain)} 🪙` : ''}`, 'bonus');
+        say(`Tour offert ${i + 1}/${result.bonus.length}${b.gain ? ` — +${fmt(b.gain)} ¤` : ''}`, 'bonus');
         await showGrid(b.grid, true);
         if (b.wins.length) {
           highlight(b.wins);
@@ -217,13 +217,13 @@
         }
         await wait(520);
       }
-      say(`Bonus terminé : +${fmt(result.payout)} 🪙 au total`, 'bonus');
+      say(`Bonus terminé : +${fmt(result.payout)} ¤ au total`, 'bonus');
     } else if (!result.spin.wins.length) {
       say('Rien cette fois.', '');
       SFX.lose();
     }
 
-    $('#sl-last').textContent = `${result.profit >= 0 ? '+' : ''}${fmt(result.profit)} 🪙`;
+    $('#sl-last').textContent = `${result.profit >= 0 ? '+' : ''}${fmt(result.profit)} ¤`;
     $('#sl-last').style.color = result.profit >= 0 ? 'var(--green)' : 'var(--red)';
     pushHistory(result);
 

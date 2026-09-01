@@ -58,7 +58,7 @@
     const net = asked - Math.ceil(asked * (m.fee / 100));
 
     $('#mk-hint').textContent =
-      `Revente automatique : ${fmt(item.base)} 🪙. Tu peux demander entre ${fmt(item.min)} et ` +
+      `Revente automatique : ${fmt(item.base)} ¤. Tu peux demander entre ${fmt(item.min)} et ` +
       `${fmt(item.max)}. À ${fmt(asked)} tu touches ${fmt(net)} après la commission de ${m.fee} %.`;
   }
 
@@ -125,7 +125,7 @@
       else if (l.ratio >= 12) ratio.classList.add('steep');
       node.appendChild(ratio);
 
-      node.appendChild(el('span', 'mk-price', `${fmt(l.price)} 🪙`));
+      node.appendChild(el('span', 'mk-price', `${fmt(l.price)} ¤`));
 
       if (l.mine) {
         const cancel = el('button', 'btn btn-soft', 'Retirer');
@@ -158,7 +158,7 @@
       row.appendChild(el('span', 'mk-emoji', h.emoji));
       row.appendChild(el('b', null, h.count > 1 ? `${h.count} × ${h.name}` : h.name));
       row.appendChild(el('span', 'fine', `à ${h.buyer}`));
-      row.appendChild(el('span', 'mk-net', `+${fmt(h.net)} 🪙`));
+      row.appendChild(el('span', 'mk-net', `+${fmt(h.net)} ¤`));
       row.appendChild(el('i', null, timeOf(h.at)));
       box.appendChild(row);
     });

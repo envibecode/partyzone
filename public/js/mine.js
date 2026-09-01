@@ -82,7 +82,7 @@
         up.price === null ? up.effect : up.level ? `${up.effect} → ${up.next}` : up.next));
       btn.appendChild(mid);
 
-      btn.appendChild(el('span', 'pr', up.price === null ? '—' : `${fmt(up.price)} 🪙`));
+      btn.appendChild(el('span', 'pr', up.price === null ? '—' : `${fmt(up.price)} ¤`));
       ups.appendChild(btn);
     });
   }
@@ -180,7 +180,7 @@
 
     const amount = el('div', 'rake-amount');
     amount.appendChild(el('b', null, fmt(r.pending)));
-    amount.appendChild(el('span', null, '🪙 en attente'));
+    amount.appendChild(el('span', null, '¤ en attente'));
     row.appendChild(amount);
 
     const bar = el('div', 'rake-bar');

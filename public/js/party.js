@@ -15,21 +15,21 @@
 
   const GAMES = [
     {
-      id: 'undercover', name: 'Undercover', icon: '🕵️', colour: '#8b6bff',
+      id: 'undercover', name: 'Undercover', icon: 'i-spy', colour: '#9a86cf',
       players: '3 à 12', minutes: '10 min',
       blurb: 'Tout le monde a le même mot. Sauf un. Décris le tien sans le dire, ' +
         'et trouve celui qui bluffe — ou passe la partie à te faire oublier.',
       ready: true,
     },
     {
-      id: 'poker', name: 'Poker', icon: '♠️', colour: '#2ee66b',
+      id: 'poker', name: 'Poker', icon: 'i-cards', colour: '#d4af6a',
       players: '2 à 8', minutes: '20 min',
       blurb: 'Texas Hold’em en tournoi. Même tapis pour tout le monde au départ, ' +
         'blindes qui montent, et ça finit quand une seule personne a tous les jetons.',
       ready: true,
     },
     {
-      id: 'loupgarou', name: 'Loup-garou', icon: '🐺', colour: '#ff4d6a',
+      id: 'loupgarou', name: 'Loup-garou', icon: 'i-wolf', colour: '#c98da6',
       players: '6 à 16', minutes: '25 min',
       blurb: 'La nuit tombe, le village s’endort. Prévu avec le vocal : micro coupé ' +
         'ou ouvert selon ton rôle.',
@@ -37,19 +37,19 @@
       note: 'Le vocal a besoin d’un serveur relais dédié — c’est le prochain gros morceau.',
     },
     {
-      id: 'uno', name: 'Uno', icon: '🎴', colour: '#ffc23d',
+      id: 'uno', name: 'Uno', icon: 'i-uno', colour: '#c9a86a',
       players: '2 à 8', minutes: '15 min',
       blurb: 'Le +4 au dernier tour, les disputes sur les règles maison, tout ça.',
       ready: false,
     },
     {
-      id: 'belote', name: 'Belote', icon: '🃏', colour: '#3fd6ff',
+      id: 'belote', name: 'Belote', icon: 'i-cards', colour: '#7fa8bd',
       players: '4', minutes: '30 min',
       blurb: 'En équipes de deux, avec annonces et atout. La vraie, pas la coinchée.',
       ready: false,
     },
     {
-      id: 'monopoly', name: 'Monopoly', icon: '🎲', colour: '#ff9f1c',
+      id: 'monopoly', name: 'Monopoly', icon: 'i-dice', colour: '#b08d5e',
       players: '2 à 6', minutes: '1 h et des poussières',
       blurb: 'Les propriétés, les maisons, la prison, et l’amitié qui s’effrite.',
       ready: false,
@@ -113,7 +113,9 @@
       const node = el('div', `pgame${g.ready ? '' : ' soon'}`);
       node.style.setProperty('--c', g.colour);
 
-      node.appendChild(el('div', 'pgame-icon', g.icon));
+      const icon = el('div', 'pgame-icon');
+      icon.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22"><use href="#${g.icon}"/></svg>`;
+      node.appendChild(icon);
       const head = el('div', 'pgame-head');
       head.appendChild(el('h3', null, g.name));
       head.appendChild(el('span', 'pgame-meta', `${g.players} joueurs · ${g.minutes}`));
@@ -150,11 +152,13 @@
     }
 
     rooms.forEach((r) => {
-      const game = GAME_BY_ID[r.game] || { icon: '🎲', colour: '#8b6bff' };
+      const game = GAME_BY_ID[r.game] || { icon: 'i-dice', colour: '#9a86cf' };
       const node = el('div', 'proom');
       node.style.setProperty('--c', game.colour);
 
-      node.appendChild(el('span', 'proom-icon', game.icon));
+      const rIcon = el('span', 'proom-icon');
+      rIcon.innerHTML = `<svg viewBox="0 0 24 24" width="19" height="19"><use href="#${game.icon || 'i-dice'}"/></svg>`;
+      node.appendChild(rIcon);
 
       const info = el('div', 'proom-info');
       info.appendChild(el('b', null, r.gameName));

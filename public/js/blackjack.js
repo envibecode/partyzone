@@ -305,7 +305,7 @@
       const staked = seat.bet || (seat.lastResult ? seat.lastResult.staked : 0);
       const bet = el('div', 'seat-bet');
       bet.appendChild(document.createTextNode('Mise '));
-      bet.appendChild(el('b', null, staked ? `${fmt(staked)} 🪙` : '—'));
+      bet.appendChild(el('b', null, staked ? `${fmt(staked)} ¤` : '—'));
       node.appendChild(bet);
 
       // Les paris annexes du siège, et ce qu'ils ont donné.
@@ -352,7 +352,7 @@
     // Barre de mise
     const canBet = s.phase === 'betting' || s.phase === 'waiting';
     $('#bj-betrow').classList.toggle('hidden', !canBet);
-    $('#bj-place').textContent = s.you && s.you.bet ? `Misé : ${fmt(s.you.bet)} 🪙 — changer` : 'Miser';
+    $('#bj-place').textContent = s.you && s.you.bet ? `Misé : ${fmt(s.you.bet)} ¤ — changer` : 'Miser';
 
     // Journal
     const log = $('#bj-log');

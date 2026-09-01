@@ -154,7 +154,7 @@
     const row = el('div', `pk-hrow ${ball.win >= ball.stake ? 'up' : 'down'}`);
     row.appendChild(el('span', 'm', `${ball.multiplier}×`));
     row.appendChild(el('span', 'g', `${ball.win >= ball.stake ? '+' : ''}${fmt(ball.win - ball.stake)}`));
-    row.appendChild(el('span', 'p', `${fmt(ball.win)} 🪙`));
+    row.appendChild(el('span', 'p', `${fmt(ball.win)} ¤`));
 
     history.prepend(row);
     while (history.children.length > 40) history.lastElementChild.remove();
@@ -250,7 +250,7 @@
     if (!raf) raf = requestAnimationFrame(loop);
 
     const profit = result.profit;
-    $('#pk-last').textContent = `${profit >= 0 ? '+' : ''}${fmt(profit)} 🪙`;
+    $('#pk-last').textContent = `${profit >= 0 ? '+' : ''}${fmt(profit)} ¤`;
     $('#pk-last').style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
 
     const best = Math.max(...result.drops.map((d) => d.multiplier));

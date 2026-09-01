@@ -126,6 +126,37 @@ déploiement casse quelque chose, *Rollback* remet la version d'avant.
 
 ---
 
+## La direction artistique
+
+Quatre règles, et elles expliquent la plupart des choix du CSS.
+
+**1. Une seule couleur d'accent.** Un champagne discret (`--gold`). Le vert ne
+sert plus qu'aux gains, le rouge qu'aux pertes. Avant, six couleurs vives se
+disputaient l'attention et aucune n'en obtenait.
+
+**2. La hiérarchie vient de la typo et du vide.** Une échelle de tailles
+(`--t-xs` à `--t-4xl`), un rythme d'espacement en multiples de 4 (`--s-1` à
+`--s-8`), et des graisses contrastées. Plus rien n'est en majuscules par
+défaut : quand tout est important, rien ne l'est.
+
+**3. Des traits fins, pas des lueurs.** Bordures à 6 % de blanc, ombres
+presque invisibles. Les halos néon font « template gratuit ».
+
+**4. Des icônes dessinées, pas des emojis.** Un jeu de symboles SVG sur une
+grille de 24 px, défini une fois en haut de `index.html` et réutilisé par
+`<use href="#i-...">`. Les emojis restent uniquement sur les **objets du jeu**
+— les 518 memes, les caisses — là où ils sont le sujet. Le signe monétaire de
+l'interface est `¤`, qui a la même graisse et la même hauteur que les
+chiffres, contrairement à 🪙 qui changeait de dessin d'un appareil à l'autre.
+
+L'accueil suit cette logique en trois blocs : **où j'en suis** (solde,
+rakeback, caisse offerte), **à quoi je joue** (tous les jeux visibles d'un
+coup, plus de carrousel qui n'en montrait qu'un), **avec qui** (tables et
+chat). Les onze entrées de menu sont retombées à quatre ; le reste vit dans
+le menu du compte.
+
+---
+
 ## L'honnêteté du casino
 
 Tout est décidé côté serveur, avant que tu ne voies quoi que ce soit.

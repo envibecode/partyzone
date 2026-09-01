@@ -266,7 +266,13 @@
         for (let i = 0; i < result.crits; i++) floater('CRITIQUE !', true);
         SFX.crit();
       }
-      if (result.throttled) PZ.toast('Doucement — le serveur plafonne à 20 clics/seconde.', 'warn');
+      // Le chiffre vient du serveur, jamais écrit en dur : il était resté à
+      // 20 dans ce message alors que le plafond réel était descendu à 10, et
+      // l'aide juste à côté en annonçait 12. Trois chiffres pour une seule
+      // règle, c'est le meilleur moyen de faire croire à un bug.
+      if (result.throttled) {
+        PZ.toast(`Doucement — le serveur plafonne à ${state ? state.maxClicksPerSec : 10} coups/seconde.`, 'warn');
+      }
     });
   }
 

@@ -11,9 +11,13 @@
  *   node test/harness.js     (dans un autre)
  */
 const { io } = require('socket.io-client');
+const { gatePass, withPass } = require('./pass');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Le site a une porte : les bancs d'essai entrent avec la clé, comme nous.
+let pass = '';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -41,11 +45,11 @@ async function makeGuest(baseName) {
   const name = baseName + RUN;
   const res = await fetch(`${BASE}/auth/guest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: pass },
     body: JSON.stringify({ name }),
   });
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
-  const cookie = raw.map((c) => c.split(';')[0]).join('; ');
+  const cookie = withPass(pass, raw.map((c) => c.split(';')[0]).join('; '));
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
 
   const p = {
@@ -122,6 +126,9 @@ async function topUp(player, target) {
 /* ══════════════════════════════════════════════════════ */
 
 (async () => {
+  // La porte d'abord : sans laissez-passer, tout renvoie le compte à rebours.
+  pass = await gatePass(BASE);
+
   console.log(`Banc d'essai PartyZone — ${BASE}\n`);
 
   /* ── Connexion ── */
@@ -536,10 +543,10 @@ async function topUp(player, target) {
 
   /* ── Classement ── */
   section('Classement');
-  const lb = await (await fetch(`${BASE}/api/leaderboard?sort=coins&limit=10`)).json();
+  const lb = await (await fetch(`${BASE}/api/leaderboard?sort=coins&limit=10`, { headers: { Cookie: pass } })).json();
   check('classement par pièces trié', lb.leaderboard.every((p, i, a) => i === 0 || a[i - 1].coins >= p.coins),
     `${lb.leaderboard.length} joueurs`);
-  const lbXp = await (await fetch(`${BASE}/api/leaderboard?sort=xp&limit=10`)).json();
+  const lbXp = await (await fetch(`${BASE}/api/leaderboard?sort=xp&limit=10`, { headers: { Cookie: pass } })).json();
   check('classement par XP trié', lbXp.leaderboard.every((p, i, a) => i === 0 || a[i - 1].xp >= p.xp));
 
   /* ── Rien ne crée de pièces à partir de rien ── */

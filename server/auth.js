@@ -182,4 +182,11 @@ function register(app) {
   });
 }
 
-module.exports = { register, userFromCookieHeader, discordConfigured };
+module.exports = {
+  register, userFromCookieHeader, discordConfigured,
+  // La porte a besoin de signer son propre laissez-passer. Elle réutilise
+  // le même secret et le même format que les sessions plutôt que d'en
+  // inventer un deuxième : un seul secret à protéger, un seul à faire
+  // tourner le jour où il fuit.
+  signToken: sign, verifyToken: verify,
+};

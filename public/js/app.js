@@ -366,50 +366,66 @@ function ccStep() {
 let lbSort = 'coins';
 let lbTimer = null;
 
-async function loadLeaderboard() {
-  const list = $('#leaderboard');
+const LB_EMPTY = {
+  party: 'Personne n’a encore joué en Party. Ouvre un salon.',
+  xp: 'Personne au tableau. Va jouer.',
+  coins: 'Personne au tableau. Va miner.',
+};
+
+/**
+ * Une ligne de classement.
+ *
+ * Extraite pour être partagée entre la page complète et la fenêtre d'accès
+ * rapide : deux rendus différents du même classement finissent toujours par
+ * diverger, et on se retrouve avec un tableau qui n'affiche pas la même
+ * chose selon l'endroit d'où on le regarde.
+ */
+function lbRow(p, index, sort) {
+  const li = el('li');
+  if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
+  li.appendChild(el('span', 'rk', String(index + 1)));
+
+  const img = new Image(34, 34);
+  img.src = avatarUrl(p);
+  img.alt = '';
+  li.appendChild(img);
+
+  const who = el('div', 'who');
+  const nameNode = el('b', 'n', p.name);
+  who.appendChild(nameNode);
+  if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
+  // Le classement Party affiche le rang Party, pas celui du casino : ce sont
+  // deux progressions séparées et les mélanger n'aurait aucun sens.
+  who.appendChild(el('span', 't', sort === 'party' && p.party
+    ? `Party niv. ${p.party.level} · ${p.party.title}`
+    : `Niv. ${p.level} · ${p.title}`));
+  li.appendChild(who);
+
+  li.appendChild(el('span', 'v',
+    sort === 'party' ? `${fmt(p.party ? p.party.xp : 0)} XP`
+      : sort === 'xp' ? `${fmt(p.xp)} XP`
+        : `${fmt(p.coins)} ¤`));
+  return li;
+}
+
+/** Remplit une liste avec le classement demandé. */
+async function fillLeaderboard(list, sort, limit = 20) {
   if (!list) return;
   try {
-    const data = await (await fetch(`/api/leaderboard?sort=${lbSort}&limit=20`)).json();
+    const data = await (await fetch(`/api/leaderboard?sort=${sort}&limit=${limit}`)).json();
     const rows = data.leaderboard || [];
     list.replaceChildren();
     if (!rows.length) {
-      list.appendChild(el('li', 'empty', lbSort === 'party'
-        ? 'Personne n’a encore joué en Party. Ouvre un salon.'
-        : 'Personne au tableau. Va miner.'));
+      list.appendChild(el('li', 'empty', LB_EMPTY[sort] || LB_EMPTY.coins));
       return;
     }
-    rows.forEach((p, i) => {
-      const li = el('li');
-      if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
-      li.appendChild(el('span', 'rk', String(i + 1)));
-
-      const img = new Image(34, 34);
-      img.src = avatarUrl(p);
-      img.alt = '';
-      li.appendChild(img);
-
-      const who = el('div', 'who');
-      const nameNode = el('b', 'n', p.name);
-      who.appendChild(nameNode);
-      if (PZ.applyCosmetics) PZ.applyCosmetics(li, p.cosmetics, { avatar: img, name: nameNode });
-      // Le classement Party affiche le rang Party, pas celui du casino :
-      // ce sont deux progressions séparées et les mélanger n'aurait aucun sens.
-      who.appendChild(el('span', 't', lbSort === 'party' && p.party
-        ? `Party niv. ${p.party.level} · ${p.party.title}`
-        : `Niv. ${p.level} · ${p.title}`));
-      li.appendChild(who);
-
-      li.appendChild(el('span', 'v',
-        lbSort === 'party' ? `${fmt(p.party ? p.party.xp : 0)} XP 🎈`
-          : lbSort === 'xp' ? `${fmt(p.xp)} XP`
-            : `${fmt(p.coins)} ¤`));
-      list.appendChild(li);
-    });
+    rows.forEach((p, i) => list.appendChild(lbRow(p, i, sort)));
   } catch {
     list.replaceChildren(el('li', 'empty', 'Classement indisponible.'));
   }
 }
+
+const loadLeaderboard = () => fillLeaderboard($('#leaderboard'), lbSort, 20);
 PZ.loadLeaderboard = loadLeaderboard;
 
 $('#lb-sort').addEventListener('click', (e) => {
@@ -428,6 +444,86 @@ PZ.views.leaderboard = {
   },
   leave() { clearInterval(lbTimer); lbTimer = null; },
 };
+
+/* ─── Le classement en accès rapide ────────────────────── */
+
+/**
+ * Le classement, depuis n'importe où.
+ *
+ * On veut savoir où on en est sans quitter sa table de blackjack ni perdre
+ * sa mise en cours. La fenêtre se ferme sur Échap ou en cliquant à côté, et
+ * elle se rafraîchit tant qu'elle est ouverte.
+ */
+const LB_TABS = [
+  { id: 'coins', label: 'Pièces' },
+  { id: 'xp', label: 'Niveau' },
+  { id: 'party', label: 'Party' },
+];
+
+let popTimer = null;
+let popSort = 'coins';
+
+function openLeaderboard() {
+  const box = el('div', 'lb-pop');
+
+  const head = el('div', 'lb-pop-head');
+  head.appendChild(el('h2', null, 'Classement'));
+
+  const segs = el('div', 'segs');
+  LB_TABS.forEach((t) => {
+    const b = el('button', `seg${t.id === popSort ? ' active' : ''}`, t.label);
+    b.addEventListener('click', () => {
+      popSort = t.id;
+      [...segs.children].forEach((x) => x.classList.toggle('active', x === b));
+      fillLeaderboard(list, popSort, 15);
+    });
+    segs.appendChild(b);
+  });
+  head.appendChild(segs);
+  box.appendChild(head);
+
+  const list = el('ol', 'lb');
+  list.appendChild(el('li', 'empty', 'Chargement…'));
+  // Le dégradé du bas dit « ça continue » ; il n'a plus lieu d'être une
+  // fois qu'on touche le fond de la liste.
+  list.addEventListener('scroll', () => {
+    const end = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+    list.classList.toggle('at-end', end);
+  });
+  box.appendChild(list);
+
+  const foot = el('div', 'lb-pop-foot');
+  const full = el('button', 'btn btn-soft btn-block', 'Voir la page complète');
+  full.addEventListener('click', () => { closeModal(); go('leaderboard'); });
+  foot.appendChild(full);
+  box.appendChild(foot);
+
+  openModal(box);
+  fillLeaderboard(list, popSort, 15);
+
+  clearInterval(popTimer);
+  popTimer = setInterval(() => {
+    // La fenêtre a pu être fermée entre-temps : on arrête plutôt que de
+    // continuer à interroger le serveur pour une liste que personne ne voit.
+    if (!box.isConnected) return clearInterval(popTimer);
+    fillLeaderboard(list, popSort, 15);
+  }, 10000);
+}
+PZ.openLeaderboard = openLeaderboard;
+
+$('#btn-lb').addEventListener('click', openLeaderboard);
+
+// Un raccourci clavier, parce qu'on regarde le classement souvent. On
+// n'intercepte évidemment pas la touche quand on est en train d'écrire.
+addEventListener('keydown', (e) => {
+  if (e.key !== 'c' && e.key !== 'C') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+  if (!modal.hidden) return;
+  openLeaderboard();
+});
+
 
 /* ─── Le fil des gros coups ────────────────────────────── */
 
@@ -592,6 +688,59 @@ function showAuth() {
 
 $('#btn-discord').addEventListener('click', () => { location.href = '/auth/discord'; });
 
+/* ══════════════════════════════════════════════════════════════════════
+   L'ACCÈS ÉQUIPE
+
+   Une seule clé pour deux serrures : elle ouvre la porte du site quand
+   celui-ci n'a pas encore ouvert, et elle donne les droits
+   d'administration dès qu'on est connecté. Elle est retenue dans le
+   stockage de session — le temps de l'onglet, pas plus — parce que sinon
+   il faudrait la retaper après chaque connexion, et qu'une clé qu'on
+   retape dix fois par jour finit collée sur un post-it.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const STAFF_KEY = 'pz-staff-key';
+
+(() => {
+  const toggle = $('#staff-toggle');
+  const box = $('#staff-box');
+  if (!toggle || !box) return;
+
+  toggle.addEventListener('click', () => {
+    const open = box.hidden;
+    box.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) $('#staff-key').focus();
+  });
+
+  $('#staff-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const said = $('#staff-said');
+    const key = $('#staff-key').value;
+    said.className = 'fine';
+    said.textContent = 'Vérification…';
+    try {
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.ok) {
+        said.className = 'fine bad';
+        said.textContent = data.message || 'Clé refusée.';
+        return;
+      }
+      try { sessionStorage.setItem(STAFF_KEY, key); } catch { /* mode privé */ }
+      said.className = 'fine good';
+      said.textContent = 'Clé acceptée. Connecte-toi, les droits suivront.';
+    } catch {
+      said.className = 'fine bad';
+      said.textContent = 'Le serveur n’a pas répondu.';
+    }
+  });
+})();
+
 $('#form-guest').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('#guest-name').value.trim();
@@ -660,6 +809,11 @@ function start(user) {
   socket.on('me', ({ user: u, profile }) => {
     PZ.me = u;
     applyProfile(profile);
+    // La clé saisie sur l'écran de connexion se transforme en droits dès
+    // que la connexion est établie — une seule fois, puis on l'oublie.
+    let staff = null;
+    try { staff = sessionStorage.getItem(STAFF_KEY); } catch { /* mode privé */ }
+    if (staff && !profile.admin) socket.emit('admin:claim', { key: staff });
   });
   socket.on('profile:update', applyProfile);
   socket.on('toast', ({ message, kind }) => toast(message, kind));

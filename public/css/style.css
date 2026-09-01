@@ -1,113 +1,101 @@
-/* ══════════════════════════════════════════════════════════
-   PartyZone — direction artistique.
-
-   Le parti pris : un site de jeu qui a l'air CHER, pas un site
-   de jeu qui crie. Concrètement, quatre règles qu'on ne casse
-   jamais :
-
-   1. UNE SEULE COULEUR D'ACCENT — un champagne discret. Le vert
-      ne sert plus qu'aux gains, le rouge qu'aux pertes. Une
-      interface où six couleurs se disputent l'attention n'en
-      donne aucune, et c'est exactement ce qui faisait « fait à
-      l'arrache » dans la version précédente.
-
-   2. LA HIÉRARCHIE VIENT DE LA TYPO ET DU VIDE, pas des boîtes.
-      Une échelle de tailles franche, des graisses contrastées,
-      beaucoup d'air. Avant, tout était en gras et en majuscules :
-      quand tout est important, rien ne l'est.
-
-   3. DES TRAITS FINS, PAS DES LUEURS. Bordures à 6 % de blanc,
-      ombres presque invisibles. Les halos néon font « template
-      gratuit ».
-
-   4. DES ICÔNES DESSINÉES, PAS DES EMOJIS. Les emojis changent
-      d'un système à l'autre, n'ont pas la même graisse et
-      cassent l'alignement. Ils restent pour les OBJETS du jeu
-      (les 518 memes, les caisses), là où ils sont le sujet — et
-      nulle part dans l'interface.
-   ══════════════════════════════════════════════════════════ */
-
 :root {
-  /* ─ Surfaces : un noir neutre, à peine bleuté ─ */
-  --ink-0:   #08090b;   /* la toile */
-  --ink-1:   #0e1013;   /* panneau */
-  --ink-2:   #15181d;   /* panneau surélevé */
-  --ink-3:   #1d2128;   /* survol, champs */
-  --ink-4:   #272c34;
+  /* ═══════════════════════════════════════════════════════════════════
+     LA PASSERELLE.
 
-  --line:      rgba(255, 255, 255, .06);
-  --line-firm: rgba(255, 255, 255, .11);
-  --line-hi:   rgba(255, 255, 255, .18);
+     Tout le calque de composants ci-dessous — deux mille sept cents
+     lignes écrites avant la refonte — parle en noms de jetons :
+     --gold, --panel, --muted, --r-lg… Plutôt que de les remplacer un par
+     un dans chaque règle (des centaines d'occasions de casser quelque
+     chose sans s'en apercevoir), on rebranche ces noms sur le nouveau
+     socle, ici, en un seul endroit.
 
-  /* ─ Accent unique : champagne ─ */
-  --gold:      #d4af6a;
-  --gold-soft: #efdcb8;
-  --gold-deep: #8a6f3c;
-  --gold-ink:  #1a1305;
+     Une ligne mérite qu'on s'y arrête :
 
-  /* ─ Sémantique : uniquement gain / perte ─ */
-  --jade:  #3ecf8e;
-  --rose:  #e5484d;
+         --gold: var(--accent);
 
-  /* ─ Texte ─ */
-  --fg:    #f4f5f7;
-  --fg-2:  #9aa1ac;
-  --fg-3:  #666d78;
+     L'ancienne direction artistique avait UNE couleur d'accent, un
+     champagne, appliquée partout. La nouvelle en a une par jeu. Comme
+     --accent est contextuel — il vaut le violet de marque par défaut, et
+     la couleur du jeu dès qu'on entre dans un [data-game] — cette seule
+     ligne fait basculer l'intégralité du site sur la règle « une couleur
+     par jeu » sans qu'aucune autre règle CSS ait à changer.
 
-  /* ─ Échelle typographique ─ */
+     C'est aussi ce qui garantit qu'il n'y a plus une seule valeur de
+     couleur en dur dans les composants : elles passent forcément par ici.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* Les surfaces reprennent l'échelle d'encre du socle. */
+  --line:      var(--hair);
+  --line-firm: var(--hair-firm);
+  --line-hi:   var(--hair-lit);
+
+  /* L'accent, décliné pour les usages du calque de composants. */
+  --accent-soft: color-mix(in srgb, var(--accent) 42%, #ffffff);
+  --gold:      var(--accent);
+  --gold-soft: var(--accent-soft);
+  --gold-deep: var(--accent-deep);
+  --gold-ink:  #08060E;          /* le texte posé SUR un aplat d'accent */
+
+  /* La sémantique du socle, sous ses anciens noms. */
+  --jade:  var(--win);
+  --rose:  var(--lose);
+
+  --fg:    var(--t-hi);
+  --fg-2:  var(--t-mid);
+  --fg-3:  var(--t-low);
+
+  /* L'ancienne échelle typographique, recalée sur les rôles du socle.
+     Les valeurs bougent un peu : Instrument a un œil plus grand
+     qu'Inter, donc les petits corps se lisent mieux à taille égale et
+     les gros ont besoin d'un cran de moins. */
   --t-2xs: 10.5px;
   --t-xs:  11.5px;
   --t-sm:  12.5px;
   --t-md:  13.5px;
   --t-lg:  15px;
   --t-xl:  19px;
-  --t-2xl: 25px;
-  --t-3xl: 33px;
-  --t-4xl: 44px;
+  --t-2xl: 24px;
+  --t-3xl: 31px;
+  --t-4xl: 42px;
 
-  /* ─ Rythme d'espacement, multiples de 4 ─ */
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 12px;
-  --s-4: 16px;
-  --s-5: 24px;
-  --s-6: 32px;
-  --s-7: 48px;
-  --s-8: 64px;
+  --s-1: var(--s1); --s-2: var(--s2); --s-3: var(--s3); --s-4: var(--s4);
+  --s-5: var(--s5); --s-6: var(--s6); --s-7: var(--s7); --s-8: var(--s8);
 
-  --r-sm: 8px;
-  --r:    12px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  /* Les rayons suivent la règle n° 3 du socle : le rayon dit la nature. */
+  --r-sm: var(--r-inline);
+  --r:    var(--r-control);
+  --r-lg: var(--r-panel);
+  --r-xl: var(--r-tile);
 
   --pad:  24px;
-  --top:  64px;
+  --top:  var(--topbar-h);
   --side: 300px;
   --left: 268px;
 
-  --font: 'Inter', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: var(--f-ui);
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
-  --shadow-2: 0 8px 24px -14px rgba(0, 0, 0, .9);
-  --shadow-3: 0 24px 60px -28px rgba(0, 0, 0, 1);
+  /* Les trois élévations, et rien d'autre. */
+  --shadow-1: none;
+  --shadow-2: var(--e-lift);
+  --shadow-3: var(--e-float);
 
-  /* ─ Anciens noms, repointés : tout le code existant suit ─ */
+  /* ─ Anciens noms, repointés ─ */
   --bg:        var(--ink-0);
   --bg-2:      var(--ink-0);
-  --panel:     var(--ink-1);
-  --panel-2:   var(--ink-2);
-  --panel-3:   var(--ink-3);
-  --green:     var(--jade);
+  --panel:     var(--ink-2);
+  --panel-2:   var(--ink-3);
+  --panel-3:   var(--ink-4);
+  --green:     var(--win);
   --green-ink: #04210f;
-  --red:       var(--rose);
-  --violet:    #8b7bd8;
-  --cyan:      #6fb7d4;
-  --pink:      #cf7f9e;
-  --text:      var(--fg);
-  --muted:     var(--fg-2);
-  --dim:       var(--fg-3);
-  --glass:     linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, .008));
-  --shadow:    var(--shadow-2);
+  --red:       var(--lose);
+  --violet:    var(--g-vault);
+  --cyan:      var(--g-plinko);
+  --pink:      var(--g-slots);
+  --text:      var(--t-hi);
+  --muted:     var(--t-mid);
+  --dim:       var(--t-low);
+  --glass:     linear-gradient(180deg, rgba(255, 255, 255, .026), rgba(255, 255, 255, .006));
+  --shadow:    var(--e-lift);
 }
 
 * { box-sizing: border-box; }
@@ -179,19 +167,49 @@ ol, ul { margin: 0; padding: 0; }
 
 .auth-art { position: absolute; inset: 0; pointer-events: none; }
 .orb { position: absolute; border-radius: 50%; filter: blur(80px); }
-.orb.o1 { width: 420px; height: 420px; background: rgba(212, 175, 106, .10); top: -120px; left: -90px; }
-.orb.o2 { width: 460px; height: 460px; background: rgba(212, 175, 106, .06); bottom: -170px; right: -110px; }
+.orb.o1 { width: 460px; height: 460px; background: rgba(139, 77, 255, .13); top: -140px; left: -110px; }
+.orb.o2 { width: 480px; height: 480px; background: rgba(255, 61, 139, .07); bottom: -180px; right: -120px; }
 .orb.o3 { display: none; }
 
-.auth-box { position: relative; width: min(560px, 100%); }
+/*
+ * L'ÉCRAN DE CONNEXION.
+ *
+ * Même composition que la page d'ouverture, et c'est délibéré : quelqu'un
+ * qui a vu le compte à rebours puis arrive ici doit reconnaître l'endroit.
+ * C'est aussi le seul objet de marque du site, et il n'existe qu'à deux
+ * endroits — la porte fermée, et la porte ouverte.
+ */
+.auth-duo {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: var(--s-7);
+  align-items: center;
+  width: 100%; max-width: 1120px;
+}
+.auth-object { justify-self: center; }
+.auth-object img { display: block; width: 440px; height: auto; filter: drop-shadow(0 40px 60px rgba(0, 0, 0, .6)); }
+
+/* Sous 980 px l'objet disparaît : la connexion passe avant la décoration. */
+@media (max-width: 980px) {
+  .auth-duo { grid-template-columns: minmax(0, 1fr); gap: 0; max-width: 560px; }
+  .auth-object { display: none; }
+}
+
+.auth-box { position: relative; width: 100%; }
 
 .auth-logo {
+  font-family: var(--f-brand); font-weight: 800; letter-spacing: -.012em;
   display: inline-flex; align-items: center; gap: 10px;
   font-weight: 800; font-size: 1.05rem; letter-spacing: .01em; margin-bottom: 22px;
 }
 
-.auth-box h1 { font-size: clamp(30px, 5.4vw, 44px); line-height: 1.08; }
-.auth-box h1 em { font-style: normal; color: var(--gold); }
+/* Le seul très gros titre du site, en fonte de marque. */
+.auth-box h1 {
+  font: 800 clamp(29px, 4.2vw, 44px)/1.04 var(--f-brand);
+  letter-spacing: var(--track-display);
+}
+.auth-box h1 em { font-style: normal; color: var(--brand); }
 .auth-lede { color: var(--muted); margin-top: 14px; line-height: 1.62; max-width: 46ch; font-weight: 500; }
 
 .auth-card {
@@ -212,13 +230,13 @@ ol, ul { margin: 0; padding: 0; }
   color: var(--muted); background: rgba(212, 175, 106, .07);
   border: 1px solid rgba(212, 175, 106, .24); border-radius: var(--r);
 }
-.auth-warn strong { color: var(--gold); }
+.auth-warn strong { color: var(--brand-lit); }
 
 .auth-tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 18px 0 0; }
 .auth-tags li {
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 13px; font-size: 13px; font-weight: 600; color: var(--muted);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 13px; font: var(--ty-label); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-control);
 }
 
 /* ══════════════ BOUTONS, CHAMPS, ICÔNES ══════════════ */
@@ -235,54 +253,113 @@ ol, ul { margin: 0; padding: 0; }
  * styles : une interface où chaque bouton a sa couleur ne hiérarchise rien.
  */
 
+/* ══════════════════════════════════════════════════════════════════════
+   LES BOUTONS
+
+   Cinq niveaux, et un seul a le droit d'être spectaculaire.
+
+     PRIMAIRE   une touche : aplat plein, filet clair en haut, tranche de
+                3 px en bas qui s'écrase quand on appuie. C'est LA
+                signature graphique du produit. Il prend la couleur du
+                contexte — violet de marque en général, couleur du jeu
+                dans un jeu.
+     SECONDAIRE une surface d'encre et un filet. Lisible, sans autorité.
+     FANTÔME    du texte et rien d'autre, jusqu'au survol.
+     DESTRUCTIF rouge, et uniquement quand ça détruit vraiment quelque
+                chose.
+     DISCRET    presque invisible : les actions de service.
+
+   La règle qui compte : un seul bouton primaire par écran. S'il y en a
+   deux, aucun des deux n'est primaire.
+   ══════════════════════════════════════════════════════════════════════ */
+
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px 18px; border-radius: var(--r-sm);
-  font-size: var(--t-md); font-weight: 600; letter-spacing: -.01em;
-  white-space: nowrap;
-  transition: background .15s ease, border-color .15s ease, color .15s ease, opacity .15s;
+  padding: 9px 16px;
+  border-radius: var(--r-control);
+  font: var(--ty-label);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
 }
-.btn:active:not(:disabled) { transform: translateY(.5px); }
-.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn:disabled { opacity: .38; cursor: not-allowed; }
 .btn svg { flex: none; }
 
-.btn-primary {
-  background: var(--gold); color: var(--gold-ink); font-weight: 700;
-  border: 1px solid var(--gold);
+/* ── LA TOUCHE ── */
+.btn-primary, .btn-green, .btn-gold {
+  background: var(--accent);
+  color: var(--gold-ink);
+  border-color: transparent;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .34),
+    0 3px 0 var(--accent-deep);
 }
-.btn-primary:hover:not(:disabled) { background: var(--gold-soft); border-color: var(--gold-soft); }
+.btn-primary:hover:not(:disabled),
+.btn-green:hover:not(:disabled),
+.btn-gold:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 82%, #ffffff);
+}
+/* On appuie sur quelque chose de solide : le bouton descend exactement de
+   la hauteur de sa tranche, qui disparaît. */
+.btn-primary:active:not(:disabled),
+.btn-green:active:not(:disabled),
+.btn-gold:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 0 0 var(--accent-deep);
+}
+.btn-primary:disabled, .btn-green:disabled, .btn-gold:disabled {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 3px 0 var(--accent-deep);
+}
 
+/* ── SECONDAIRE ── */
 .btn-soft {
-  background: var(--ink-3); color: var(--fg);
-  border: 1px solid var(--line-firm);
+  background: var(--ink-3); color: var(--t-hi);
+  border-color: var(--hair-firm);
 }
-.btn-soft:hover:not(:disabled) { background: var(--ink-4); border-color: var(--line-hi); }
+.btn-soft:hover:not(:disabled) { background: var(--ink-4); border-color: var(--hair-lit); }
+.btn-soft:active:not(:disabled) { transform: translateY(1px); }
 
+/* ── FANTÔME ── */
 .btn-ghost {
-  background: transparent; color: var(--fg-2);
-  border: 1px solid transparent; padding: 8px 12px;
+  background: none; color: var(--t-mid);
+  border-color: transparent;
 }
-.btn-ghost:hover:not(:disabled) { color: var(--fg); background: var(--ink-2); }
+.btn-ghost:hover:not(:disabled) { color: var(--t-hi); background: var(--ink-3); }
 
+/* ── DESTRUCTIF ── */
 .btn-danger {
-  background: rgba(229, 72, 77, .12); color: #ff8b8f;
-  border: 1px solid rgba(229, 72, 77, .3);
+  background: var(--lose-wash); color: var(--lose);
+  border-color: color-mix(in srgb, var(--lose) 28%, transparent);
 }
-.btn-danger:hover:not(:disabled) { background: rgba(229, 72, 77, .2); }
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--lose) 22%, transparent);
+  border-color: color-mix(in srgb, var(--lose) 45%, transparent);
+}
 
-.btn-discord { background: #5865f2; color: #fff; border: 1px solid #5865f2; }
+/* ── DISCRET ── */
+.btn-pink {
+  background: none; color: var(--t-low);
+  border-color: var(--hair);
+}
+.btn-pink:hover:not(:disabled) { color: var(--t-mid); border-color: var(--hair-firm); }
+
+.btn-discord {
+  background: #5865f2; color: #fff; border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #3b47c4;
+}
 .btn-discord:hover:not(:disabled) { background: #6a75f4; }
-
-/* Compatibilité : le code existant utilise encore ces noms. */
-.btn-green { background: var(--gold); color: var(--gold-ink); font-weight: 700; border: 1px solid var(--gold); }
-.btn-green:hover:not(:disabled) { background: var(--gold-soft); border-color: var(--gold-soft); }
-.btn-gold { background: var(--gold); color: var(--gold-ink); font-weight: 700; border: 1px solid var(--gold); }
-.btn-gold:hover:not(:disabled) { background: var(--gold-soft); border-color: var(--gold-soft); }
-.btn-pink { background: var(--ink-3); color: var(--fg); border: 1px solid var(--line-firm); }
-.btn-pink:hover:not(:disabled) { background: var(--ink-4); }
+.btn-discord:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 #3b47c4;
+}
 
 .btn-block { width: 100%; }
-.btn.big { padding: 13px 22px; font-size: var(--t-lg); }
+.btn.big { padding: 13px 22px; font-size: 14.5px; }
 
 .btn-mini {
   padding: 6px 11px; font-size: var(--t-sm); font-weight: 600; border-radius: var(--r-sm);
@@ -290,7 +367,7 @@ ol, ul { margin: 0; padding: 0; }
   transition: background .15s, color .15s;
 }
 .btn-mini:hover { background: var(--ink-4); color: var(--fg); }
-.btn-mini.danger { background: rgba(229, 72, 77, .12); color: #ff8b8f; border-color: rgba(229, 72, 77, .25); }
+.btn-mini.danger { background: rgba(229, 72, 77, .12); color: var(--lose); border-color: rgba(229, 72, 77, .25); }
 .btn-mini.on { background: rgba(212, 175, 106, .16); color: var(--gold); border-color: rgba(212, 175, 106, .4); }
 
 .link {
@@ -346,13 +423,26 @@ select.input { cursor: pointer; }
 
 /* ─── Barre du haut ─── */
 
+/*
+ * LA BARRE DU HAUT.
+ *
+ * Elle ne ressemble pas à un gabarit d'administration, et ça se joue à
+ * deux détails : le nom du site est le seul élément de la barre en fonte
+ * de marque, et l'onglet actif n'est pas un rectangle grisé mais un
+ * trait de couleur posé SOUS le mot — la façon dont on souligne, pas
+ * celle dont on surligne.
+ *
+ * Elle est translucide et floute ce qui passe dessous : c'est la seule
+ * surface du site qui le fait, et c'est ce qui la détache du contenu
+ * quand on descend dans une longue page.
+ */
 .topbar {
   display: flex; align-items: center; gap: var(--s-5);
   padding: 0 var(--s-5);
   height: var(--top);
-  background: rgba(8, 9, 11, .82);
-  backdrop-filter: saturate(160%) blur(16px);
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink-1) 82%, transparent);
+  backdrop-filter: saturate(150%) blur(18px);
+  border-bottom: 1px solid var(--hair);
   position: sticky; top: 0; z-index: 50;
 }
 
@@ -360,41 +450,63 @@ select.input { cursor: pointer; }
   display: inline-flex; align-items: center; gap: 9px;
   color: var(--fg); flex: none;
 }
-.brand-mark { color: var(--gold); }
+.brand-mark { flex: none; transition: transform var(--t-base) var(--ease); }
 .brand-name {
-  font-size: var(--t-lg); font-weight: 700; letter-spacing: -.02em;
+  font: 800 15.5px/1 var(--f-brand);
+  letter-spacing: -.012em;
 }
-.brand:hover .brand-mark { color: var(--gold-soft); }
+/* Un très léger basculement du sigle au survol : c'est un objet, pas une
+   image. Rien d'autre ne bouge. */
+.brand:hover .brand-mark { transform: rotate(-8deg); }
 
-.topnav { display: flex; align-items: center; gap: 2px; flex: 1; }
+.topnav { display: flex; align-items: center; gap: var(--s-1); flex: 1; }
 .topnav-btn {
-  padding: 8px 14px; border-radius: var(--r-sm);
-  font-size: var(--t-md); font-weight: 500; color: var(--fg-2);
-  transition: color .15s, background .15s;
+  position: relative;
+  padding: 8px 12px 9px;
+  font: var(--ty-label); font-weight: 500; color: var(--t-mid);
+  transition: color var(--t-fast) var(--ease);
 }
-.topnav-btn:hover { color: var(--fg); background: var(--ink-2); }
-.topnav-btn.active { color: var(--fg); background: var(--ink-3); font-weight: 600; }
+.topnav-btn:hover { color: var(--t-hi); }
+.topnav-btn.active { color: var(--t-hi); font-weight: 600; }
+/* Le trait de l'onglet actif. Il naît du centre — 190 ms, une seule
+   fois — plutôt que d'apparaître d'un bloc. */
+.topnav-btn::after {
+  content: '';
+  position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 2px; border-radius: 2px;
+  background: var(--brand);
+  transform: scaleX(0);
+  transition: transform var(--t-base) var(--ease);
+}
+.topnav-btn.active::after { transform: scaleX(1); }
 
 .topbar-right { display: flex; align-items: center; gap: var(--s-3); flex: none; }
 
+/* Le solde est de l'argent : il est donc en mono, comme partout ailleurs
+   sur le site. C'est ce qui l'empêche de sautiller quand il change. */
 .balance {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 8px 14px; border-radius: var(--r-sm);
-  background: var(--ink-2); border: 1px solid var(--line-firm);
-  color: var(--gold);
-  transition: border-color .15s, background .15s;
+  padding: 8px 13px; border-radius: var(--r-control);
+  background: var(--ink-3); border: 1px solid var(--hair-firm);
+  color: var(--brand);
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
+/* La règle de la mono se précise à l'usage : elle est parfaite pour un
+   nombre de chiffres pleins (« 300 400 »), mauvaise dès qu'il y a une
+   virgule et une lettre (« 300,4 k »), parce que sa virgule occupe une
+   chasse entière et écarte le tout. Le solde abrégé du bandeau repasse
+   donc en fonte d'interface, chiffres tabulaires. */
 .balance b {
-  font-size: var(--t-md); font-weight: 700; color: var(--fg);
-  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  font: 700 13.5px/1 var(--f-ui); color: var(--t-hi);
+  font-variant-numeric: tabular-nums; letter-spacing: -.005em;
 }
-.balance:hover { border-color: var(--gold-deep); background: var(--ink-3); }
+.balance:hover { border-color: color-mix(in srgb, var(--brand) 45%, transparent); background: var(--ink-4); }
 /* Le solde qui bouge : un bref éclat, sans clignoter. Une valeur qui change
    sous les yeux doit se signaler, mais discrètement — c'est de l'argent de
    jeu, pas une alarme. */
 .balance.pulse { animation: coin-pulse .55s ease; }
 @keyframes coin-pulse {
-  35% { border-color: var(--gold); background: rgba(212, 175, 106, .12); }
+  35% { border-color: var(--brand); background: var(--brand-wash); }
 }
 .balance.pulse b { animation: coin-lift .55s ease; }
 @keyframes coin-lift { 35% { transform: translateY(-2px); color: var(--gold-soft); } }
@@ -461,49 +573,137 @@ select.input { cursor: pointer; }
 
 /* ══════════════ L'ACCUEIL ══════════════ */
 
-/* ─ 1. Où j'en suis ─ */
+/* ══════════════════════════════════════════════════════════════════════
+   1. OÙ J'EN SUIS — le bandeau d'arrivée
+
+   L'ancienne version alignait cinq cartes rigoureusement identiques.
+   C'est le défaut le plus courant d'un tableau de bord : cinq objets de
+   même poids visuel qui demandent la même attention, alors que deux
+   seulement appellent une action et que les trois autres ne sont que des
+   chiffres qu'on consulte.
+
+   Ici la hiérarchie est explicite et tient en trois familles :
+
+     · LE SOLDE — le seul chiffre en très grand corps de toute la page.
+       C'est ce qu'on vient vérifier en arrivant.
+     · CE QUI ATTEND — le rakeback à récolter, la caisse offerte prête.
+       Deux tuiles cliquables, et elles ne s'allument QUE quand il y a
+       vraiment quelque chose à prendre. Une pastille qui brille en
+       permanence ne signale plus rien.
+     · CE QUI SE CONSULTE — le rang Party, la collection, la mine. Une
+       bande de chiffres séparés par des filets, sans cadre, sans fond.
+       Ils sont lisibles ; ils ne réclament rien.
+   ══════════════════════════════════════════════════════════════════════ */
 
 .hero {
-  display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
-  gap: var(--s-6); align-items: center;
-  padding: var(--s-6) 0 var(--s-7);
-  border-bottom: 1px solid var(--line);
-  margin-bottom: var(--s-7);
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: var(--s-7); align-items: center;
+  padding: var(--s-6) 0 var(--s-6);
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: var(--s-6);
 }
-@media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: var(--s-5); } }
+@media (max-width: 940px) { .hero { grid-template-columns: 1fr; gap: var(--s-5); } }
 
 .hero-kicker {
-  font-size: var(--t-xs); font-weight: 500; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--fg-3);
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
 }
-.hero-amount { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.hero-amount { display: flex; align-items: center; gap: 12px; margin-top: 9px; }
 .hero-amount b {
-  font-size: var(--t-4xl); font-weight: 600; letter-spacing: -.035em;
-  font-variant-numeric: tabular-nums; line-height: 1;
-}
-.hero-coin { color: var(--gold); align-self: center; }
-.hero-sub { margin-top: 10px; font-size: var(--t-md); color: var(--fg-2); font-weight: 400; }
-
-.hero-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); }
-@media (max-width: 1100px) { .hero-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-.hcard {
-  display: flex; align-items: flex-start; gap: 11px; text-align: left;
-  padding: 13px 15px; border-radius: var(--r);
-  background: var(--ink-1); border: 1px solid var(--line);
-  transition: border-color .15s, background .15s;
-}
-.hcard:hover { border-color: var(--line-firm); background: var(--ink-2); }
-.hcard-icon { color: var(--fg-3); margin-top: 1px; flex: none; }
-.hcard-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.hcard-label { font-size: var(--t-xs); color: var(--fg-3); font-weight: 500; }
-.hcard-body b {
-  font-size: var(--t-lg); font-weight: 600; letter-spacing: -.02em;
+  font: 700 clamp(34px, 3.4vw, 46px)/1 var(--f-num);
+  letter-spacing: -.045em;
   font-variant-numeric: tabular-nums;
 }
-.hcard-note { font-size: var(--t-xs); color: var(--fg-3); font-weight: 400; }
-.hcard.lit { border-color: var(--gold-deep); background: rgba(212, 175, 106, .06); }
-.hcard.lit .hcard-icon, .hcard.lit .hcard-body b { color: var(--gold); }
+.hero-coin { color: var(--brand); flex: none; }
+.hero-sub { margin-top: 11px; font: var(--ty-fine); color: var(--t-mid); }
+
+/* Les deux tuiles d'action, puis la bande de consultation. */
+.hero-cards { display: grid; gap: var(--s-3); }
+.hero-act {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+@media (max-width: 620px) { .hero-act { grid-template-columns: 1fr; } }
+
+.hcard {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 13px; text-align: left;
+  padding: 15px 17px;
+  border-radius: var(--r-panel);
+  background: var(--ink-2);
+  border: 1px solid var(--hair);
+  box-shadow: var(--e-panel);
+  transition: border-color var(--t-base) var(--ease),
+              background var(--t-base) var(--ease),
+              transform var(--t-base) var(--ease);
+}
+.hcard:hover { border-color: var(--hair-firm); transform: translateY(-2px); }
+
+.hcard-icon {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border-radius: var(--r-control);
+  background: var(--ink-4); color: var(--t-low);
+  transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease);
+}
+.hcard-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hcard-label { font: var(--ty-fine); color: var(--t-low); }
+/* La mono est pour l'argent et les codes. Ici les valeurs mélangent des
+   nombres et des mots (« Ouvrir », « Niveau 1 ») : la fonte d'interface
+   avec ses chiffres tabulaires les tient mieux ensemble. */
+.hcard-body b {
+  font: 700 16.5px/1.15 var(--f-ui);
+  letter-spacing: -.01em; font-variant-numeric: tabular-nums;
+}
+.hcard-note { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); }
+
+/*
+ * L'état « il y a quelque chose à prendre ».
+ *
+ * Il n'apparaît que quand c'est vrai : rakeback récoltable, caisse
+ * offerte disponible. C'est la seule chose de tout le bandeau qui porte
+ * la couleur de marque, et c'est pour ça qu'on la voit.
+ */
+.hcard.lit {
+  border-color: color-mix(in srgb, var(--brand) 42%, transparent);
+  background: linear-gradient(180deg, var(--brand-wash), transparent 70%), var(--ink-2);
+}
+.hcard.lit .hcard-icon { background: var(--brand); color: #fff; }
+.hcard.lit .hcard-body b { color: var(--brand-lit); }
+.hcard.lit::after {
+  content: '';
+  position: absolute; top: 0; right: 0;
+  width: 34px; height: 34px;
+  background: radial-gradient(circle at 100% 0%,
+              color-mix(in srgb, var(--brand) 55%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+/* ── La bande de consultation ──
+   Pas de cadre, pas de fond, pas d'ombre : trois chiffres et deux
+   filets. Ce sont des informations, pas des invitations. */
+.hero-read {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--hair);
+  padding-top: var(--s-3);
+}
+@media (max-width: 620px) { .hero-read { grid-template-columns: 1fr; } }
+.hero-read .hcard {
+  background: none; border: 0; box-shadow: none;
+  border-radius: 0; padding: 4px var(--s-4);
+  gap: 0; flex-direction: column; align-items: flex-start;
+}
+.hero-read .hcard:first-child { padding-left: 0; }
+.hero-read .hcard + .hcard { border-left: 1px solid var(--hair); }
+.hero-read .hcard:hover { transform: none; }
+.hero-read .hcard:hover .hcard-body b { color: var(--brand-lit); }
+.hero-read .hcard-icon { display: none; }
+.hero-read .hcard-body b { font-size: 15px; margin-top: 3px; }
+@media (max-width: 620px) {
+  .hero-read .hcard { padding: 9px 0; }
+  .hero-read .hcard + .hcard { border-left: 0; border-top: 1px solid var(--hair); }
+}
 
 /* ─ Sections ─ */
 
@@ -519,43 +719,218 @@ select.input { cursor: pointer; }
   font-size: var(--t-md); color: var(--fg-3); font-weight: 400;
 }
 
-/* ─ 2. À quoi je joue ─ */
+/* ══════════════════════════════════════════════════════════════════════
+   2. À QUOI JE JOUE — le catalogue
 
-/* Six jeux : trois par ligne sur grand écran. En « auto-fill » on obtenait
-   cinq cartes puis une seule orpheline, ce qui donne toujours l'impression
-   qu'il manque quelque chose. */
-.games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
-@media (max-width: 1180px) { .games { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .games { grid-template-columns: 1fr; } }
+   C'est le bloc qui porte toute la direction artistique, alors il obéit
+   à trois décisions et pas une de plus.
+
+   · LA GRILLE N'EST PAS RÉGULIÈRE. Six cases identiques alignées trois
+     par trois, c'est un tableur : rien ne dit ce qui compte. Ici le
+     blackjack occupe une grande tuile sur deux rangées — c'est le cœur du
+     site, on y joue à plusieurs avec un code — la roulette et le plinko
+     des tuiles moyennes, et les trois derniers des tuiles courtes. La
+     taille EST la hiérarchie.
+
+   · CHAQUE TUILE PORTE SA COULEUR. Elle vient de [data-game] et ne sort
+     jamais de la tuile : le fond de la page reste noir. C'est ce
+     contraste qui fait ressortir les objets, exactement comme sur une
+     planche d'icônes posées sur fond sombre.
+
+   · L'OBJET EST UN JETON. Le même que celui de la page d'ouverture, à
+     l'échelle d'une tuile. Une marque se reconnaît à ce qu'elle répète :
+     plutôt que huit illustrations différentes, une forme unique déclinée
+     huit fois, ce qui fait exister la famille au lieu de la collection.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.games {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+/* La mise en page nommée, plutôt que six règles nth-child : on lit la
+   composition d'un coup d'œil, et on la modifie sans compter. */
+.game[data-game="blackjack"] { grid-column: span 3; grid-row: span 2; }
+.game[data-game="roulette"]  { grid-column: span 3; }
+.game[data-game="plinko"]    { grid-column: span 3; }
+.game[data-game="slots"],
+.game[data-game="vault"],
+.game[data-game="mine"]      { grid-column: span 2; }
+
+@media (max-width: 1120px) {
+  .games { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .game[data-game="blackjack"] { grid-column: span 4; grid-row: span 1; }
+  .game[data-game="roulette"], .game[data-game="plinko"] { grid-column: span 2; }
+  .game[data-game="slots"], .game[data-game="vault"], .game[data-game="mine"] { grid-column: span 4; }
+}
+@media (max-width: 680px) {
+  .games { grid-template-columns: 1fr; }
+  .game[data-game] { grid-column: span 1 !important; grid-row: span 1 !important; }
+}
+
 .game {
-  display: flex; flex-direction: column; gap: 9px; text-align: left;
-  padding: var(--s-4); border-radius: var(--r-lg);
-  background: var(--ink-1); border: 1px solid var(--line);
-  transition: border-color .18s, background .18s, transform .18s;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 10px; text-align: left;
+  padding: var(--s-4);
+  border-radius: var(--r-tile);
+  background: var(--ink-2);
+  border: 1px solid var(--hair);
+  box-shadow: var(--e-panel);
+  transition: transform var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease),
+              box-shadow var(--t-base) var(--ease);
 }
+
+/* La couleur du jeu, en très petite dose, dans le coin haut-gauche —
+   là où arrive la lumière partout ailleurs sur le site. C'est ce qui
+   teinte la tuile sans la peindre. */
+.game::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 0% 0%,
+              color-mix(in srgb, var(--accent) 15%, transparent), transparent 62%);
+  opacity: .7;
+  transition: opacity var(--t-base) var(--ease);
+  pointer-events: none;
+}
+.game > * { position: relative; z-index: 1; }
+
 .game:hover {
-  border-color: var(--line-hi); background: var(--ink-2); transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  box-shadow: var(--e-lift), var(--e-accent);
 }
-.game-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.game:hover::before { opacity: 1; }
+.game:active { transform: translateY(-1px); }
+
+.game-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+
+/* ── LE JETON ──
+   Un disque d'accent, une tranche pleine en dessous, un liseré clair en
+   haut : la même grammaire que la touche des boutons et que la pile de
+   la page d'ouverture. Les encoches du pourtour sont un dégradé conique
+   découpé en anneau — aucune image, et ça reste net à n'importe quelle
+   taille d'écran. */
 .game-icon {
-  display: grid; place-items: center; width: 40px; height: 40px;
-  border-radius: var(--r-sm); background: var(--ink-3); color: var(--gold);
+  position: relative;
+  display: grid; place-items: center;
+  width: 46px; height: 46px; flex: none;
+  border-radius: var(--r-circle);
+  background:
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--accent) 78%, #ffffff) 0%,
+      var(--accent) 42%,
+      color-mix(in srgb, var(--accent) 72%, #000000) 100%);
+  color: color-mix(in srgb, var(--accent-deep) 72%, #000000);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 3px 0 var(--accent-deep),
+    0 8px 16px -8px color-mix(in srgb, var(--accent) 60%, transparent);
+  transition: transform var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
-.game:hover .game-icon { background: rgba(212, 175, 106, .12); }
+.game-icon::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: repeating-conic-gradient(
+    from 12deg,
+    color-mix(in srgb, var(--accent-deep) 80%, #000000) 0deg 9deg,
+    transparent 9deg 45deg);
+  /* L'anneau : on ne garde que la couronne extérieure du dégradé. */
+  -webkit-mask: radial-gradient(closest-side, transparent 72%, #000 74%);
+  mask: radial-gradient(closest-side, transparent 72%, #000 74%);
+  opacity: .75;
+}
+.game-icon svg { position: relative; z-index: 1; }
+.game:hover .game-icon {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 5px 0 var(--accent-deep),
+    0 14px 22px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
 .game-tag {
-  font-size: var(--t-2xs); font-weight: 600; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--fg-3);
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+  padding-top: 5px;
 }
-.game h3 { font-size: var(--t-lg); font-weight: 600; letter-spacing: -.02em; }
-.game p { font-size: var(--t-sm); color: var(--fg-2); line-height: 1.55; font-weight: 400; flex: 1; }
+
+/* Le nom du jeu est le seul texte de la page en fonte de marque : c'est
+   à ça qu'elle sert. Sur la grande tuile il monte d'un cran, ce qui
+   suffit à dire « celui-là d'abord » sans rien ajouter. */
+.game h3 {
+  font: var(--ty-title);
+  letter-spacing: -.015em;
+  margin-top: 2px;
+}
+.game[data-game="blackjack"] h3 { font-size: 27px; }
+.game[data-game="blackjack"] .game-icon { width: 60px; height: 60px; }
+.game[data-game="blackjack"] .game-icon svg { width: 28px; height: 28px; }
+
+.game p {
+  font: var(--ty-fine); color: var(--t-mid); flex: 1;
+  max-width: 46ch;
+}
+
+/*
+ * LE BANDEAU DE LA GRANDE TUILE.
+ *
+ * Une tuile deux fois plus haute que les autres doit avoir deux fois
+ * plus à dire, sinon c'est un trou. Trois chiffres qui ne se trouvent
+ * nulle part ailleurs sur la page — combien de tables tournent en ce
+ * moment, combien de places, ce que paie un blackjack — et qui donnent
+ * une raison de cliquer plutôt qu'une simple étiquette.
+ */
+.game-live {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; margin-top: auto;
+  background: var(--hair);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+  overflow: hidden;
+}
+.game-live div {
+  padding: 11px var(--s-3);
+  background: color-mix(in srgb, var(--accent) 7%, var(--ink-1));
+}
+.game-live b {
+  display: block;
+  font: 700 19px/1 var(--f-num);
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--accent) 55%, #ffffff);
+}
+.game-live span {
+  display: block; margin-top: 5px;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+/* Le point qui bat quand des tables tournent vraiment. Il ne s'anime
+   qu'en présence de quelque chose à signaler — pas en permanence. */
+.game-live .on { color: var(--accent); }
+.game-live .on::after {
+  content: ''; display: inline-block; vertical-align: middle;
+  width: 7px; height: 7px; margin-left: 7px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: live-beat 2.4s var(--ease) infinite;
+}
+@keyframes live-beat {
+  0%, 70%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  35% { box-shadow: 0 0 0 6px transparent; }
+}
 .game-foot {
   display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s-3); padding-top: 10px; border-top: 1px solid var(--line);
+  gap: var(--s-3); padding-top: 11px;
+  border-top: 1px solid var(--hair);
 }
-.game-min { font-size: var(--t-sm); color: var(--fg-3); font-weight: 500; }
+.game-min { font: var(--ty-fine); color: var(--t-low); font-weight: 500; }
 .game-rtp {
-  font-size: var(--t-sm); font-weight: 600; color: var(--fg-2);
+  font: 600 12px/1 var(--f-ui);
   font-variant-numeric: tabular-nums;
+  color: var(--t-mid);
+  padding: 5px 8px; border-radius: var(--r-inline);
+  background: var(--ink-3);
 }
 
 /* ─ 3. Avec qui ─ */
@@ -724,8 +1099,8 @@ select.input { cursor: pointer; }
   padding: 16px; display: flex; flex-direction: column; gap: 13px;
   box-shadow: var(--shadow);
 }
-.bet-tabs { display: flex; gap: 4px; padding: 4px; background: rgba(0, 0, 0, .35); border-radius: 999px; }
-.bet-tab { flex: 1; padding: 9px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.bet-tabs { display: flex; gap: 3px; padding: 3px; background: rgba(0, 0, 0, .35); border-radius: var(--r-control); }
+.bet-tab { flex: 1; padding: 9px; border-radius: 7px; font: var(--ty-label); font-weight: 600; color: var(--muted); }
 .bet-tab.active { background: var(--panel-3); color: var(--text); }
 
 .field { display: flex; flex-direction: column; gap: 7px; }
@@ -859,15 +1234,60 @@ select.input { cursor: pointer; }
 .bj-phase { flex: 1; text-align: center; font-size: 13.5px; font-weight: 700; }
 .bj-tools { display: flex; gap: 6px; }
 
+/*
+ * LE TAPIS.
+ *
+ * Une vraie table, pas une liste de cartes : un demi-ovale de feutre bordé
+ * de cuir, le croupier en haut, l'arc des cinq places en bas. Le tout est
+ * dessiné en CSS — aucune image à télécharger, et ça s'adapte à toutes les
+ * largeurs, ce qu'une photo de table ne sait pas faire.
+ *
+ * Le vert du feutre est le seul endroit du site où le vert n'est pas un
+ * gain : ici c'est la couleur du meuble, tout le monde la reconnaît, et une
+ * table de blackjack champagne n'aurait aucun sens.
+ */
 .felt {
+  position: relative;
+  padding: 30px 20px 26px;
+  min-height: 430px;
+  display: flex; flex-direction: column; gap: 22px;
+  border-radius: 26px;
   background:
-    radial-gradient(760px 360px at 50% 0%, rgba(212, 175, 106, .08), transparent 70%),
-    var(--glass), var(--panel);
-  border: 1px solid var(--line); border-radius: var(--r-lg);
-  padding: 24px 16px; min-height: 380px;
-  display: flex; flex-direction: column; gap: 28px;
-  box-shadow: var(--shadow);
+    /* le halo de la lampe au-dessus du croupier */
+    radial-gradient(600px 300px at 50% -6%, rgba(255, 240, 210, .10), transparent 68%),
+    /* le feutre, plus clair au centre comme sous un vrai éclairage */
+    radial-gradient(120% 100% at 50% 22%, #1c5140 0%, #143b2f 46%, #0d2a21 100%);
+  border: 1px solid rgba(212, 175, 106, .22);
+  box-shadow:
+    inset 0 0 0 10px rgba(0, 0, 0, .28),           /* le bourrelet de cuir */
+    inset 0 0 0 11px rgba(212, 175, 106, .22),     /* le filet doré */
+    inset 0 30px 80px -30px rgba(0, 0, 0, .7),
+    var(--shadow-3);
 }
+
+/* L'arc de cercle imprimé sur le feutre, devant les places. */
+.felt::before {
+  content: '';
+  position: absolute; left: 8%; right: 8%; top: 44%; bottom: 12%;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 50% 50% 46% 46% / 60% 60% 40% 40%;
+  pointer-events: none;
+}
+
+/* La règle de la maison, sérigraphiée sur le tapis comme dans un vrai club. */
+.felt-rules {
+  position: absolute; left: 0; right: 0; top: 39%;
+  text-align: center; pointer-events: none;
+  font-size: var(--t-sm); font-weight: 600; letter-spacing: .22em;
+  text-transform: uppercase; color: rgba(212, 175, 106, .42);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+.felt-rules small {
+  display: block; margin-top: 5px;
+  font-size: var(--t-2xs); letter-spacing: .16em;
+  color: rgba(255, 255, 255, .2);
+}
+@media (max-width: 700px) { .felt-rules { display: none; } }
 
 .dealer { text-align: center; }
 .dealer .who { font-size: 11px; color: var(--muted); margin-bottom: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 800; }
@@ -890,16 +1310,74 @@ select.input { cursor: pointer; }
   border: 1px solid var(--panel-3);
 }
 
-.seats { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.seat {
-  flex: 1 1 0; min-width: 104px; max-width: 158px;
-  padding: 13px 8px; border-radius: var(--r);
-  background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
-  display: flex; flex-direction: column; gap: 8px; align-items: center;
-  transition: border-color .15s, box-shadow .15s;
+/*
+ * LES CINQ PLACES.
+ *
+ * Toujours cinq, toujours visibles — même vides. Avant, seuls les sièges
+ * occupés étaient dessinés : à deux joueurs on ne voyait que deux cases et
+ * rien ne disait qu'il restait trois places libres, ni où s'asseoir.
+ *
+ * Elles sont disposées en arc autour du croupier : celle du milieu lui
+ * fait face et descend le plus bas, celles des bords remontent.
+ */
+.seats {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px; align-items: end; margin-top: auto;
+  /* De quoi laisser respirer les places relevées sans rogner le feutre. */
+  padding-bottom: 2px;
 }
-.seat.active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(212, 175, 106, .24); }
-.seat.you { background: rgba(212, 175, 106, .06); }
+.seat {
+  position: relative;
+  padding: 12px 8px; border-radius: 14px;
+  background: rgba(4, 14, 11, .5); border: 1px solid rgba(255, 255, 255, .07);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  transition: border-color .15s, box-shadow .15s, transform .15s, background .15s;
+  backdrop-filter: blur(2px);
+}
+/*
+ * La courbe de la table.
+ *
+ * Le croupier est en haut, les joueurs assis autour du demi-cercle : la
+ * place du milieu est celle qui lui fait face, donc la plus éloignée —
+ * la plus basse à l'écran. Les places des bords remontent en suivant
+ * l'arc. C'est l'inverse qui donnait une table bombée, et l'œil le voit
+ * tout de suite sans savoir pourquoi.
+ */
+.seat:nth-child(1), .seat:nth-child(5) { transform: translateY(-16px); }
+.seat:nth-child(2), .seat:nth-child(4) { transform: translateY(-6px); }
+
+.seat.active {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 0 34px -8px rgba(212, 175, 106, .8);
+}
+.seat.you { background: rgba(212, 175, 106, .09); border-color: rgba(212, 175, 106, .35); }
+
+/* Une place libre : discrète, mais cliquable. */
+.seat.free {
+  background: rgba(0, 0, 0, .22);
+  border: 1px dashed rgba(255, 255, 255, .13);
+  min-height: 132px; justify-content: center;
+  color: rgba(255, 255, 255, .32); font-size: var(--t-sm); font-weight: 500;
+}
+.seat.free .seat-num {
+  font-size: var(--t-2xs); letter-spacing: .16em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .22);
+}
+button.seat.free:hover {
+  border-color: rgba(212, 175, 106, .55); color: var(--gold-soft);
+  background: rgba(212, 175, 106, .07); transform: translateY(0);
+}
+
+/* Le bouton d'exclusion, réservé à l'hôte et discret jusqu'au survol. */
+.seat-kick {
+  position: absolute; top: 5px; right: 5px;
+  width: 20px; height: 20px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 12px; line-height: 1;
+  color: rgba(255, 255, 255, .35); background: rgba(0, 0, 0, .45);
+  opacity: 0; transition: opacity .15s, color .15s, background .15s;
+}
+.seat:hover .seat-kick { opacity: 1; }
+.seat-kick:hover { color: #fff; background: var(--rose); }
 .seat-who { display: flex; align-items: center; gap: 6px; max-width: 100%; }
 .seat-who img { width: 24px; height: 24px; border-radius: 50%; background: var(--panel-3); flex: none; }
 .seat-who span { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1228,7 +1706,6 @@ select.input { cursor: pointer; }
   .rl-nums { grid-template-columns: 30px repeat(12, 1fr); }
   .rl-cell { font-size: 10px; padding: 7px 1px; }
   .collection { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
-  .hero-cards { grid-template-columns: 1fr 1fr; }
   .social { grid-template-columns: 1fr; }
   .chat { height: 380px; }
 }
@@ -1752,12 +2229,12 @@ select.input { cursor: pointer; }
 .cos-frame.frame-or, .frame-demo.frame-or { box-shadow: 0 0 0 2px var(--gold), 0 0 14px -3px var(--gold); }
 .cos-frame.frame-arcen, .frame-demo.frame-arcen {
   box-shadow: 0 0 0 2px transparent;
-  background-image: conic-gradient(#ff4d6a, var(--gold), var(--jade), #7fa8bd, #8b7bd8, #ff4d6a);
+  background-image: conic-gradient(var(--lose), var(--gold), var(--jade), #7fa8bd, var(--brand), var(--lose));
   padding: 2px; animation: spin-slow 4s linear infinite;
 }
 @keyframes spin-slow { to { filter: hue-rotate(360deg); } }
 .cos-frame.frame-cosmos, .frame-demo.frame-cosmos {
-  box-shadow: 0 0 0 2px #8b7bd8, 0 0 18px -2px #8b7bd8;
+  box-shadow: 0 0 0 2px var(--brand), 0 0 18px -2px var(--brand);
   animation: cosmos 3s ease-in-out infinite;
 }
 @keyframes cosmos { 50% { box-shadow: 0 0 0 2px #7fa8bd, 0 0 22px 0 #7fa8bd; } }
@@ -1879,7 +2356,7 @@ select.input { cursor: pointer; }
    ═══════════════════════════════════════════════════════════ */
 
 .topnav-btn.party i { font-size: 13px; margin-right: 4px; }
-.topnav-btn.party.active, .topnav-btn.party:hover { color: #c9b6ff; }
+.topnav-btn.party.active, .topnav-btn.party:hover { color: var(--brand-lit); }
 
 .party-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
 @media (max-width: 900px) { .party-top { grid-template-columns: 1fr; } }
@@ -1888,7 +2365,7 @@ select.input { cursor: pointer; }
 .party-rank { display: flex; flex-direction: column; gap: 12px; }
 .prank-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .prank-label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
-.prank-title { font-size: 17px; font-weight: 800; color: #c9b6ff; letter-spacing: .04em; }
+.prank-title { font-size: 17px; font-weight: 800; color: var(--brand-lit); letter-spacing: .04em; }
 .prank-row { display: flex; align-items: center; gap: 14px; }
 .prank-lvl {
   width: 54px; height: 54px; flex: none; display: grid; place-items: center;
@@ -1898,7 +2375,7 @@ select.input { cursor: pointer; }
 }
 .prank-bars { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .prank-bar { height: 9px; border-radius: 999px; background: rgba(0, 0, 0, .4); overflow: hidden; }
-.prank-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8b7bd8, #c9b6ff); transition: width .5s ease; }
+.prank-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--brand-lit)); transition: width .5s ease; }
 .prank-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .prank-stats > div {
   background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
@@ -1976,13 +2453,13 @@ select.input { cursor: pointer; }
   font-family: ui-monospace, monospace; font-size: 20px; font-weight: 800;
   letter-spacing: .3em; padding: 6px 8px 6px 14px; border-radius: 10px;
   background: rgba(0, 0, 0, .4); border: 1px dashed rgba(212, 175, 106, .5);
-  color: #c9b6ff; transition: border-color .2s, color .2s;
+  color: var(--brand-lit); transition: border-color .2s, color .2s;
 }
-.room-code:hover { border-color: #c9b6ff; color: #fff; }
+.room-code:hover { border-color: var(--brand-lit); color: #fff; }
 .room-phase { flex: 1; text-align: center; font-size: 14px; font-weight: 800; color: var(--muted); }
 .room-phase.voting { color: var(--gold); }
 .room-phase.describing { color: var(--green); }
-.room-phase.over, .room-phase.reveal { color: #c9b6ff; }
+.room-phase.over, .room-phase.reveal { color: var(--brand-lit); }
 .room-acts { display: flex; gap: 8px; }
 
 .room-timer { height: 4px; border-radius: 999px; background: rgba(0, 0, 0, .4); overflow: hidden; margin-bottom: 14px; }
@@ -2015,7 +2492,7 @@ select.input { cursor: pointer; }
 
 .vote-btn {
   font-size: 11px; font-weight: 800; padding: 6px 11px; border-radius: 999px;
-  background: rgba(255, 77, 106, .12); border: 1px solid rgba(255, 77, 106, .4); color: #ff8ea3;
+  background: rgba(255, 77, 106, .12); border: 1px solid rgba(255, 77, 106, .4); color: var(--lose);
 }
 .vote-btn:hover { background: rgba(255, 77, 106, .24); color: #fff; }
 .vote-btn.on { background: var(--red); border-color: var(--red); color: #fff; }
@@ -2026,14 +2503,14 @@ select.input { cursor: pointer; }
 .room-chat { display: flex; flex-direction: column; max-height: 560px; }
 .room-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 4px; min-height: 220px; }
 .rmsg { font-size: 12.5px; line-height: 1.5; }
-.rmsg b { color: #c9b6ff; font-weight: 800; margin-right: 5px; }
+.rmsg b { color: var(--brand-lit); font-weight: 800; margin-right: 5px; }
 .rmsg i { font-style: normal; font-size: 10px; color: var(--dim); margin-left: 5px; }
 .rmsg.ghost { opacity: .5; font-style: italic; }
 .rmsg.sys { color: var(--dim); font-weight: 600; font-size: 12px; padding: 4px 0; }
 .rmsg.sys.start, .rmsg.sys.good { color: var(--green); }
 .rmsg.sys.bad { color: var(--red); }
 .rmsg.sys.warn { color: var(--gold); }
-.rmsg.sys.twist, .rmsg.sys.end { color: #c9b6ff; font-weight: 800; }
+.rmsg.sys.twist, .rmsg.sys.end { color: var(--brand-lit); font-weight: 800; }
 .chat-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 10px; }
 
 /* ─── Undercover ─── */
@@ -2079,7 +2556,7 @@ select.input { cursor: pointer; }
   padding: 5px 11px; border-radius: 999px;
 }
 .uc-role.civil { background: rgba(212, 175, 106, .14); color: var(--gold); }
-.uc-role.spy { background: rgba(255, 77, 106, .16); color: #ff8ea3; }
+.uc-role.spy { background: rgba(255, 77, 106, .16); color: var(--lose); }
 .uc-role.white { background: rgba(255, 255, 255, .12); color: #fff; }
 
 .uc-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
@@ -2100,7 +2577,7 @@ select.input { cursor: pointer; }
   padding: 16px 26px; border-radius: 16px; text-align: center; width: 100%;
 }
 .uc-banner.civils { background: rgba(212, 175, 106, .14); color: var(--gold); }
-.uc-banner.spies { background: rgba(255, 77, 106, .14); color: #ff8ea3; }
+.uc-banner.spies { background: rgba(255, 77, 106, .14); color: var(--lose); }
 .uc-banner.white { background: rgba(255, 255, 255, .12); color: #fff; }
 .uc-words { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .uc-wordcard { padding: 14px; border-radius: 13px; text-align: center; border: 1px solid var(--line); }
@@ -2118,7 +2595,7 @@ select.input { cursor: pointer; }
 .uc-rolecard b { font-size: 13px; }
 .uc-rolecard span { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .uc-rolecard.spy { border-color: rgba(255, 77, 106, .4); }
-.uc-rolecard.spy span { color: #ff8ea3; }
+.uc-rolecard.spy span { color: var(--lose); }
 .uc-rolecard.white { border-color: rgba(255, 255, 255, .35); }
 .uc-rolecard.civil span { color: var(--green); }
 
@@ -2332,7 +2809,7 @@ select.input { cursor: pointer; }
 }
 .me-item i { font-style: normal; font-size: 15px; }
 .me-item:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
-.me-item.danger:hover { background: rgba(255, 77, 106, .12); color: #ff8ea3; }
+.me-item.danger:hover { background: rgba(255, 77, 106, .12); color: var(--lose); }
 .me-sep { height: 1px; margin: 5px 8px; background: var(--line); }
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .modal-actions .btn { flex: 1; }
@@ -2377,7 +2854,7 @@ select.input { cursor: pointer; }
   background: rgba(255, 255, 255, .06); color: var(--muted);
 }
 .mk-ratio.good { background: rgba(62, 207, 142, .14); color: var(--green); }
-.mk-ratio.steep { background: rgba(255, 77, 106, .14); color: #ff8ea3; }
+.mk-ratio.steep { background: rgba(255, 77, 106, .14); color: var(--lose); }
 .mk-price { font-size: 14.5px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 800px) {
   .mk-row { grid-template-columns: 34px 1fr auto; row-gap: 8px; }
@@ -2404,7 +2881,7 @@ select.input { cursor: pointer; }
 }
 .road-title::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .road-title.building { color: var(--gold); }
-.road-title.thinking { color: #8b7bd8; }
+.road-title.thinking { color: var(--brand); }
 .road-title.done { color: var(--green); }
 .road-card {
   padding: 15px; border-radius: 14px;
@@ -2580,3 +3057,102 @@ select.input { cursor: pointer; }
 /* Deux panneaux côte à côte de hauteurs différentes : le plus court ne doit
    pas s'étirer pour rejoindre le plus long, sinon il se remplit de vide. */
 .med-top, .party-top, .lb-grid { align-items: start; }
+
+/* ══════════════ LE CLASSEMENT EN ACCÈS RAPIDE ══════════════ */
+
+.lb-pop { width: min(520px, 92vw); display: flex; flex-direction: column; gap: var(--s-4); }
+.lb-pop-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.lb-pop-head h2 { font-size: var(--t-xl); font-weight: 600; }
+/*
+ * La liste défile, et on doit le VOIR. Sans ce dégradé, la dernière ligne
+ * est coupée net au milieu d'un nom : ça ressemble à un bug d'affichage
+ * plutôt qu'à une invitation à faire défiler.
+ */
+.lb-pop .lb {
+  max-height: min(460px, 56vh); overflow-y: auto; padding-right: 4px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), transparent);
+}
+/* Arrivé en bas, plus rien à masquer. */
+.lb-pop .lb.at-end { -webkit-mask-image: none; mask-image: none; }
+.lb-pop-foot { border-top: 1px solid var(--line); padding-top: var(--s-3); }
+
+
+/* Le bandeau du spectateur, sous le tapis. */
+.bj-watch {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-4); flex-wrap: wrap;
+  padding: 13px 18px; border-radius: var(--r);
+  background: var(--ink-2); border: 1px dashed var(--line-firm);
+  font-size: var(--t-md); color: var(--fg-2); font-weight: 500;
+}
+
+/* La carte d'une table dans la liste : rejoindre, ou seulement regarder. */
+.bj-open-card { position: relative; }
+.boc-go, .boc-full {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: var(--t-sm); font-weight: 600; color: var(--gold); text-align: center;
+}
+.boc-full { color: var(--fg-3); }
+.boc-watch {
+  position: absolute; top: 10px; right: 10px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: var(--t-2xs); font-weight: 600; letter-spacing: .04em;
+  color: var(--fg-3); background: rgba(0, 0, 0, .4); border: 1px solid var(--line);
+  opacity: 0; transition: opacity .15s, color .15s, border-color .15s;
+}
+.bj-open-card:hover .boc-watch { opacity: 1; }
+.boc-watch:hover { color: var(--fg); border-color: var(--line-hi); }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   L'ACCÈS ÉQUIPE
+
+   Discret, pas secret. Un lien gris sous la carte de connexion : les
+   joueurs ne le remarqueront pas, et celui qui a la clé n'a pas à se
+   souvenir d'une combinaison de touches cachée.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.auth-staff { margin-top: var(--s-4); }
+.staff-btn {
+  background: none; border: 0; padding: 0;
+  color: var(--t-off); font: var(--ty-fine); font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  transition: color var(--t-fast) var(--ease);
+}
+.staff-btn:hover { color: var(--t-mid); }
+.staff-box {
+  margin-top: var(--s-3);
+  padding: var(--s-4);
+  background: var(--ink-1);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+}
+.staff-box[hidden] { display: none; }
+.staff-box form { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+.staff-box .input { flex: 1; min-width: 0; font-family: var(--f-num); font-size: 13px; }
+.staff-box .input::placeholder { font-family: var(--f-ui); }
+#staff-said { margin-top: var(--s-2); min-height: 1.2em; }
+#staff-said.bad { color: var(--lose); }
+#staff-said.good { color: var(--win); }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   LA BARRE DU HAUT SUR TÉLÉPHONE
+
+   Unbounded est une fonte large : « PartyZone » écrit en toutes lettres
+   pousse le solde hors de l'écran sur un mobile. En dessous de 520 px le
+   nom disparaît donc et il ne reste que le sigle — qui est justement fait
+   pour ça, se lire seul. Ce n'est pas une réduction, c'est un autre
+   arbitrage : sur un petit écran, savoir combien on a vaut mieux que
+   relire le nom du site sur lequel on est déjà.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 520px) {
+  .topbar { gap: var(--s-3); padding: 0 var(--s-3); }
+  .brand-name { display: none; }
+  .me-text { display: none; }
+  .me-chip { padding: 4px 6px; }
+  .balance { padding: 7px 10px; }
+}

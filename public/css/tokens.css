@@ -1,0 +1,362 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   PARTYZONE — LE SOCLE
+   ═══════════════════════════════════════════════════════════════════════
+
+   Ce fichier ne dessine rien. Il énonce les règles. Tout le reste du CSS
+   n'a le droit d'utiliser que ce qui est déclaré ici : pas une couleur
+   écrite en dur, pas une ombre inventée sur place, pas un rayon au hasard.
+
+   C'est cette contrainte-là qui fait qu'une interface a l'air dessinée par
+   quelqu'un plutôt qu'assemblée morceau par morceau.
+
+   ────────────────────────────────────────────────────────────────────────
+   LES CINQ RÈGLES
+   ────────────────────────────────────────────────────────────────────────
+
+   1. LE CHROME EST GRIS.
+      La barre du haut, les panneaux, les tableaux, les formulaires : tout
+      ce qui sert à naviguer est en encre désaturée. Aucune saturation.
+      Neuf dixièmes de l'écran ne contiennent aucune couleur.
+
+   2. LA COULEUR APPARTIENT AUX JEUX.
+      Chaque jeu possède une couleur, et une seule, pour toujours. Le
+      blackjack est jade, la roulette vermillon, le plinko cyan. Cette
+      couleur le suit partout — sa tuile, son en-tête, sa ligne dans
+      l'historique, sa pastille au classement. On reconnaît un jeu à sa
+      couleur avant d'avoir lu son nom.
+      Conséquence directe : l'accueil n'est pas violet. Il est noir, avec
+      des objets colorés posés dessus.
+
+   3. LE RAYON DIT LA NATURE.
+      Plus un élément est illustratif, plus il est arrondi. Un objet à
+      regarder : 18 px. Un panneau qui contient de l'information : 12 px.
+      Un bouton : 9 px. Une ligne de tableau : 0. Le cercle est réservé aux
+      avatars. Il n'y a pas de bouton en gélule sur ce site.
+
+   4. LA PROFONDEUR SE MÉRITE.
+      Trois niveaux, pas plus. À plat (les données), creusé (les panneaux :
+      un filet de lumière en haut, aucune ombre portée), et soulevé (ce qui
+      flotte vraiment : menus, fenêtres, la tuile du jeu où l'on est).
+      Une ombre colorée n'existe que pour le jeu en cours, et elle emprunte
+      SA couleur. Aucun halo violet derrière un composant qui n'a rien
+      demandé.
+
+   5. LES BOUTONS PRINCIPAUX SONT DES TOUCHES.
+      Un aplat, un filet clair en haut, une tranche pleine de 2 px en bas
+      qui s'écrase quand on appuie. Pas de dégradé, pas de lueur. La
+      signature du produit est un objet mécanique, pas un effet lumineux.
+
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   LES FONTES
+
+   Trois voix, trois rôles, et jamais l'inverse :
+
+   · UNBOUNDED  — la marque parle. Large, géométrique, un peu joueuse.
+     Le nom du site, les titres de section, le nom d'un jeu. Rien d'autre.
+     Elle est trop présente pour porter une phrase entière.
+
+   · INSTRUMENT SANS — l'interface se tait. Une grotesque légèrement
+     resserrée, excellente en petit, qui ne cherche pas à se faire
+     remarquer. C'est elle qui écrit 95 % des mots du site.
+
+   · AZERET MONO — les chiffres sont précis. Toute somme d'argent, tout
+     multiplicateur, tout code de table. Un chiffre qui change ne doit pas
+     faire bouger ses voisins : c'est une exigence fonctionnelle avant
+     d'être un goût.
+
+   Elles sont servies depuis /fonts : aucun appel à Google, rien à charger
+   depuis l'extérieur, et le site s'affiche correctement même hors ligne.
+   ───────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Unbounded'; font-style: normal; font-weight: 700;
+  font-display: swap; src: url('/fonts/unbounded-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Unbounded'; font-style: normal; font-weight: 800;
+  font-display: swap; src: url('/fonts/unbounded-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument'; font-style: normal; font-weight: 400;
+  font-display: swap; src: url('/fonts/instrument-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument'; font-style: normal; font-weight: 500;
+  font-display: swap; src: url('/fonts/instrument-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument'; font-style: normal; font-weight: 600;
+  font-display: swap; src: url('/fonts/instrument-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument'; font-style: normal; font-weight: 700;
+  font-display: swap; src: url('/fonts/instrument-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Azeret'; font-style: normal; font-weight: 500;
+  font-display: swap; src: url('/fonts/azeret-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Azeret'; font-style: normal; font-weight: 700;
+  font-display: swap; src: url('/fonts/azeret-700.woff2') format('woff2');
+}
+
+
+:root {
+
+  /* ───────────────────────────────────────────────────────────────────
+     L'ENCRE
+
+     Sept valeurs, d'une seule teinte : 258°, très peu saturée. Ce n'est
+     pas du noir pur — un noir pur sous une couleur saturée paraît sale —
+     mais ce n'est pas violet non plus : à 12 % de saturation, l'œil lit
+     « noir », et sent juste que ce noir est chaud du bon côté.
+
+     On monte d'un cran à chaque niveau d'imbrication, jamais deux.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --ink-0:  #07060C;   /* le vide : le fond de la page */
+  --ink-1:  #0C0A14;   /* la barre du haut, les fonds creusés */
+  --ink-2:  #12101C;   /* un panneau posé sur la page */
+  --ink-3:  #191625;   /* un élément dans un panneau, un champ */
+  --ink-4:  #221E31;   /* survol, état enfoncé */
+  --ink-5:  #2E2942;   /* le plus haut : une pastille, un jeton */
+
+  /* Les filets. Jamais une bordure opaque : une bordure translucide
+     laisse passer la couleur de ce qu'il y a dessous et reste juste sur
+     n'importe quel fond. */
+  --hair:      rgba(255, 255, 255, .065);
+  --hair-firm: rgba(255, 255, 255, .11);
+  --hair-lit:  rgba(255, 255, 255, .18);
+
+  /* ───────────────────────────────────────────────────────────────────
+     LE TEXTE
+
+     Quatre niveaux, et l'écart entre deux niveaux doit être visible d'un
+     coup d'œil. Un gris à peine plus clair qu'un autre ne hiérarchise
+     rien : il donne juste l'impression que quelqu'un a hésité.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --t-hi:   #F3F1F8;   /* ce qu'on lit vraiment */
+  --t-mid:  #ABA4C0;   /* les explications, les libellés */
+  --t-low:  #6C6486;   /* les métadonnées, les unités */
+  --t-off:  #453F5A;   /* désactivé, décoratif */
+
+  /* ───────────────────────────────────────────────────────────────────
+     LA MARQUE
+
+     Un violet, un magenta. Ils ne servent qu'à trois choses : l'action
+     principale, l'état actif de la navigation, et le nom du site.
+     Nulle part ailleurs. Le violet n'est pas l'ambiance du site, c'est
+     sa signature — et une signature qu'on met partout ne signe plus rien.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --brand:      #8B4DFF;
+  --brand-lit:  #A87BFF;   /* survol */
+  --brand-deep: #5B2BC4;   /* la tranche des touches */
+  --brand-wash: rgba(139, 77, 255, .13);
+  --brand-hot:  #FF3D8B;   /* le second souffle : une seule fois par écran */
+
+  /* ───────────────────────────────────────────────────────────────────
+     LE SENS
+
+     Trois couleurs qui veulent dire quelque chose et ne sont jamais
+     décoratives : on a gagné, on a perdu, attention.
+     Elles sont volontairement à l'écart des couleurs de jeux pour qu'un
+     gain reste lisible comme un gain sur n'importe quelle page.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --win:   #34D399;
+  --lose:  #FB5E6D;
+  --warn:  #F5A524;
+
+  --win-wash:  rgba(52, 211, 153, .12);
+  --lose-wash: rgba(251, 94, 109, .12);
+  --warn-wash: rgba(245, 165, 36, .12);
+
+  /* ───────────────────────────────────────────────────────────────────
+     LES JEUX
+
+     La règle n° 2, écrite noir sur blanc. Une couleur par jeu, choisie
+     pour deux raisons : elle raconte le jeu (le jade est le feutre, le
+     vermillon est la case rouge, l'ambre est le minerai), et les huit se
+     distinguent les unes des autres même côte à côte en petit.
+
+     On ne les utilise pas directement. On pose data-game="plinko" sur un
+     élément, et --accent devient le cyan pour lui et toute sa descendance.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --g-blackjack: #17A97C;   /* jade — le feutre */
+  --g-roulette:  #E8453C;   /* vermillon — la case rouge */
+  --g-plinko:    #29C2E8;   /* cyan — la bille qui tombe */
+  --g-slots:     #FF3D8B;   /* magenta — l'enseigne */
+  --g-vault:     #9B5CFF;   /* améthyste — la caisse rare */
+  --g-mine:      #E8A33C;   /* ambre — le minerai */
+  --g-market:    #4C82F7;   /* bleu d'acier — le commerce */
+  --g-party:     #C3EF3C;   /* lime acide — la section sans argent */
+
+  /* La valeur par défaut, quand rien n'est déclaré : la marque. */
+  --accent: var(--brand);
+  --accent-deep: var(--brand-deep);
+
+  /* ───────────────────────────────────────────────────────────────────
+     LES RAYONS — règle n° 3
+     ─────────────────────────────────────────────────────────────────── */
+
+  --r-tile:    18px;   /* un objet qu'on regarde */
+  --r-panel:   12px;   /* un contenant d'information */
+  --r-control:  9px;   /* un bouton, un champ */
+  --r-inline:   6px;   /* une étiquette, un bout de code */
+  --r-circle: 999px;   /* avatars uniquement */
+
+  /* ───────────────────────────────────────────────────────────────────
+     LA PROFONDEUR — règle n° 4
+
+     Remarque : --e-panel n'a PAS d'ombre portée. Un panneau ne flotte
+     pas au-dessus de la page, il est creusé dedans ; le filet clair en
+     haut suffit à le décoller. Les ombres portées sont réservées à ce qui
+     recouvre vraiment autre chose.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --e-flat:  none;
+  --e-panel: inset 0 1px 0 rgba(255, 255, 255, .045);
+  --e-lift:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 2px 4px rgba(0, 0, 0, .4),
+    0 22px 48px -28px rgba(0, 0, 0, .95);
+  --e-float:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 4px 10px rgba(0, 0, 0, .5),
+    0 40px 80px -40px rgba(0, 0, 0, 1);
+
+  /* La seule ombre colorée du site. Elle emprunte --accent, donc elle
+     n'existe que là où un jeu a déclaré sa couleur. */
+  --e-accent: 0 18px 44px -26px color-mix(in srgb, var(--accent) 75%, transparent);
+
+  /* ───────────────────────────────────────────────────────────────────
+     L'ESPACE
+
+     Une échelle de 4, mais pas linéaire : les petits écarts servent à
+     coller des choses ensemble, les grands à séparer des idées. Entre
+     les deux il n'y a rien, exprès — c'est ce vide dans l'échelle qui
+     empêche les « espacements mécaniques » où tout se vaut.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --s1:  4px;
+  --s2:  8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 36px;
+  --s7: 56px;
+  --s8: 84px;
+
+  /* ───────────────────────────────────────────────────────────────────
+     LA TYPOGRAPHIE
+
+     Sept rôles nommés. On n'écrit jamais une taille de police ailleurs
+     que dans ce bloc : si un texte a besoin d'une taille qui n'existe
+     pas, c'est le rôle qui manque, pas la valeur.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --f-brand: 'Unbounded', 'Trebuchet MS', system-ui, sans-serif;
+  --f-ui: 'Instrument', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --f-num: 'Azeret', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* display — une fois par page, au maximum */
+  --ty-display: 800 clamp(30px, 4.4vw, 46px) / 1.02 var(--f-brand);
+  /* title — le titre d'un jeu, l'en-tête d'une fenêtre */
+  --ty-title: 700 20px / 1.15 var(--f-brand);
+  /* subtitle — le titre d'un panneau */
+  --ty-sub: 700 15px / 1.25 var(--f-ui);
+  /* eyebrow — la petite ligne en capitales au-dessus d'une section */
+  --ty-eyebrow: 600 10.5px / 1 var(--f-ui);
+  /* body — le texte courant */
+  --ty-body: 400 14.5px / 1.55 var(--f-ui);
+  /* label — un libellé de bouton, un intitulé de colonne */
+  --ty-label: 600 13px / 1.2 var(--f-ui);
+  /* fine — la note en bas, l'unité, la mention légale */
+  --ty-fine: 400 12.5px / 1.5 var(--f-ui);
+
+  --track-eyebrow: .16em;   /* les capitales ont besoin d'air */
+  --track-display: -.025em; /* les gros corps ont besoin d'être resserrés */
+
+  /* ───────────────────────────────────────────────────────────────────
+     LE MOUVEMENT
+
+     Une courbe unique pour tout le site : départ franc, arrivée douce.
+     Trois durées. Rien ne dure plus de 380 ms, rien ne boucle en
+     permanence — une animation qui tourne sans fin dans un coin de
+     l'écran fatigue au bout de trois minutes.
+     ─────────────────────────────────────────────────────────────────── */
+
+  --ease: cubic-bezier(.2, .75, .3, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --t-fast: 110ms;
+  --t-base: 190ms;
+  --t-slow: 380ms;
+
+  /* ─────────────────────────────────────────────────────────────────── */
+
+  --shell: 1320px;   /* largeur maximale du contenu */
+  --topbar-h: 60px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LE COMMUTATEUR DE COULEUR
+
+   Toute la règle n° 2 tient dans ce bloc. On écrit data-game="roulette"
+   sur un élément — une tuile, une vue, une ligne de tableau — et lui et
+   tous ses enfants basculent sur le vermillon. Aucune règle CSS n'a
+   besoin de connaître le nom d'un jeu ailleurs qu'ici.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+[data-game="blackjack"] { --accent: var(--g-blackjack); --accent-deep: #0C6B4E; }
+[data-game="roulette"]  { --accent: var(--g-roulette);  --accent-deep: #97231D; }
+[data-game="plinko"]    { --accent: var(--g-plinko);    --accent-deep: #157F99; }
+[data-game="slots"]     { --accent: var(--g-slots);     --accent-deep: #B01A57; }
+[data-game="vault"]     { --accent: var(--g-vault);     --accent-deep: #6229C4; }
+[data-game="mine"]      { --accent: var(--g-mine);      --accent-deep: #9C6811; }
+[data-game="market"]    { --accent: var(--g-market);    --accent-deep: #2A55B8; }
+[data-game="party"]     { --accent: var(--g-party);     --accent-deep: #7FA411; }
+
+/*
+ * ET LE PIÈGE, QU'IL FAUT CONNAÎTRE.
+ *
+ * Une propriété personnalisée qui en cite une autre est résolue LÀ OÙ ELLE
+ * EST DÉCLARÉE, pas là où elle est utilisée. Écrire `--gold: var(--accent)`
+ * une seule fois dans :root fige donc --gold sur la valeur qu'avait
+ * --accent à la racine — le violet de marque — et les huit couleurs de jeux
+ * ne descendent jamais jusqu'aux boutons.
+ *
+ * D'où ce bloc : il redéclare les alias sur CHAQUE élément qui porte un
+ * [data-game], là où --accent vaut enfin la couleur du jeu. Il doit rester
+ * APRÈS les règles ci-dessus (même spécificité, c'est l'ordre qui tranche).
+ */
+[data-game] {
+  --accent-soft: color-mix(in srgb, var(--accent) 42%, #ffffff);
+  --gold:      var(--accent);
+  --gold-soft: var(--accent-soft);
+  --gold-deep: var(--accent-deep);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPECT DU RÉGLAGE SYSTÈME
+
+   Quelqu'un qui a demandé moins d'animations à son système a de bonnes
+   raisons. On ne « réduit » pas : on coupe.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

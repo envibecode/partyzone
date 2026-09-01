@@ -8,9 +8,13 @@
  * cartes de quelqu'un d'autre, et qu'aucun jeton ne se crée en route.
  */
 const { io } = require('socket.io-client');
+const { gatePass, withPass } = require('./pass');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Le site a une porte : les bancs d'essai entrent avec la clé, comme nous.
+let pass = '';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -34,11 +38,11 @@ function waitFor(fn, ms = 5000, what = 'condition') {
 
 async function guest(name) {
   const res = await fetch(`${BASE}/auth/guest`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: pass },
     body: JSON.stringify({ name }),
   });
   const raw = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
-  const cookie = raw.map((c) => c.split(';')[0]).join('; ');
+  const cookie = withPass(pass, raw.map((c) => c.split(';')[0]).join('; '));
   const socket = io(BASE, { extraHeaders: { Cookie: cookie }, transports: ['websocket'] });
 
   const p = { name, socket, uc: null, pk: null, rank: null, toasts: [], rooms: [], joined: null };
@@ -63,6 +67,9 @@ async function guest(name) {
 }
 
 (async () => {
+  // La porte d'abord : sans laissez-passer, tout renvoie le compte à rebours.
+  pass = await gatePass(BASE);
+
   console.log(`Banc d'essai Party — ${BASE}\n`);
 
   section('Connexion et rang');

@@ -118,6 +118,13 @@ async function snapshot(presence) {
     }),
     online,
     log,
+    // L'état de la porte, pour que le panel affiche l'interrupteur dans la
+    // bonne position au lieu de le deviner.
+    gate: await (async () => {
+      const g = require('./gate');
+      const cfg = await g.config();
+      return { mode: cfg.mode, opensAt: cfg.opensAt, open: await g.isOpen() };
+    })(),
     // La liste des caisses distribuables, pour que le panel puisse proposer
     // un menu déroulant plutôt que de faire taper un identifiant à la main.
     cases: CASES.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji, price: c.price })),
@@ -334,6 +341,29 @@ async function act(actor, action, payload = {}, ctx = {}) {
       blackjack.closeTable(code);
       record(actor, 'table fermée', code);
       return { ok: true, message: `Table ${code} fermée.` };
+    }
+
+    /*
+     * L'OUVERTURE DU SITE.
+     *
+     * Trois modes seulement, et le mode normal est celui où personne n'a
+     * rien à faire : « auto » ouvre tout seul à l'heure dite. Les deux
+     * autres servent aux imprévus — ouvrir plus tôt parce que tout est
+     * prêt, refermer parce qu'on a cassé quelque chose.
+     */
+    case 'site-gate': {
+      const gate = require('./gate');
+      const next = await gate.setConfig({ mode: payload.mode, opensAt: payload.opensAt });
+      const open = await gate.isOpen();
+      record(actor, 'porte du site', next.mode, new Date(next.opensAt).toISOString());
+      const said = {
+        auto: `Ouverture automatique le ${new Date(next.opensAt).toLocaleString('fr-FR', {
+          timeZone: 'Europe/Paris', dateStyle: 'long', timeStyle: 'short',
+        })}.`,
+        open: 'Le site est ouvert à tout le monde.',
+        closed: 'Le site est fermé : seule la clé d’administration passe.',
+      }[next.mode];
+      return { ok: true, message: said, gate: { ...next, open } };
     }
 
     case 'announce': {

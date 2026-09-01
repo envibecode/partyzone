@@ -23,6 +23,7 @@ const medals = require('./medals');
 const DECKS = 6;
 const SEATS = 5;
 const BETTING_MS = 22000;
+const WAKE_MS = 3000; // battement avant le premier tour de mises
 const TURN_MS = 22000;
 const PAYOUT_MS = 7000;
 const DEAL_STEP_MS = 420;
@@ -106,9 +107,21 @@ class Table {
     this.stepTimer = null;
     this.activeSeat = -1;
     this.hand = 0;
+    this.cycling = false; // le tour de table tourne-t-il déjà ? (voir wake)
     this.log = [];
     this.emptySince = Date.now();
     this.lastActivityAt = Date.now(); // dernière vraie mise posée à cette table
+    /*
+     * Les spectateurs.
+     *
+     * On peut regarder une table sans y jouer : c'est comme ça qu'on décide
+     * si on a envie de s'asseoir, et c'est aussi ce qui permet de suivre la
+     * partie d'un copain quand les cinq sièges sont pris. Un spectateur
+     * reçoit exactement le même état que les joueurs — il n'y a rien de
+     * secret à une table de blackjack, toutes les cartes visibles le sont
+     * pour tout le monde.
+     */
+    this.watchers = new Map(); // userId → { id, name, avatar, socketId }
     this.newShoe();
   }
 
@@ -161,7 +174,29 @@ class Table {
     this.seats.push(seat);
     if (!this.hostId) this.hostId = user.id;
     this.emptySince = null;
+    this.wake();
     return seat;
+  }
+
+  /**
+   * Mettre la table en mouvement.
+   *
+   * Une table qui attend qu'on mise pour ouvrir un tour n'affiche aucun
+   * compte à rebours : on s'assoit devant un écran figé et on ne sait pas
+   * quand il faut poser ses jetons. Dès que quelqu'un prend une place, le
+   * cycle démarre donc tout seul et ne s'arrête plus tant que la table est
+   * occupée — trois secondes de battement d'abord, le temps de voir où on
+   * a atterri.
+   *
+   * `cycling` évite qu'un second joueur relance un second cycle en
+   * parallèle : deux boucles sur la même table, c'est deux distributions
+   * pour une seule mise.
+   */
+  wake() {
+    if (this.cycling) return;
+    this.cycling = true;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.startBetting(), WAKE_MS);
   }
 
   removePlayer(userId) {
@@ -182,6 +217,46 @@ class Table {
   /** Tous les joueurs assis (il n'y a plus de bots). */
   humans() {
     return this.seats;
+  }
+
+  /* ── Spectateurs ── */
+
+  addWatcher(user, socketId) {
+    this.watchers.set(user.id, { id: user.id, name: user.name, avatar: user.avatar, socketId });
+    clearTimeout(this.closeTimer);
+    this.emptySince = null;
+  }
+
+  removeWatcher(userId) {
+    this.watchers.delete(userId);
+    if (!this.seats.some((s) => s.connected) && !this.watchers.size) {
+      this.emptySince = Date.now();
+    }
+  }
+
+  /**
+   * Exclure quelqu'un de la table.
+   *
+   * Réservé à l'hôte, et impossible sur un joueur qui a une mise en cours :
+   * on ne prend pas l'argent de quelqu'un pour le mettre dehors ensuite. Un
+   * siège occupé par quelqu'un qui ne joue pas, en revanche, bloque une des
+   * cinq places — d'où ce bouton.
+   */
+  kick(byId, targetId) {
+    if (byId !== this.hostId) return { ok: false, message: 'Seul l’hôte de la table peut faire ça.' };
+    if (byId === targetId) return { ok: false, message: 'Pour partir, utilise « Quitter ».' };
+
+    const seat = this.seatOf(targetId);
+    if (!seat) return { ok: false, message: 'Cette personne n’est pas à la table.' };
+    if (seat.bet >= MIN_BET || (seat.hands && seat.hands.length)) {
+      return { ok: false, message: `${seat.name} a une mise en jeu : attends la fin de la main.` };
+    }
+
+    this.seats = this.seats.filter((s) => s.id !== targetId);
+    this.profiles.delete(targetId);
+    this.say('Croupier', `${seat.name} a été retiré de la table.`);
+    this.broadcast();
+    return { ok: true, seat };
   }
 
   /* ── Cycle ── */
@@ -232,6 +307,7 @@ class Table {
     this.touch();
 
     this.broadcast();
+    this.dealIfEveryoneIsIn();
     return { ok: true, coins: profile.vault.coins };
   }
 
@@ -275,6 +351,33 @@ class Table {
 
     this.broadcast();
     this.timer = setTimeout(() => this.deal(), BETTING_MS);
+    // Si tout le monde est en mode auto, les mises sont déjà posées.
+    this.dealIfEveryoneIsIn();
+  }
+
+  /**
+   * Tout le monde a misé : on distribue sans attendre la fin du décompte.
+   *
+   * Rester à regarder tourner vingt secondes de chronomètre à trois quand
+   * les trois ont déjà posé leurs jetons, c'est la principale raison pour
+   * laquelle on quitte une table. On laisse une seconde et demie pour que le
+   * dernier voie sa mise s'afficher, puis on lance.
+   */
+  dealIfEveryoneIsIn() {
+    if (this.phase !== 'betting') return false;
+
+    const present = this.seats.filter((s) => s.connected);
+    if (present.length < 1) return false;
+    if (!present.every((s) => s.bet >= MIN_BET)) return false;
+
+    clearTimeout(this.timer);
+    this.deadline = Date.now() + 1500;
+    this.say('Croupier', present.length > 1
+      ? 'Tout le monde a misé — on distribue.'
+      : 'Mise posée — on distribue.');
+    this.broadcast();
+    this.timer = setTimeout(() => this.deal(), 1500);
+    return true;
   }
 
   /** Repose la mise du tour précédent, si le solde le permet. */
@@ -303,6 +406,13 @@ class Table {
       this.phase = 'waiting';
       this.deadline = Date.now() + BETTING_MS;
       this.broadcast();
+      // Plus personne d'assis : on arrête de tourner dans le vide. Le
+      // concierge fermera la table, et `wake()` la relancera si quelqu'un
+      // revient s'asseoir avant.
+      if (!this.seats.some((s) => s.connected)) {
+        this.cycling = false;
+        return;
+      }
       this.timer = setTimeout(() => this.startBetting(), 1500);
       return;
     }
@@ -587,6 +697,11 @@ class Table {
       hand: this.hand,
       hostId: this.hostId,
       isHost: this.hostId === userId,
+      // Assis ou simple spectateur : l'écran ne montre pas la même chose.
+      seated: Boolean(seat),
+      watching: !seat && this.watchers.has(userId),
+      seatsFree: SEATS - this.seats.length,
+      watchers: [...this.watchers.values()].map((w) => ({ id: w.id, name: w.name, avatar: w.avatar })),
       minBet: MIN_BET,
       maxBet: MAX_BET,
       seatsMax: SEATS,

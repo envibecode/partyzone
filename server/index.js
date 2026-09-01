@@ -28,6 +28,7 @@ const partyRooms = require('./party/rooms');
 const partyRank = require('./party/rank');
 const { Undercover } = require('./party/undercover');
 const { Poker } = require('./party/poker');
+const gate = require('./gate');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,6 +39,15 @@ const chat = new Chat(io);
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
+
+// LA PORTE, avant tout le reste.
+//
+// Elle est posée AVANT express.static exprès : si elle venait après, le
+// fichier index.html serait servi par le middleware statique et la porte
+// ne verrait jamais passer la requête. Un site fermé dont on peut lire la
+// page d'accueil en tapant /index.html n'est pas fermé.
+gate.mount(app);
+
 app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', extensions: ['html'] }));
 
 auth.register(app);
@@ -164,7 +174,13 @@ setInterval(() => checkSeason().catch(() => {}), 3600 * 1000).unref();
 
 /* ─── Socket.IO ────────────────────────────────────────── */
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
+  // La porte vaut aussi pour les websockets. Sans ce contrôle, une page
+  // laissée ouverte avant la fermeture continuerait de jouer tranquillement
+  // pendant que le site est censé être clos.
+  if (!(await gate.isOpen()) && !gate.hasPassHeader(socket.handshake.headers.cookie)) {
+    return next(new Error('site_ferme'));
+  }
   const user = auth.userFromCookieHeader(socket.handshake.headers.cookie);
   if (!user) return next(new Error('non_authentifie'));
   socket.data.user = user;
@@ -371,18 +387,46 @@ io.on('connection', async (socket) => {
     return socket.data.tableCode ? blackjack.getTable(socket.data.tableCode) : null;
   }
 
-  function joinTable(table) {
+  /**
+   * Rejoindre une table, assis ou debout.
+   *
+   * `watch: true` place en spectateur : on voit tout, on ne mise rien. C'est
+   * aussi le repli automatique quand les cinq sièges sont pris — plutôt que
+   * de renvoyer un message d'erreur et de laisser la personne devant une
+   * porte fermée.
+   */
+  function joinTable(table, { watch = false } = {}) {
+    const full = table.seats.length >= blackjack.SEATS && !table.seatOf(user.id);
+
+    if (watch || full) {
+      table.addWatcher(user, socket.id);
+      socket.join('bj:' + table.code);
+      socket.data.tableCode = table.code;
+      presence.setStatus(user.id, 'blackjack');
+      socket.emit('bj:joined', { code: table.code, watching: true });
+      if (full && !watch) {
+        socket.emit('toast', {
+          message: 'Les cinq sièges sont pris — tu regardes la partie. Une place se libère, tu pourras t’asseoir.',
+          kind: 'info',
+        });
+      }
+      table.broadcast();
+      broadcastLobby();
+      return true;
+    }
+
     const seat = table.addPlayer(user, profile, socket.id);
     if (!seat) {
       socket.emit('toast', { message: 'La table est pleine (5 sièges).', kind: 'error' });
       return false;
     }
+    table.removeWatcher(user.id);
     socket.join('bj:' + table.code);
     socket.data.tableCode = table.code;
     table.profiles.set(user.id, profile);
     presence.setStatus(user.id, 'blackjack');
     table.say('Croupier', `${user.name} rejoint la table.`);
-    socket.emit('bj:joined', { code: table.code });
+    socket.emit('bj:joined', { code: table.code, watching: false });
     table.broadcast();
     broadcastLobby();
     return true;
@@ -393,9 +437,11 @@ io.on('connection', async (socket) => {
     if (!table) return;
     socket.leave('bj:' + table.code);
     socket.data.tableCode = null;
+    const wasSeated = Boolean(table.seatOf(user.id));
     table.profiles.delete(user.id);
     table.removePlayer(user.id);
-    table.say('Croupier', `${user.name} quitte la table.`);
+    table.removeWatcher(user.id);
+    if (wasSeated) table.say('Croupier', `${user.name} quitte la table.`);
     presence.setStatus(user.id, 'home');
     table.broadcast();
     broadcastLobby();
@@ -419,11 +465,67 @@ io.on('connection', async (socket) => {
     joinTable(table);
   });
 
-  socket.on('bj:join', ({ code } = {}) => {
+  socket.on('bj:join', ({ code, watch } = {}) => {
     const table = blackjack.getTable(code);
     if (!table) return socket.emit('toast', { message: 'Table introuvable. Vérifie le code.', kind: 'error' });
     leaveTable();
-    joinTable(table);
+    joinTable(table, { watch: Boolean(watch) });
+  });
+
+  /** Un spectateur prend une des places libres. */
+  socket.on('bj:sit', () => {
+    const table = currentTable();
+    if (!table) return;
+    if (table.seatOf(user.id)) return;
+    if (table.seats.length >= blackjack.SEATS) {
+      return socket.emit('toast', { message: 'Toutes les places sont prises.', kind: 'warn' });
+    }
+    table.addPlayer(user, profile, socket.id);
+    table.removeWatcher(user.id);
+    table.profiles.set(user.id, profile);
+    table.say('Croupier', `${user.name} prend place à la table.`);
+    table.broadcast();
+    broadcastLobby();
+  });
+
+  /** Se lever sans quitter la table : on continue à regarder. */
+  socket.on('bj:stand-up', () => {
+    const table = currentTable();
+    if (!table) return;
+    const seat = table.seatOf(user.id);
+    if (!seat) return;
+    if (seat.bet >= blackjack.MIN_BET || (seat.hands && seat.hands.length)) {
+      return socket.emit('toast', { message: 'Tu as une mise en jeu : attends la fin de la main.', kind: 'warn' });
+    }
+    table.removePlayer(user.id);
+    table.profiles.delete(user.id);
+    table.addWatcher(user, socket.id);
+    table.say('Croupier', `${user.name} se lève et regarde.`);
+    table.broadcast();
+    broadcastLobby();
+  });
+
+  /** L'hôte libère une place occupée par quelqu'un qui ne joue pas. */
+  socket.on('bj:kick', ({ id } = {}) => {
+    const table = currentTable();
+    if (!table) return;
+    const result = table.kick(user.id, id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    // L'exclu reste dans la salle en spectateur : on lui retire sa place,
+    // pas la partie qu'il était en train de regarder.
+    const entry = presence.users.get(id);
+    if (entry) {
+      for (const socketId of entry.sockets) {
+        io.to(socketId).emit('toast', {
+          message: `${user.name} t’a retiré de la table. Tu peux continuer à regarder.`,
+          kind: 'warn',
+        });
+      }
+      table.addWatcher(entry.user, [...entry.sockets][0]);
+    }
+    table.broadcast();
+    broadcastLobby();
   });
 
   socket.on('bj:leave', () => leaveTable());

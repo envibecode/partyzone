@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="stack" viewBox="0 336 500 398" aria-hidden="true" role="presentation">
+  <style>
+      .chip, .chip-top { animation: chip-in 460ms cubic-bezier(.16,1,.3,1) backwards; }
+      .chip:nth-of-type(2) { animation-delay: 40ms; }
+      .chip:nth-of-type(3) { animation-delay: 95ms; }
+      .chip:nth-of-type(4) { animation-delay: 150ms; }
+      .chip:nth-of-type(5) { animation-delay: 205ms; }
+      .chip:nth-of-type(6) { animation-delay: 260ms; }
+      .chip:nth-of-type(7) { animation-delay: 315ms; }
+      .chip:nth-of-type(8) { animation-delay: 370ms; }
+      .chip-top { animation-delay: 425ms; }
+      @keyframes chip-in { from { opacity: 0; transform: translateY(26px); } }
+      @media (prefers-reduced-motion: reduce) { .chip, .chip-top { animation: none; } }
+    </style>
+    <defs>
+    <!--
+      L'ÉCLAIRAGE, une fois pour toutes.
+
+      Une seule source, en haut à gauche. Les trois dégradés ci-dessous
+      sont partagés par les huit jetons : c'est ce qui fait qu'ils
+      appartiennent au même objet et non à huit dessins posés côte à côte.
+
+      Les couleurs des jetons du bas sont assombries à la source, pas
+      recouvertes d'un voile : dans une pile, ce qui est en dessous est
+      dans l'ombre de ce qui est au-dessus, et c'est cette dégression qui
+      donne le volume. Huit couleurs pleines à égalité donnent un gâteau
+      arc-en-ciel, pas un objet.
+    -->
+    <linearGradient id="chip-face" x1=".1" y1="0" x2=".9" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".34"/>
+      <stop offset=".45" stop-color="#fff" stop-opacity=".03"/>
+      <stop offset=".75" stop-color="#000" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".30"/>
+    </linearGradient>
+    <linearGradient id="chip-wall" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".50"/>
+      <stop offset=".24" stop-color="#fff" stop-opacity=".14"/>
+      <stop offset=".60" stop-color="#000" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".56"/>
+    </linearGradient>
+    <radialGradient id="chip-floor">
+      <stop offset="0" stop-color="#000" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="250" cy="680" rx="184" ry="38" fill="url(#chip-floor)"/>
+
+  <g class="chip" data-chip="blackjack">
+    <ellipse cx="250" cy="660" rx="154" ry="44" fill="#082420"/>
+    <rect x="96" y="634" width="308" height="26" fill="#082420"/>
+    <rect x="96" y="634" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="250" cy="634" rx="154" ry="44" fill="#0C372E"/>
+    <ellipse cx="250" cy="634" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="250" cy="634" rx="133" ry="38" fill="none" stroke="#18453A" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 96 634 A 154 44 0 0 1 404 634" fill="none" stroke="#18453A" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="roulette">
+    <ellipse cx="258" cy="626" rx="154" ry="44" fill="#411213"/>
+    <rect x="104" y="600" width="308" height="26" fill="#411213"/>
+    <rect x="104" y="600" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="258" cy="600" rx="154" ry="44" fill="#611F1F"/>
+    <ellipse cx="258" cy="600" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="258" cy="600" rx="133" ry="38" fill="none" stroke="#6A3435" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 104 600 A 154 44 0 0 1 412 600" fill="none" stroke="#6A3435" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="plinko">
+    <ellipse cx="262" cy="592" rx="154" ry="44" fill="#0E4252"/>
+    <rect x="108" y="566" width="308" height="26" fill="#0E4252"/>
+    <rect x="108" y="566" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="262" cy="566" rx="154" ry="44" fill="#18647A"/>
+    <ellipse cx="262" cy="566" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="262" cy="566" rx="133" ry="38" fill="none" stroke="#3B7383" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 108 566 A 154 44 0 0 1 416 566" fill="none" stroke="#3B7383" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="slots">
+    <ellipse cx="261" cy="558" rx="154" ry="44" fill="#6C1239"/>
+    <rect x="107" y="532" width="308" height="26" fill="#6C1239"/>
+    <rect x="107" y="532" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="261" cy="532" rx="154" ry="44" fill="#9C2758"/>
+    <ellipse cx="261" cy="532" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="261" cy="532" rx="133" ry="38" fill="none" stroke="#9C5172" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 107 532 A 154 44 0 0 1 415 532" fill="none" stroke="#9C5172" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="vault">
+    <ellipse cx="255" cy="524" rx="154" ry="44" fill="#471E8D"/>
+    <rect x="101" y="498" width="308" height="26" fill="#471E8D"/>
+    <rect x="101" y="498" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="255" cy="498" rx="154" ry="44" fill="#6F42B6"/>
+    <ellipse cx="255" cy="498" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="255" cy="498" rx="133" ry="38" fill="none" stroke="#886EB6" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 101 498 A 154 44 0 0 1 409 498" fill="none" stroke="#886EB6" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="mine">
+    <ellipse cx="247" cy="490" rx="154" ry="44" fill="#7E5410"/>
+    <rect x="93" y="464" width="308" height="26" fill="#7E5410"/>
+    <rect x="93" y="464" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="247" cy="464" rx="154" ry="44" fill="#BB8432"/>
+    <ellipse cx="247" cy="464" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="247" cy="464" rx="133" ry="38" fill="none" stroke="#CDA161" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 93 464 A 154 44 0 0 1 401 464" fill="none" stroke="#CDA161" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="market">
+    <ellipse cx="240" cy="456" rx="154" ry="44" fill="#264DA7"/>
+    <rect x="86" y="430" width="308" height="26" fill="#264DA7"/>
+    <rect x="86" y="430" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="240" cy="430" rx="154" ry="44" fill="#4576E0"/>
+    <ellipse cx="240" cy="430" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="240" cy="430" rx="133" ry="38" fill="none" stroke="#7D9DE7" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 86 430 A 154 44 0 0 1 394 430" fill="none" stroke="#7D9DE7" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip" data-chip="party">
+    <ellipse cx="238" cy="422" rx="154" ry="44" fill="#7FA411"/>
+    <rect x="84" y="396" width="308" height="26" fill="#7FA411"/>
+    <rect x="84" y="396" width="308" height="26" fill="url(#chip-wall)"/>
+    <ellipse cx="238" cy="396" rx="154" ry="44" fill="#C3EF3C"/>
+    <ellipse cx="238" cy="396" rx="154" ry="44" fill="url(#chip-face)"/>
+    <ellipse cx="238" cy="396" rx="133" ry="38" fill="none" stroke="#DEFB84" stroke-opacity=".45" stroke-width="1.3"/>
+    <path d="M 84 396 A 154 44 0 0 1 392 396" fill="none" stroke="#DEFB84" stroke-opacity=".8" stroke-width="1.8"/>
+  </g>
+
+  <g class="chip-top">
+    <line x1="380.4" y1="406.4" x2="357.2" y2="404.7" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="331.9" y1="428.3" x2="316.5" y2="423.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="247.4" y1="437.9" x2="245.9" y2="431.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="159.4" y1="431.5" x2="172.2" y2="425.7" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="101.4" y1="411.5" x2="123.7" y2="409.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="95.6" y1="385.6" x2="118.8" y2="387.3" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="144.1" y1="363.7" x2="159.5" y2="369.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="228.6" y1="354.1" x2="230.1" y2="361.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="316.6" y1="360.5" x2="303.8" y2="366.3" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <line x1="374.6" y1="380.5" x2="352.3" y2="383.0" stroke="#4A6408" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="238" cy="396" rx="100" ry="28.6" fill="#0B1A07" fill-opacity=".18"/>
+    <ellipse cx="238" cy="394" rx="100" ry="28.6" fill="none" stroke="#DEFB84" stroke-opacity=".5" stroke-width="1.5"/>
+  </g>
+</svg>

@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07060C">
+<title>PartyZone — ouverture le 2 septembre</title>
+<meta name="description" content="PartyZone ouvre le mercredi 2 septembre 2026 à midi.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%2307060C'/><circle cx='16' cy='16' r='7' fill='none' stroke='%238B4DFF' stroke-width='3'/></svg>">
+<link rel="stylesheet" href="/css/tokens.css">
+
+<!--
+  LA PAGE FERMÉE.
+
+  C'est la première chose que verra qui que ce soit, donc c'est ici que la
+  direction artistique se joue en premier. Elle applique les cinq règles du
+  socle sans en inventer une sixième :
+
+    · le fond est noir, pas violet ;
+    · les quatre nombres du compte à rebours sont les seuls objets
+      lumineux de l'écran — ce sont eux qu'on est venu voir ;
+    · les six pastilles de jeux montrent la règle « une couleur par jeu »
+      avant même qu'on soit entré ;
+    · aucune animation ne tourne en boucle, sauf la seconde qui s'écoule,
+      et c'est bien le minimum pour un compte à rebours.
+
+  Elle est autonome : un seul fichier, aucun script externe, aucune image.
+  Elle doit s'afficher même si tout le reste du site est cassé.
+-->
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  min-height: 100dvh;
+  background: var(--ink-0);
+  color: var(--t-hi);
+  font: var(--ty-body);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow-x: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   LE FOND
+
+   Pas un dégradé sur tout l'écran : deux sources de lumière posées à des
+   endroits précis, très basses en intensité, plus une trame de points.
+   La trame est ce qui empêche le noir de paraître vide — elle donne une
+   échelle à la page, comme le grain d'un papier.
+   ───────────────────────────────────────────────────────────────────── */
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  background:
+    radial-gradient(58rem 34rem at 18% -8%, rgba(139, 77, 255, .16), transparent 62%),
+    radial-gradient(46rem 30rem at 92% 108%, rgba(255, 61, 139, .10), transparent 60%);
+}
+
+body::after {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, .055) 1px, transparent 1px);
+  background-size: 34px 34px;
+  /* La trame s'efface sur les bords : sinon elle plafonne la page d'un
+     quadrillage régulier qui attire l'œil au lieu de le porter. */
+  -webkit-mask-image: radial-gradient(72% 62% at 50% 34%, #000 20%, transparent 100%);
+  mask-image: radial-gradient(72% 62% at 50% 34%, #000 20%, transparent 100%);
+}
+
+.wrap { position: relative; z-index: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 var(--s5); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   LA COMPOSITION
+
+   Deux colonnes qui ne font pas la même largeur, et c'est voulu : une
+   grille en deux moitiés égales donne toujours l'air d'un gabarit. Le
+   texte occupe la part large, l'objet la part étroite — et il déborde
+   volontairement de sa colonne, parce qu'un objet qui tient sagement dans
+   sa case n'a pas de présence.
+   ───────────────────────────────────────────────────────────────────── */
+
+.duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: var(--s6);
+  align-items: center;
+}
+
+.art { position: relative; justify-self: center; }
+.stack {
+  display: block;
+  width: 500px; height: auto;
+  margin: 0 -40px 0 -30px;              /* le débordement */
+  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, .6));
+}
+
+/* L'entrée : les jetons se posent du bas vers le haut, une fois, et
+   c'est fini. Rien ne boucle. */
+.chip, .chip-top {
+  animation: chip-in 460ms var(--ease-out) backwards;
+}
+.chip:nth-child(2)  { animation-delay: 40ms; }
+.chip:nth-child(3)  { animation-delay: 95ms; }
+.chip:nth-child(4)  { animation-delay: 150ms; }
+.chip:nth-child(5)  { animation-delay: 205ms; }
+.chip:nth-child(6)  { animation-delay: 260ms; }
+.chip:nth-child(7)  { animation-delay: 315ms; }
+.chip:nth-child(8)  { animation-delay: 370ms; }
+.chip:nth-child(9)  { animation-delay: 425ms; }
+.chip-top { animation-delay: 470ms; }
+
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(26px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ─── L'en-tête ─── */
+
+.top { padding: var(--s5) 0 0; }
+
+.mark {
+  display: inline-flex; align-items: center; gap: 11px;
+  font: 800 15.5px/1 var(--f-brand);
+  letter-spacing: -.01em;
+}
+/* Le sigle : deux disques décalés, l'un plein l'autre évidé. Il se lit à
+   16 px comme à 96, et il n'a besoin d'aucun fichier image. */
+.sigil { width: 26px; height: 26px; flex: none; }
+
+
+/* ─── Le bloc principal ─── */
+
+main {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: var(--s6) 0 var(--s5);
+}
+
+.eyebrow {
+  font: var(--ty-eyebrow);
+  letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase;
+  color: var(--brand-lit);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.eyebrow::before {
+  content: ''; width: 22px; height: 1px; background: var(--brand);
+}
+
+h1 {
+  font: var(--ty-display);
+  letter-spacing: var(--track-display);
+  margin: var(--s4) 0 0;
+  max-width: 16ch;
+}
+h1 em {
+  font-style: normal;
+  color: var(--t-low);
+}
+
+.lede {
+  margin-top: var(--s4);
+  max-width: 52ch;
+  color: var(--t-mid);
+  font-size: 15px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   LE COMPTE À REBOURS
+
+   Quatre plaques. Chacune est un objet posé sur la page : un aplat plus
+   clair que le fond, un filet de lumière en haut, une ombre portée en
+   dessous. Le chiffre est en Azeret, tabulaire — les colonnes ne bougent
+   pas d'un pixel quand 09 devient 08, ce qui est exactement l'inverse de
+   ce que fait un compteur mal fichu.
+   ───────────────────────────────────────────────────────────────────── */
+
+.clock {
+  margin-top: var(--s5);
+  display: flex; align-items: flex-end; gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.plate {
+  position: relative;
+  min-width: 106px;
+  padding: var(--s4) var(--s4) var(--s3);
+  background: linear-gradient(var(--ink-3), var(--ink-2));
+  border: 1px solid var(--hair);
+  border-radius: var(--r-tile);
+  box-shadow: var(--e-lift);
+}
+/* Le reflet en haut de la plaque : une seule ligne, pas un dégradé sur
+   toute la hauteur. C'est ce qui donne l'impression que l'objet a une
+   arête plutôt qu'une texture. */
+.plate::before {
+  content: '';
+  position: absolute; inset: 1px 1px auto;
+  height: 44%;
+  border-radius: calc(var(--r-tile) - 2px) calc(var(--r-tile) - 2px) 0 0;
+  background: linear-gradient(rgba(255, 255, 255, .05), transparent);
+  pointer-events: none;
+}
+
+.plate b {
+  display: block;
+  font: 700 clamp(38px, 6.4vw, 60px)/1 var(--f-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  color: var(--t-hi);
+}
+.plate span {
+  display: block;
+  margin-top: var(--s2);
+  font: var(--ty-eyebrow);
+  letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase;
+  color: var(--t-low);
+}
+
+/* La plaque des secondes est la seule à porter la couleur de marque :
+   c'est le seul chiffre qui bouge, donc le seul qui mérite d'attirer
+   l'œil. Les trois autres restent en encre. */
+.plate.live b { color: var(--brand-lit); }
+.plate.live { box-shadow: var(--e-lift), 0 22px 50px -32px var(--brand); }
+
+.sep {
+  align-self: center;
+  padding-bottom: 26px;
+  color: var(--t-off);
+  font: 700 26px/1 var(--f-num);
+}
+
+/* Quand l'heure est passée. */
+.opened {
+  margin-top: var(--s6);
+  padding: var(--s5);
+  border: 1px solid color-mix(in srgb, var(--win) 34%, transparent);
+  background: var(--win-wash);
+  border-radius: var(--r-panel);
+}
+.opened b { font: var(--ty-title); color: var(--win); display: block; }
+.opened p { margin-top: var(--s2); color: var(--t-mid); }
+.opened a {
+  display: inline-block; margin-top: var(--s4);
+  text-decoration: none;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   LES SIX PASTILLES
+
+   Elles annoncent le contenu, et surtout elles montrent la règle : chaque
+   jeu a sa couleur, et cette couleur ne sert qu'à lui. Six teintes
+   franches sur un fond noir — c'est exactement ce que sera l'accueil.
+   ───────────────────────────────────────────────────────────────────── */
+
+.games {
+  margin-top: var(--s6);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--hair);
+  display: flex; flex-wrap: wrap; gap: var(--s2);
+  list-style: none;
+}
+
+.games li {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  padding: 7px 13px 7px 9px;
+  background: var(--ink-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+  font: var(--ty-label);
+  color: var(--t-mid);
+}
+.games li::before {
+  content: '';
+  width: 9px; height: 9px; border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 12px -2px var(--accent);
+}
+
+
+/* ─── Le pied de page ─── */
+
+footer {
+  padding: var(--s5) 0 var(--s6);
+  border-top: 1px solid var(--hair);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s4); flex-wrap: wrap;
+  color: var(--t-low);
+  font: var(--ty-fine);
+}
+footer strong { color: var(--t-mid); font-weight: 600; }
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   LA PORTE DÉROBÉE
+
+   Discrète, pas cachée. Un lien en gris bas de page : les visiteurs ne le
+   remarqueront pas, et celui qui a la clé n'a pas à chercher un raccourci
+   clavier secret dont il aura oublié la combinaison dans trois jours.
+   ───────────────────────────────────────────────────────────────────── */
+
+.staff-btn {
+  background: none; border: 0; padding: 0;
+  color: var(--t-off);
+  font: var(--ty-fine); font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--t-off);
+  transition: color var(--t-fast) var(--ease);
+}
+.staff-btn:hover { color: var(--t-mid); }
+
+.staff {
+  margin-top: var(--s4);
+  padding: var(--s4);
+  background: var(--ink-1);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+  box-shadow: var(--e-panel);
+}
+.staff[hidden] { display: none; }
+.staff p { color: var(--t-low); font: var(--ty-fine); margin-bottom: var(--s3); }
+.staff form { display: flex; gap: var(--s2); flex-wrap: wrap; }
+
+.field {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 11px 13px;
+  background: var(--ink-3);
+  border: 1px solid var(--hair-firm);
+  border-radius: var(--r-control);
+  color: var(--t-hi);
+  font: 500 14px/1.2 var(--f-num);
+  letter-spacing: .02em;
+  transition: border-color var(--t-fast) var(--ease);
+}
+.field::placeholder { color: var(--t-off); font-family: var(--f-ui); letter-spacing: 0; }
+.field:focus { outline: none; border-color: var(--brand); }
+
+/* ── LA TOUCHE ──
+   La signature du produit, énoncée règle n° 5 : un aplat, un filet clair
+   en haut, une tranche pleine en bas qui s'écrase à l'appui. Aucun
+   dégradé, aucune lueur. On appuie sur quelque chose de solide. */
+.key {
+  padding: 11px 20px;
+  background: var(--brand);
+  color: #fff;
+  border: 0;
+  border-radius: var(--r-control);
+  font: var(--ty-label);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .28),
+    0 3px 0 var(--brand-deep);
+  transform: translateY(0);
+  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+}
+.key:hover { background: var(--brand-lit); }
+.key:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 var(--brand-deep);
+}
+.key[disabled] { opacity: .55; cursor: default; transform: none; }
+
+.said { margin-top: var(--s3); font: var(--ty-fine); min-height: 1.2em; }
+.said.bad { color: var(--lose); }
+.said.good { color: var(--win); }
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   MOBILE
+
+   Ce n'est pas la version réduite du bureau. Les plaques passent en grille
+   de deux, le sigle et le titre se resserrent, le pied de page s'empile,
+   et la trame de fond disparaît — sur un petit écran elle mange le peu de
+   place qu'il reste sans rien apporter.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Sous 900 px, l'objet disparaît : il est décoratif, et la place qu'il
+   prendrait vaut mieux au compte à rebours. La colonne unique n'est pas
+   une réduction du bureau, c'est un autre ordre de lecture. */
+@media (max-width: 900px) {
+  .duo { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .art { display: none; }
+  h1 { max-width: none; }
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 var(--s4); }
+  main { padding: var(--s6) 0 var(--s5); }
+  body::after { display: none; }
+
+  .clock { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+  .plate { min-width: 0; padding: var(--s3); }
+  .plate b { font-size: clamp(32px, 12vw, 44px); }
+  .sep { display: none; }
+
+  footer { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrap top">
+  <div class="mark">
+    <svg class="sigil" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="12" cy="16" r="8.5" fill="none" stroke="#8B4DFF" stroke-width="3"/>
+      <circle cx="21" cy="16" r="8.5" fill="#FF3D8B" opacity=".9"/>
+      <circle cx="21" cy="16" r="8.5" fill="none" stroke="#07060C" stroke-width="3"/>
+    </svg>
+    PartyZone
+  </div>
+</div>
+
+<main class="wrap">
+ <div class="duo">
+  <div class="say">
+  <p class="eyebrow">Ouverture le mercredi 2 septembre</p>
+
+  <h1>On installe<br>les tables.<br><em>Encore un peu.</em></h1>
+
+  <p class="lede">
+    Blackjack, roulette, Plinko, machine à sous et 518 objets à collectionner.
+    On joue avec des pièces virtuelles qu’on gagne à la mine&nbsp;: il n’y a rien
+    à acheter, nulle part.
+  </p>
+
+  <div class="clock" id="clock" aria-live="off">
+    <div class="plate"><b id="d">—</b><span>jours</span></div>
+    <span class="sep">:</span>
+    <div class="plate"><b id="h">—</b><span>heures</span></div>
+    <span class="sep">:</span>
+    <div class="plate"><b id="m">—</b><span>minutes</span></div>
+    <span class="sep">:</span>
+    <div class="plate live"><b id="s">—</b><span>secondes</span></div>
+  </div>
+
+  <div class="opened" id="opened" hidden>
+    <b>C’est ouvert.</b>
+    <p>Le site vient de déverrouiller ses portes.</p>
+    <a class="key" href="/">Entrer</a>
+  </div>
+
+  </div>
+
+  <div class="art">
+    <img class="stack" src="/img/stack.svg" alt="" width="500" height="398">
+  </div>
+ </div>
+
+  <ul class="games">
+    <li data-game="blackjack">Blackjack</li>
+    <li data-game="roulette">Roulette</li>
+    <li data-game="plinko">Plinko</li>
+    <li data-game="slots">Les Copains</li>
+    <li data-game="vault">Caisses</li>
+    <li data-game="party">Party</li>
+  </ul>
+</main>
+
+<footer class="wrap">
+  <div>
+    <strong>Pièces virtuelles uniquement.</strong>
+    Aucun moyen de paiement, aucun gain réel, aucune conversion.
+  </div>
+  <div>
+    <button class="staff-btn" id="staff-toggle" aria-expanded="false" aria-controls="staff">Accès équipe</button>
+  </div>
+</footer>
+
+<div class="wrap" style="padding-bottom:var(--s6)">
+  <div class="staff" id="staff" hidden>
+    <p>Réservé aux tests avant ouverture. La clé est celle du panel d’administration&nbsp;; l’accès dure douze heures.</p>
+    <form id="staff-form">
+      <input class="field" id="staff-key" type="password" placeholder="Clé d’administration"
+             autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <button class="key" type="submit" id="staff-go">Entrer</button>
+    </form>
+    <p class="said" id="said" role="status"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  /* ── Le compte à rebours ──
+     L'heure vient du serveur, pas du navigateur : une horloge de PC
+     déréglée de vingt minutes ne doit pas afficher un autre décompte que
+     celui de tout le monde. On mesure l'écart une fois, et on l'applique
+     à chaque tick. */
+  let target = null;
+  let skew = 0;
+  let timer = null;
+
+  const pad = (n) => String(n).padStart(2, '0');
+
+  function tick() {
+    const left = target - (Date.now() - skew);
+    if (left <= 0) {
+      clearInterval(timer);
+      $('clock').hidden = true;
+      $('opened').hidden = false;
+      return;
+    }
+    const s = Math.floor(left / 1000);
+    $('d').textContent = pad(Math.floor(s / 86400));
+    $('h').textContent = pad(Math.floor(s / 3600) % 24);
+    $('m').textContent = pad(Math.floor(s / 60) % 60);
+    $('s').textContent = pad(s % 60);
+  }
+
+  fetch('/api/gate')
+    .then((r) => r.json())
+    .then((info) => {
+      target = info.opensAt;
+      skew = Date.now() - info.serverNow;
+      if (info.open) { location.href = '/'; return; }
+      tick();
+      timer = setInterval(tick, 1000);
+    })
+    .catch(() => {
+      // Le serveur ne répond pas : plutôt que de laisser quatre tirets, on
+      // le dit. Un compteur figé fait croire à un bug du navigateur.
+      $('clock').hidden = true;
+      $('opened').hidden = false;
+      $('opened').querySelector('b').textContent = 'Compteur indisponible';
+      $('opened').querySelector('p').textContent =
+        'Impossible de joindre le serveur pour connaître l’heure d’ouverture.';
+      $('opened').querySelector('a').hidden = true;
+    });
+
+  /* ── La porte dérobée ── */
+  const staff = $('staff');
+  $('staff-toggle').addEventListener('click', (e) => {
+    const open = staff.hidden;
+    staff.hidden = !open;
+    e.currentTarget.setAttribute('aria-expanded', String(open));
+    if (open) $('staff-key').focus();
+  });
+
+  $('staff-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const said = $('said');
+    const go = $('staff-go');
+    go.disabled = true;
+    said.className = 'said';
+    said.textContent = 'Vérification…';
+    try {
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: $('staff-key').value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        said.className = 'said good';
+        said.textContent = 'Ouvert. On entre…';
+        setTimeout(() => { location.href = '/'; }, 450);
+        return;
+      }
+      said.className = 'said bad';
+      said.textContent = data.message || 'Clé refusée.';
+    } catch {
+      said.className = 'said bad';
+      said.textContent = 'Le serveur n’a pas répondu.';
+    }
+    go.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

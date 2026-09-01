@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#07060C">
 <title>PartyZone</title>
 <meta name="description" content="Blackjack, roulette, Plinko, machine à sous et 518 objets à collectionner. Un casino en pièces virtuelles, entre amis. Aucun achat, aucun argent réel.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='10' fill='%230a0e1a'/><text x='16' y='24' font-size='19' text-anchor='middle'>🍀</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Inter : dessinée pour les interfaces, avec des chiffres tabulaires et
-     des graisses fines qui existent vraiment. Manrope n'allait pas en
-     dessous de 500, ce qui obligeait à tout écrire en demi-gras. -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Les fontes sont servies par ce serveur, pas par Google : rien à
+     charger depuis l'extérieur, aucune requête vers un tiers, et le site
+     s'affiche correctement même quand un réseau d'entreprise bloque les
+     domaines de police. Elles pèsent 156 Ko en tout. -->
+<link rel="preload" href="/fonts/unbounded-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/instrument-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/tokens.css">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -143,8 +144,9 @@
 <!-- ══════════════ CONNEXION ══════════════ -->
 <section id="screen-auth" class="screen active auth-screen">
   <div class="auth-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
+  <div class="auth-duo">
   <div class="auth-box">
-    <div class="auth-logo"><svg class="clover" viewBox="0 0 24 24" width="22" height="22"><use href="#i-clover"/></svg> PartyZone</div>
+    <div class="auth-logo"><svg class="clover" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="12" cy="16" r="8.5" fill="none" stroke="var(--brand)" stroke-width="3"/><circle cx="21" cy="16" r="8.5" fill="var(--brand-hot)"/><circle cx="21" cy="16" r="8.5" fill="none" stroke="var(--ink-0)" stroke-width="3"/></svg> PartyZone</div>
     <h1>Le casino<br><em>où personne ne perd d’argent.</em></h1>
     <p class="auth-lede">
       Blackjack, roulette, Plinko et caisses à memes. On joue avec des pièces
@@ -170,6 +172,28 @@
       réel, aucune conversion. Si tu perds tout, tu retournes à la mine.
     </div>
 
+    <!--
+      L'ACCÈS ÉQUIPE.
+
+      Il est ici plutôt que caché derrière un raccourci clavier : celui qui
+      en a besoin le trouve, les autres ne le voient pas. La clé fait deux
+      choses d'un coup — elle ouvre la porte du site s'il est encore fermé,
+      et elle est retenue le temps de la session pour se donner les droits
+      d'administration dès qu'on est connecté, sans avoir à la retaper.
+    -->
+    <div class="auth-staff">
+      <button class="staff-btn" id="staff-toggle" aria-expanded="false" aria-controls="staff-box">Accès équipe</button>
+      <div class="staff-box" id="staff-box" hidden>
+        <p class="fine">Clé d’administration. Elle ouvre le site avant l’heure et donne les droits d’admin dès la connexion.</p>
+        <form id="staff-form">
+          <input class="input" id="staff-key" type="password" placeholder="Clé d’administration"
+                 autocomplete="off" autocapitalize="off" spellcheck="false" required>
+          <button class="btn btn-soft" type="submit">Valider</button>
+        </form>
+        <p class="fine" id="staff-said" role="status"></p>
+      </div>
+    </div>
+
     <ul class="auth-tags">
       <li><svg viewBox="0 0 24 24"><use href="#i-cards"/></svg> Blackjack</li>
       <li><svg viewBox="0 0 24 24"><use href="#i-wheel"/></svg> Roulette</li>
@@ -177,6 +201,11 @@
       <li><svg viewBox="0 0 24 24"><use href="#i-case"/></svg> Caisses</li>
       <li><svg viewBox="0 0 24 24"><use href="#i-pick"/></svg> La Mine</li>
     </ul>
+  </div>
+
+  <div class="auth-object" aria-hidden="true">
+    <img src="/img/stack.svg" alt="" width="440" height="350">
+  </div>
   </div>
 </section>
 
@@ -197,7 +226,7 @@
     </button>
 
     <button class="brand" data-go="home">
-      <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22"><use href="#i-clover"/></svg>
+      <svg class="brand-mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><circle cx="12" cy="16" r="8.5" fill="none" stroke="var(--brand)" stroke-width="3"/><circle cx="21" cy="16" r="8.5" fill="var(--brand-hot)"/><circle cx="21" cy="16" r="8.5" fill="none" stroke="var(--ink-1)" stroke-width="3"/></svg>
       <span class="brand-name">PartyZone</span>
     </button>
 
@@ -209,6 +238,10 @@
     </nav>
 
     <div class="topbar-right" id="nav-right">
+      <button class="icon-btn" id="btn-lb" data-tip="Le classement (touche C)" aria-label="Classement">
+        <svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-trophy"/></svg>
+      </button>
+
       <button class="balance" id="balance" data-go="mine" data-tip="Aller miner">
         <svg viewBox="0 0 24 24" width="16" height="16"><use href="#i-coin"/></svg>
         <b id="coins">0</b>
@@ -343,7 +376,7 @@
     </section>
 
     <!-- ══════ LA MINE ══════ -->
-    <section class="view" id="view-mine">
+    <section class="view" id="view-mine" data-game="mine">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-pick"/></svg>La Mine</h1>
         <p>Tape sur le filon. Une barre pleine, c’est une soixantaine de pièces : de quoi
@@ -378,7 +411,7 @@
           <p class="fine">
             Coup critique : <b id="mine-crit">5</b> % de chances de gagner <b id="mine-critx">7</b>×.
             L’endurance remonte de <b id="mine-regen">3,2</b> points par seconde et le serveur
-            plafonne à <b id="mine-cap">12</b> coups/seconde : un autoclic vide juste la barre
+            plafonne à <b id="mine-cap">10</b> coups/seconde : un autoclic vide juste la barre
             plus vite et mine à perte. <b>Aucun revenu quand tu n’es pas là.</b>
           </p>
         </div>
@@ -390,7 +423,7 @@
     </section>
 
     <!-- ══════ PLINKO ══════ -->
-    <section class="view" id="view-plinko">
+    <section class="view" id="view-plinko" data-game="plinko">
       <div class="game-layout three">
         <aside class="betpanel">
           <div class="bet-tabs"><button class="bet-tab active">Manuel</button></div>
@@ -432,7 +465,7 @@
     </section>
 
     <!-- ══════ MACHINE À SOUS ══════ -->
-    <section class="view" id="view-slots">
+    <section class="view" id="view-slots" data-game="slots">
       <div class="game-layout three">
         <aside class="betpanel">
           <div class="bet-tabs"><button class="bet-tab active">Les Copains</button></div>
@@ -472,7 +505,7 @@
     </section>
 
     <!-- ══════ ROULETTE ══════ -->
-    <section class="view" id="view-roulette">
+    <section class="view" id="view-roulette" data-game="roulette">
       <div class="game-layout three rl-layout">
         <aside class="betpanel">
           <div class="rl-phase" id="rl-phase">Connexion…</div>
@@ -538,7 +571,7 @@
     </section>
 
     <!-- ══════ BLACKJACK ══════ -->
-    <section class="view" id="view-blackjack">
+    <section class="view" id="view-blackjack" data-game="blackjack">
       <div class="bj-lobby" id="bj-lobby">
         <div class="view-head">
           <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-cards"/></svg>Blackjack</h1>
@@ -579,7 +612,20 @@
               <div class="who">Croupier <b id="bj-dealer-val"></b></div>
               <div class="cards" id="bj-dealer-cards"></div>
             </div>
+
+            <!-- La règle de la maison, sérigraphiée sur le tapis. -->
+            <div class="felt-rules" aria-hidden="true">
+              Blackjack paie 3 pour 2
+              <small>Le croupier tire jusqu’à 16 et reste sur 17</small>
+            </div>
+
             <div class="seats" id="bj-seats"></div>
+          </div>
+
+          <!-- Le bandeau du spectateur : visible seulement quand on regarde. -->
+          <div class="bj-watch hidden" id="bj-watch">
+            <span>Tu regardes cette table sans jouer.</span>
+            <button class="btn btn-primary" id="bj-sit">Prendre une place</button>
           </div>
           <div class="bj-actions" id="bj-actions"></div>
           <div class="bj-betrow" id="bj-betrow">
@@ -637,7 +683,7 @@
     </section>
 
     <!-- ══════ CAISSES ══════ -->
-    <section class="view" id="view-vault">
+    <section class="view" id="view-vault" data-game="vault">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-case"/></svg>Caisses</h1>
         <p>518 objets de culture internet à trouver, du commun au maudit. Les doublons se
@@ -751,7 +797,7 @@
     </section>
 
     <!-- ══════ PARTY — LE HALL ══════ -->
-    <section class="view" id="view-party">
+    <section class="view" id="view-party" data-game="party">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-party"/></svg>Party</h1>
         <p>Les jeux entre amis, à côté du casino. <b>Aucune pièce ne se mise ici</b> —
@@ -786,7 +832,7 @@
     </section>
 
     <!-- ══════ UNDERCOVER ══════ -->
-    <section class="view" id="view-uc">
+    <section class="view" id="view-uc" data-game="party">
       <div class="room-bar">
         <div class="room-id">
           <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-party"/></svg> Undercover</span>
@@ -833,7 +879,7 @@
     </section>
 
     <!-- ══════ POKER ══════ -->
-    <section class="view" id="view-pk">
+    <section class="view" id="view-pk" data-game="party">
       <div class="room-bar">
         <div class="room-id">
           <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-cards"/></svg> Poker</span>
@@ -876,7 +922,7 @@
     </section>
 
     <!-- ══════ MARCHÉ ══════ -->
-    <section class="view" id="view-market">
+    <section class="view" id="view-market" data-game="market">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-market"/></svg>Marché</h1>
         <p>Revends tes doublons aux autres joueurs, au prix que tu veux. Le site prélève

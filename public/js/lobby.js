@@ -21,7 +21,9 @@
     {
       id: 'blackjack', name: 'Blackjack', icon: 'i-cards',
       tag: 'Entre joueurs',
-      line: 'Six jeux de cartes, cinq sièges, le blackjack payé 3:2.',
+      line: 'Six jeux de cartes, cinq sièges, le blackjack payé 3:2. On ouvre une '
+            + 'table, on envoie le code à quatre lettres, et on joue ensemble — sans bots. '
+            + 'Les curieux peuvent regarder la partie sans prendre de place.',
       rtp: '99,5 %', min: 10,
     },
     {
@@ -56,13 +58,20 @@
     },
   ];
 
+  // Combien de tables tournent en ce moment : la grande tuile l'affiche,
+  // donc la valeur voyage jusqu'ici.
+  let openTables = 0;
+
   function renderGames() {
     const box = $('#games');
     if (!box) return;
     box.replaceChildren();
 
     GAMES.forEach((g) => {
-      const card = el('button', 'game');
+        const card = el('button', 'game');
+      // La couleur du jeu est déclarée ici, une fois : la tuile, son
+      // jeton, sa bordure au survol et son ombre s'y accordent tout seuls.
+      card.dataset.game = g.id;
       card.addEventListener('click', () => PZ.go(g.id));
 
       const top = el('div', 'game-top');
@@ -85,6 +94,23 @@
         rtp.dataset.tip = 'Taux de redistribution, calculé et non promis';
         foot.appendChild(rtp);
       }
+      // La grande tuile porte trois chiffres vivants : c'est ce qui
+      // justifie qu'elle prenne deux fois la place des autres.
+      if (g.id === 'blackjack') {
+        const live = el('div', 'game-live');
+        const cell = (value, label, on) => {
+          const d = el('div');
+          const b = el('b', on ? 'on' : null, value);
+          d.appendChild(b);
+          d.appendChild(el('span', null, label));
+          return d;
+        };
+        live.appendChild(cell(String(openTables), openTables > 1 ? 'tables ouvertes' : 'table ouverte', openTables > 0));
+        live.appendChild(cell('5', 'places par table'));
+        live.appendChild(cell('3:2', 'le blackjack paie'));
+        card.appendChild(live);
+      }
+
       card.appendChild(foot);
 
       box.appendChild(card);
@@ -133,41 +159,58 @@
       return node;
     };
 
+    /* ── Ce qui attend ──
+       Deux tuiles, et elles ne s'allument que s'il y a vraiment quelque
+       chose à prendre. Le reste du temps elles sont sobres comme tout le
+       bandeau : un état « prêt » permanent ne veut plus rien dire. */
+    const act = el('div', 'hero-act');
     const rake = p.rake || { pending: 0, rate: 1 };
-    box.appendChild(card({
+    act.appendChild(card({
       icon: 'i-coin', go: 'mine', lit: rake.canClaim,
       label: 'Rakeback',
       value: fmtShort(rake.pending),
-      note: rake.canClaim ? 'à récolter' : `${String(rake.rate).replace('.', ',')} % des mises`,
+      note: rake.canClaim ? 'à récolter maintenant' : `${String(rake.rate).replace('.', ',')} % de tout ce que tu mises`,
     }));
-
-    box.appendChild(card({
-      icon: 'i-case', go: 'vault', lit: Boolean(vaultInfo && vaultInfo.freeReady),
+    const ready = Boolean(vaultInfo && vaultInfo.freeReady);
+    act.appendChild(card({
+      icon: 'i-case', go: 'vault', lit: ready,
       label: 'Caisse offerte',
       value: freeLabel(),
-      note: vaultInfo && vaultInfo.freeReady ? 'prête' : 'toutes les 10 min',
+      note: ready ? 'prête à ouvrir' : 'une toutes les 10 minutes',
     }));
+    box.appendChild(act);
 
+    /* ── Ce qui se consulte ──
+       Trois chiffres, deux filets, rien d'autre. */
+    const read = el('div', 'hero-read');
     const party = p.party || { level: 1, title: 'NOUVEAU' };
-    box.appendChild(card({
+    read.appendChild(card({
       icon: 'i-party', go: 'party',
-      label: 'Rang Party',
-      value: `Niveau ${party.level}`,
-      note: party.title,
+      label: 'Rang Party', value: `Niveau ${party.level}`, note: party.title,
     }));
 
-    box.appendChild(card({
+    const total = p.collectionTotal || 518;
+    const found = p.collected || 0;
+    read.appendChild(card({
+      icon: 'i-case', go: 'vault',
+      label: 'Collection',
+      value: `${fmt(found)} / ${fmt(total)}`,
+      note: `${Math.round((found / total) * 100)} % du catalogue`,
+    }));
+
+    read.appendChild(card({
       icon: 'i-pick', go: 'mine',
       label: 'La Mine',
       value: mineInfo ? `${fmt(mineInfo.perClick)} / coup` : 'Ouvrir',
       note: mineInfo ? `${mineInfo.stamina}/${mineInfo.staminaMax} d’endurance` : 'gratuit',
     }));
+    box.appendChild(read);
 
     // Le compte à rebours doit descendre sous les yeux.
     clearInterval(heroTimer);
     if (vaultInfo && !vaultInfo.freeReady) {
       heroTimer = setInterval(() => {
-        const slot = $('#hero-cards .hcard:nth-child(2) b');
+        const slot = $('#hero-cards .hero-act .hcard:nth-child(2) b');
         if (!slot) return clearInterval(heroTimer);
         slot.textContent = freeLabel();
       }, 1000);
@@ -239,7 +282,12 @@
     if (!socket || socket.__lobbyBound) return;
     socket.__lobbyBound = true;
 
-    socket.on('bj:lobby', ({ tables }) => renderRooms(tables || []));
+    socket.on('bj:lobby', ({ tables }) => {
+      openTables = (tables || []).length;
+      renderRooms(tables || []);
+      // Le compteur de la grande tuile suit, sans qu'on recharge la page.
+      if (PZ.view === 'home') renderGames();
+    });
 
     socket.on('online:list', ({ online }) => {
       const slot = $('#chat-stats');

@@ -17,8 +17,17 @@ const check = (l, ok, d = '') => { res.push(ok); console.log(`${ok ? '  ✓' : '
 async function player(browser, name) {
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 940 }, locale: 'fr-FR' });
   const p = await ctx.newPage();
+  // La porte : le site est fermé avant son ouverture, et le navigateur
+  // d'essai entre comme tout le monde — avec la clé.
+  await p.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await p.evaluate((k) => fetch('/api/gate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
+  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
+  // On écoute la console seulement une fois la porte franchie : les 503 de
+  // la page d'attente sont le comportement attendu.
   p.on('pageerror', e => errs.push(`ERR(${name}) ` + e.message));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|ERR_TUNNEL/.test(m.text())) errs.push(`CON(${name}) ` + m.text()); });
+
   await p.goto('http://localhost:3000', { waitUntil: 'networkidle' });
   const intro = await p.$('#intro-skip');
   if (intro) { await intro.click(); await wait(1000); }

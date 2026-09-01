@@ -193,7 +193,7 @@
     const table = el('table', 'adm-table');
     const thead = el('thead');
     const tr = el('tr');
-    ['Code', 'Hôte', 'Joueurs', 'Bots', 'Phase', 'Main', ''].forEach((h) => tr.appendChild(el('th', null, h)));
+    ['Code', 'Hôte', 'Joueurs', 'Phase', 'Main', ''].forEach((h) => tr.appendChild(el('th', null, h)));
     thead.appendChild(tr);
     table.appendChild(thead);
 
@@ -202,8 +202,7 @@
       const row = el('tr');
       row.appendChild(el('td', null, t.code));
       row.appendChild(el('td', null, t.host));
-      row.appendChild(el('td', null, String(t.humans)));
-      row.appendChild(el('td', null, String(t.bots)));
+      row.appendChild(el('td', null, `${t.humans}/5`));
       row.appendChild(el('td', null, t.phase));
       row.appendChild(el('td', null, String(t.hand)));
       const cell = el('td');
@@ -301,11 +300,15 @@
         return;
       }
       load();
-      refreshTimer = setInterval(load, 10000);
+      // Le serveur pousse les changements ; ce battement n'est qu'un filet
+      // de sécurité pour les compteurs qui bougent tout seuls (mémoire,
+      // durée de fonctionnement).
+      refreshTimer = setInterval(load, 20000);
     },
     leave() {
       if (refreshTimer) clearInterval(refreshTimer);
       refreshTimer = null;
+      if (PZ.socket) PZ.socket.emit('admin:close');
     },
   };
 })();

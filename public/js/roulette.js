@@ -189,6 +189,58 @@
   });
 
   $('#rl-clear').addEventListener('click', () => PZ.socket.emit('roulette:clear'));
+  $('#rl-rebet').addEventListener('click', () => PZ.socket.emit('roulette:rebet'));
+
+  /* ─── Mode auto ─── */
+  /* On repose la mise précédente à chaque nouvelle phase de mises. Tout
+     passe par les mêmes messages qu'un clic à la main : le serveur ne fait
+     aucune confiance particulière au mode auto. */
+
+  let auto = false;
+  const autoBtn = $('#rl-auto');
+  autoBtn.addEventListener('click', () => {
+    auto = !auto;
+    autoBtn.textContent = `Auto : ${auto ? 'on' : 'off'}`;
+    autoBtn.classList.toggle('on', auto);
+    PZ.toast(auto ? 'Mode auto : ta mise sera reposée à chaque tour.' : 'Mode auto coupé.', 'info');
+  });
+
+  /* ─── Configurations enregistrées ─── */
+
+  $('#rl-save').addEventListener('click', () => {
+    if (!state || !state.you || !state.you.bets.length) {
+      return PZ.toast('Pose d’abord des jetons sur le tapis.', 'warn');
+    }
+    const name = prompt('Nom de la configuration ?', `Setup ${(setups.length + 1)}`);
+    if (name === null) return;
+    PZ.socket.emit('roulette:setup-save', { name: name.trim() || 'Sans nom' });
+  });
+
+  let setups = [];
+
+  function renderSetups() {
+    const box = $('#rl-setups');
+    box.replaceChildren();
+    if (!setups.length) {
+      box.appendChild(el('span', 'fine', 'Pose des jetons puis enregistre-les ici.'));
+      return;
+    }
+    setups.forEach((s) => {
+      const chip = el('div', 'setup-chip');
+      const use = el('button', 'setup-use');
+      use.appendChild(el('b', null, s.name));
+      use.appendChild(el('span', null, `${fmt(s.total)} 🪙 · ${s.bets.length} mise${s.bets.length > 1 ? 's' : ''}`));
+      use.addEventListener('click', () => PZ.socket.emit('roulette:setup-apply', { name: s.name }));
+      chip.appendChild(use);
+
+      const del = el('button', 'setup-del', '✕');
+      del.title = 'Supprimer';
+      del.addEventListener('click', () => PZ.socket.emit('roulette:setup-delete', { name: s.name }));
+      chip.appendChild(del);
+
+      box.appendChild(chip);
+    });
+  }
 
   /* ─── Affichage de l'état ─── */
 
@@ -217,6 +269,11 @@
     // La roue ne tourne qu'au moment où la phase bascule.
     if (s.phase === 'spinning' && lastPhase !== 'spinning' && s.result) {
       SFX.spin();
+      // Le serveur crédite les gains dès qu'il a le numéro, donc avant que
+      // la bille s'arrête à l'écran. Si on laissait le solde bouger, on
+      // saurait qu'on a gagné avant de voir le résultat : on gèle
+      // l'affichage jusqu'à l'annonce.
+      PZ.freezeCoins();
       spinTo_(s.result.index, Math.max(1200, s.deadline - s.serverNow));
     }
     if (s.phase === 'betting' && lastPhase && lastPhase !== 'betting') {
@@ -238,9 +295,19 @@
 
     renderHistory(s.history);
     renderMyBets(s);
+    renderTable(s);
+    renderTicker(s.lastWinners);
     highlight(s);
 
+    $('#rl-rebet').disabled = !s.canRebet;
+
+    // Mode auto : dès qu'un nouveau tour de mises s'ouvre, on repose.
+    if (auto && s.phase === 'betting' && lastPhase && lastPhase !== 'betting') {
+      if (s.canRebet) PZ.socket.emit('roulette:rebet');
+    }
+
     if (s.phase === 'result' && lastPhase !== 'result') {
+      PZ.unfreezeCoins();
       const you = s.you;
       if (you && you.payout != null) {
         if (you.payout > 0) {
@@ -255,6 +322,66 @@
 
     lastPhase = s.phase;
     startTimer();
+  }
+
+  /**
+   * Le bandeau des gagnants du tour précédent.
+   *
+   * C'est ce qui donne l'impression qu'il y a du monde à la table : on voit
+   * défiler les pseudos et ce que chacun a ramassé au dernier tirage.
+   */
+  function renderTicker(last) {
+    const box = $('#rl-ticker');
+    if (!last || !last.players.length) {
+      box.replaceChildren();
+      box.classList.remove('on');
+      return;
+    }
+    box.classList.add('on');
+
+    const build = () => {
+      const strip = el('div', 'ticker-strip');
+      const head = el('span', 'ticker-head');
+      head.appendChild(el('b', `n ${last.color}`, String(last.number)));
+      head.appendChild(el('span', null, `tour n° ${last.round}`));
+      strip.appendChild(head);
+
+      last.players.forEach((w) => {
+        const item = el('span', 'ticker-item');
+        const img = new Image(22, 22);
+        img.src = PZ.avatarUrl(w);
+        img.alt = '';
+        item.appendChild(img);
+        item.appendChild(el('b', null, w.name));
+        item.appendChild(el('span', 'g', `+${fmt(w.payout)} 🪙`));
+        strip.appendChild(item);
+      });
+      return strip;
+    };
+
+    // Deux copies à la suite : le défilement peut boucler sans à-coup.
+    box.replaceChildren(build(), build());
+  }
+
+  /** Qui a misé quoi, à côté du tapis. */
+  function renderTable(s) {
+    const list = $('#rl-players-list');
+    list.replaceChildren();
+    if (!s.table.length) {
+      list.appendChild(el('li', 'empty', 'Personne n’a encore misé.'));
+      return;
+    }
+    s.table.forEach((p) => {
+      const li = el('li');
+      if (p.you) li.classList.add('you');
+      const img = new Image(26, 26);
+      img.src = PZ.avatarUrl(p);
+      img.alt = '';
+      li.appendChild(img);
+      li.appendChild(el('span', 'n', p.name));
+      li.appendChild(el('b', null, `${fmt(p.staked)} 🪙`));
+      list.appendChild(li);
+    });
   }
 
   function renderHistory(history) {
@@ -285,12 +412,17 @@
     $('#rl-staked').textContent = fmt(you.staked);
   }
 
-  /** Jetons posés sur le tapis + surlignage des cases gagnantes. */
+  /**
+   * Les jetons sur le tapis.
+   *
+   * On montre les siens en chiffres, et les têtes de tous ceux qui ont misé
+   * sur la même case — c'est ce qui fait qu'on sent les autres joueurs.
+   */
   function highlight(s) {
     const cells = PZ.$$('#rl-table .rl-cell');
-    const byKey = new Map();
+    const mine = new Map();
     if (s.you) {
-      for (const b of s.you.bets) byKey.set(`${b.type}:${b.value}`, b.amount);
+      for (const b of s.you.bets) mine.set(`${b.type}:${b.value}`, b.amount);
     }
     const winners = new Set();
     if (s.phase === 'result' && s.you && s.you.detail) {
@@ -299,11 +431,29 @@
 
     cells.forEach((cell) => {
       const key = `${cell.dataset.type}:${cell.dataset.value != null ? Number(cell.dataset.value) : null}`;
-      const old = cell.querySelector('.chip');
-      if (old) old.remove();
-      const amount = byKey.get(key);
-      if (amount) cell.appendChild(el('span', 'chip', fmt(amount)));
+      cell.querySelectorAll('.chip, .cell-faces').forEach((n) => n.remove());
+
+      const amount = mine.get(key);
+      if (amount) cell.appendChild(el('span', 'chip', PZ.fmtShort(amount)));
+
+      const board = s.board && s.board[key];
+      if (board) {
+        const others = board.players.filter((p) => !p.you);
+        if (others.length) {
+          const faces = el('span', 'cell-faces');
+          others.slice(0, 3).forEach((p) => {
+            const img = new Image(18, 18);
+            img.src = PZ.avatarUrl(p);
+            img.alt = '';
+            faces.appendChild(img);
+          });
+          faces.dataset.tip = `${fmt(board.total)} 🪙 misés par ${board.players.map((p) => p.name).join(', ')}`;
+          cell.appendChild(faces);
+        }
+      }
+
       cell.classList.toggle('won', winners.has(key));
+      cell.classList.toggle('busy', Boolean(board));
     });
   }
 
@@ -330,19 +480,32 @@
     if (!socket || socket.__rlBound) return;
     socket.__rlBound = true;
     socket.on('roulette:state', render);
+    socket.on('roulette:setups', ({ setups: list }) => {
+      setups = list || [];
+      renderSetups();
+    });
   }
 
   buildTable();
+
+  PZ.chat.mount({
+    log: $('#rl-chat-log'),
+    form: $('#rl-chat-form'),
+    input: $('#rl-chat-input'),
+  });
 
   PZ.views.roulette = {
     enter() {
       bind();
       PZ.socket.emit('roulette:join');
+      PZ.socket.emit('roulette:setups');
     },
     leave() {
       if (PZ.socket) PZ.socket.emit('roulette:leave');
       if (timerRaf) cancelAnimationFrame(timerRaf);
       timerRaf = null;
+      // On ne laisse jamais le solde gelé en quittant l'écran.
+      PZ.unfreezeCoins();
     },
   };
 })();

@@ -77,6 +77,7 @@ function blankProfile(user, now = Date.now()) {
     vault: blankVault(now),
     clicker: blankClicker(now),
     fair: fairness.blankFair(),
+    setups: [],       // configurations de mises à la roulette
     admin: false,
     banned: false,
     banReason: '',
@@ -96,6 +97,7 @@ function migrate(profile, now = Date.now()) {
     vault: { ...fresh.vault, ...(profile.vault || {}) },
     clicker: { ...fresh.clicker, ...(profile.clicker || {}) },
     fair: profile.fair && profile.fair.serverSeed ? profile.fair : fresh.fair,
+    setups: Array.isArray(profile.setups) ? profile.setups : [],
   };
   merged.vault.items = { ...(merged.vault.items || {}) };
   merged.clicker.upgrades = { ...fresh.clicker.upgrades, ...(merged.clicker.upgrades || {}) };

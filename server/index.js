@@ -16,12 +16,14 @@ const plinko = require('./plinko');
 const blackjack = require('./blackjack');
 const { Roulette } = require('./roulette');
 const { Presence } = require('./presence');
+const { Chat } = require('./chat');
 const admin = require('./admin');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: false } });
 const presence = new Presence(io);
+const chat = new Chat(io);
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '256kb' }));
@@ -62,6 +64,61 @@ function pushProfile(profile) {
 }
 roulette.onProfile = pushProfile;
 
+/* ─── Les tables ouvertes, pour le carrousel du lobby ──── */
+
+function lobbyTables() {
+  return [...blackjack.tables.values()].map((table) => {
+    const host = table.seats.find((s) => s.id === table.hostId);
+    const humans = table.seats.filter((s) => !s.isBot);
+    return {
+      code: table.code,
+      host: host ? host.name : null,
+      seats: table.seats.length,
+      seatsMax: blackjack.SEATS,
+      bots: table.seats.filter((s) => s.isBot).length,
+      phase: table.phase,
+      hand: table.hand,
+      minBet: blackjack.MIN_BET,
+      // Les têtes affichées sur la vignette.
+      faces: humans.slice(0, 4).map((s) => ({ name: s.name, avatar: s.avatar })),
+      more: Math.max(0, humans.length - 4),
+    };
+  });
+}
+
+/** Prévient tout le monde que la liste des tables a bougé. */
+function broadcastLobby() {
+  io.emit('bj:lobby', { tables: lobbyTables() });
+  refreshAdmins();
+}
+
+/**
+ * Le panel d'administration se met à jour tout seul.
+ *
+ * Les administrateurs en train de le regarder sont dans le salon 'admin' ;
+ * dès que quelque chose bouge sur le site — une table ouverte, un joueur
+ * qui arrive — on leur renvoie un état frais. On regroupe les appels pour
+ * ne pas recalculer la liste des profils dix fois par seconde.
+ */
+let adminTimer = null;
+function refreshAdmins() {
+  if (adminTimer) return;
+  adminTimer = setTimeout(async () => {
+    adminTimer = null;
+    const room = io.sockets.adapter.rooms.get('admin');
+    if (!room || !room.size) return;
+    try {
+      const [snap, list] = await Promise.all([
+        admin.snapshot(presence),
+        admin.players({ sort: 'coins' }),
+      ]);
+      io.to('admin').emit('admin:state', { ...snap, ...list, live: true });
+    } catch (err) {
+      console.error('[admin] rafraîchissement impossible :', err.message);
+    }
+  }, 700);
+}
+
 /* ─── Socket.IO ────────────────────────────────────────── */
 
 io.use((socket, next) => {
@@ -90,12 +147,15 @@ io.on('connection', async (socket) => {
 
   socket.data.profile = profile;
   presence.join(socket, user, profile);
+  refreshAdmins();
 
   const sendMe = () => socket.emit('me', { user, profile: store.publicProfile(profile) });
   const save = () => store.saveProfile(profile).catch((e) => console.error('[store]', e.message));
 
   sendMe();
   socket.emit('online:list', { online: presence.list() });
+  socket.emit('chat:history', { messages: chat.history(), maxLength: 240 });
+  socket.emit('bj:lobby', { tables: lobbyTables() });
 
   /** Écriture différée : utile pour les rafales de clics. */
   let saveTimer = null;
@@ -154,6 +214,7 @@ io.on('connection', async (socket) => {
         text: `×${best}`,
         amount: result.payout,
       });
+      chat.system(`${user.name} touche ×${best} au Plinko et repart avec ${result.payout} 🪙 !`, 'win');
     }
   });
 
@@ -172,6 +233,51 @@ io.on('connection', async (socket) => {
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     await save();
     socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('roulette:rebet', async () => {
+    const result = await roulette.rebet(profile);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', { message: `${result.count} mise(s) reposée(s).`, kind: 'success' });
+  });
+
+  /* Les configurations de mises vivent dans le profil : elles suivent le
+     compte d'un appareil à l'autre. */
+  socket.on('roulette:setups', () => {
+    socket.emit('roulette:setups', { setups: profile.setups || [] });
+  });
+
+  socket.on('roulette:setup-save', async ({ name } = {}) => {
+    const entry = roulette.publicState(user.id).you;
+    if (!entry || !entry.bets.length) {
+      return socket.emit('toast', { message: 'Pose d’abord des jetons sur le tapis.', kind: 'error' });
+    }
+    profile.setups = (profile.setups || []).filter((s) => s.name !== name).slice(0, 7);
+    profile.setups.unshift({
+      name: String(name || 'Sans nom').trim().slice(0, 24) || 'Sans nom',
+      bets: entry.bets.map((b) => ({ type: b.type, value: b.value, amount: b.amount })),
+      total: entry.staked,
+    });
+    await save();
+    socket.emit('roulette:setups', { setups: profile.setups });
+    socket.emit('toast', { message: 'Configuration enregistrée.', kind: 'success' });
+  });
+
+  socket.on('roulette:setup-apply', async ({ name } = {}) => {
+    const setup = (profile.setups || []).find((s) => s.name === name);
+    if (!setup) return socket.emit('toast', { message: 'Configuration introuvable.', kind: 'error' });
+    const result = await roulette.applySetup(profile, setup.bets);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  socket.on('roulette:setup-delete', async ({ name } = {}) => {
+    profile.setups = (profile.setups || []).filter((s) => s.name !== name);
+    await save();
+    socket.emit('roulette:setups', { setups: profile.setups });
   });
 
   socket.on('roulette:clear', async () => {
@@ -200,6 +306,7 @@ io.on('connection', async (socket) => {
     table.say('Croupier', `${user.name} rejoint la table.`);
     socket.emit('bj:joined', { code: table.code });
     table.broadcast();
+    broadcastLobby();
     return true;
   }
 
@@ -213,6 +320,7 @@ io.on('connection', async (socket) => {
     table.say('Croupier', `${user.name} quitte la table.`);
     presence.setStatus(user.id, 'home');
     table.broadcast();
+    broadcastLobby();
   }
 
   socket.on('bj:create', () => {
@@ -242,10 +350,12 @@ io.on('connection', async (socket) => {
 
   socket.on('bj:leave', () => leaveTable());
 
-  socket.on('bj:bet', async ({ amount } = {}) => {
+  socket.on('bj:lobby', () => socket.emit('bj:lobby', { tables: lobbyTables() }));
+
+  socket.on('bj:bet', async ({ amount, side } = {}) => {
     const table = currentTable();
     if (!table) return;
-    const result = await table.setBet(profile, amount);
+    const result = await table.setBet(profile, amount, side);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     await save();
     socket.emit('profile:update', store.publicProfile(profile));
@@ -260,13 +370,10 @@ io.on('connection', async (socket) => {
     socket.emit('profile:update', store.publicProfile(profile));
   });
 
-  socket.on('bj:bot', ({ action } = {}) => {
+  socket.on('bj:auto', ({ on } = {}) => {
     const table = currentTable();
     if (!table) return;
-    if (table.hostId !== user.id) {
-      return socket.emit('toast', { message: 'Seul l’hôte de la table gère les bots.', kind: 'error' });
-    }
-    const result = action === 'remove' ? table.removeBot() : table.addBot();
+    const result = table.setAuto(user.id, on);
     socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
   });
 
@@ -310,6 +417,7 @@ io.on('connection', async (socket) => {
         rarity: pull.rarity,
         color: pull.color,
       });
+      chat.system(`${user.name} sort ${pull.emoji} ${pull.name} — ${pull.rarity} !`, 'drop');
     }
   });
 
@@ -354,19 +462,30 @@ io.on('connection', async (socket) => {
   socket.on('admin:open', async (query = {}) => {
     if (!requireAdmin()) return;
     presence.setStatus(user.id, 'admin');
+    socket.join('admin');
     socket.emit('admin:state', await adminState(query));
   });
+
+  socket.on('admin:close', () => socket.leave('admin'));
 
   socket.on('admin:action', async ({ action, payload, query } = {}) => {
     if (!requireAdmin()) return;
     let result;
     try {
-      result = await admin.act(profile, action, payload || {}, { io, presence });
+      result = await admin.act(profile, action, payload || {}, { io, presence, chat });
     } catch (err) {
       result = { ok: false, message: err.message };
     }
     socket.emit('toast', { message: result.message, kind: result.ok ? 'success' : 'error' });
     socket.emit('admin:state', { ...(await adminState(query || {})), result });
+    refreshAdmins();
+  });
+
+  /* ══════════ CHAT ══════════ */
+
+  socket.on('chat:say', ({ text } = {}) => {
+    const result = chat.say(user, profile, text, { isAdmin: admin.isAdmin(profile) });
+    if (!result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
   });
 
   /* ══════════ DIVERS ══════════ */
@@ -383,6 +502,7 @@ io.on('connection', async (socket) => {
     clearTimeout(saveTimer);
     leaveTable();
     presence.leave(socket, user.id);
+    refreshAdmins();
     clicker.collect(profile);
     save();
   });

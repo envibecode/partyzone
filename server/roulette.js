@@ -66,7 +66,9 @@ class Roulette {
     this.store = store;
     this.round = 0;
     this.history = [];
-    this.bets = new Map(); // userId → { name, avatar, bets: [], staked }
+    this.bets = new Map();     // userId → { name, avatar, bets: [], staked }
+    this.previous = new Map();  // userId → les mises du tour précédent
+    this.lastWinners = null;
     this.timer = null;
     this.startRound();
   }
@@ -81,6 +83,12 @@ class Roulette {
     this.round += 1;
     this.serverSeed = fair.newServerSeed();
     this.serverSeedHash = fair.hashSeed(this.serverSeed);
+    // Ce que chacun avait misé au tour précédent, pour le bouton « remiser ».
+    this.previous = new Map();
+    for (const [userId, entry] of this.bets) {
+      if (entry.bets.length) this.previous.set(userId, entry.bets.map((b) => ({ ...b })));
+    }
+
     this.bets = new Map();
     this.result = null;
     this.phase = 'betting';
@@ -148,6 +156,16 @@ class Roulette {
     this.reveal = { serverSeed: this.serverSeed, serverSeedHash: this.serverSeedHash, round: this.round };
     this.winners = winners.sort((a, b) => b.payout - a.payout).slice(0, 8);
 
+    // Le bandeau des gagnants reste affiché pendant le tour suivant : c'est
+    // ce qui donne l'impression que la salle est vivante.
+    this.lastWinners = {
+      round: this.round,
+      number,
+      color: this.result.color,
+      players: this.winners,
+      total: winners.reduce((sum, w) => sum + w.payout, 0),
+    };
+
     this.broadcast();
     this.timer = setTimeout(() => this.startRound(), RESULT_MS);
   }
@@ -194,6 +212,49 @@ class Roulette {
     return { ok: true, coins: profile.vault.coins, staked: entry.staked };
   }
 
+  /**
+   * Repose exactement les mises du tour précédent.
+   * C'est le geste le plus fréquent à la roulette, et le refaire case par
+   * case à chaque tour est pénible.
+   */
+  async rebet(profile) {
+    if (this.phase !== 'betting') return { ok: false, message: 'Les mises sont fermées.' };
+    const previous = this.previous.get(profile.id);
+    if (!previous || !previous.length) return { ok: false, message: 'Aucune mise à reposer.' };
+
+    const total = previous.reduce((sum, b) => sum + b.amount, 0);
+    if (profile.vault.coins < total) {
+      return { ok: false, message: `Il te manque ${total - profile.vault.coins} pièces pour reposer la même chose.` };
+    }
+
+    for (const bet of previous) {
+      await this.place(profile, { type: bet.type, value: bet.value, amount: bet.amount });
+    }
+    return { ok: true, coins: profile.vault.coins, staked: total, count: previous.length };
+  }
+
+  /**
+   * Pose d'un coup un ensemble de mises enregistré par le joueur.
+   * `setup` est une liste { type, value, amount } déjà validée par `place`.
+   */
+  async applySetup(profile, setup) {
+    if (this.phase !== 'betting') return { ok: false, message: 'Les mises sont fermées.' };
+    if (!Array.isArray(setup) || !setup.length) return { ok: false, message: 'Configuration vide.' };
+
+    const total = setup.reduce((sum, b) => sum + (Math.floor(Number(b.amount)) || 0), 0);
+    if (profile.vault.coins < total) {
+      return { ok: false, message: `Il te manque ${total - profile.vault.coins} pièces pour cette configuration.` };
+    }
+
+    let placed = 0;
+    for (const bet of setup) {
+      const r = await this.place(profile, bet);
+      if (r.ok) placed++;
+    }
+    if (!placed) return { ok: false, message: 'Aucune mise n’a pu être posée.' };
+    return { ok: true, coins: profile.vault.coins, count: placed };
+  }
+
   /** Retire toutes les mises du tour et rembourse. */
   async clear(profile) {
     if (this.phase !== 'betting') return { ok: false, message: 'Trop tard pour retirer.' };
@@ -215,6 +276,30 @@ class Roulette {
   publicState(userId) {
     const mine = this.bets.get(userId);
     const pot = [...this.bets.values()].reduce((sum, e) => sum + e.staked, 0);
+
+    // Ce que TOUT LE MONDE a posé, case par case : chaque case du tapis
+    // affiche les têtes des joueurs qui y ont mis des jetons.
+    const board = {};
+    const table = [];
+    for (const [id, entry] of this.bets) {
+      table.push({
+        id,
+        name: entry.name,
+        avatar: entry.avatar,
+        staked: entry.staked,
+        you: id === userId,
+      });
+      for (const bet of entry.bets) {
+        const key = `${bet.type}:${bet.value}`;
+        if (!board[key]) board[key] = { total: 0, players: [] };
+        board[key].total += bet.amount;
+        if (board[key].players.length < 4) {
+          board[key].players.push({ name: entry.name, avatar: entry.avatar, you: id === userId });
+        }
+      }
+    }
+    table.sort((a, b) => b.staked - a.staked);
+
     return {
       round: this.round,
       phase: this.phase,
@@ -228,13 +313,15 @@ class Roulette {
       history: this.history,
       players: this.bets.size,
       pot,
+      board,
+      table: table.slice(0, 12),
+      lastWinners: this.lastWinners || null,
+      canRebet: this.phase === 'betting' && (this.previous.get(userId) || []).length > 0,
       minBet: MIN_BET,
       maxBet: MAX_BET,
       rtp: Math.round((36 / 37) * 10000) / 100,
       you: mine ? { bets: mine.bets, staked: mine.staked, payout: mine.payout ?? null, detail: mine.detail || null } : null,
-      table: {
-        red: [...RED].sort((a, b) => a - b),
-      },
+      redNumbers: [...RED].sort((a, b) => a - b),
     };
   }
 

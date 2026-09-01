@@ -146,8 +146,16 @@
 
   /** Fait tourner la bande jusqu'à l'objet gagné, puis le révèle. */
   function spinReel(pull_, remaining) {
+    let aborted = false;
     const wrap = el('div', 'reel-modal');
-    wrap.appendChild(el('div', 'reel-title', remaining > 0 ? `Ouverture… encore ${remaining} après celle-ci` : 'Ouverture…'));
+
+    const head = el('div', 'reel-head');
+    head.appendChild(el('span', 'reel-title', remaining > 0 ? `Ouverture… encore ${remaining} après celle-ci` : 'Ouverture…'));
+    // Cinq rouleaux d'affilée, c'est long quand on est pressé.
+    const skip = el('button', 'link', remaining > 0 ? 'Tout révéler ›' : 'Révéler ›');
+    skip.addEventListener('click', () => { aborted = true; queue.skipAll(pull_); });
+    head.appendChild(skip);
+    wrap.appendChild(head);
 
     const window_ = el('div', 'reel-window');
     const strip = el('div', 'reel-strip');
@@ -193,11 +201,14 @@
       const tick = Math.floor(x / step);
       if (tick !== lastTick) { lastTick = tick; SFX.reelTick(); }
 
+      if (aborted) return;
       if (t < 1) requestAnimationFrame(frame);
       else reveal();
     }
 
     function reveal() {
+      if (aborted) return;
+      skip.remove();
       // On souligne la vignette qui s'est arrêtée sous l'aiguille.
       const won = strip.children[pull_.reel.winIndex];
       if (won) won.classList.add('won');
@@ -239,24 +250,82 @@
     requestAnimationFrame(frame);
   }
 
-  /* File d'attente : une caisse ×5 enchaîne cinq rouleaux. */
+  /**
+   * File d'attente : une caisse ×5 enchaîne cinq rouleaux.
+   *
+   * Si de nouveaux tirages arrivent pendant qu'un rouleau tourne, on les
+   * met à la suite au lieu de repartir de zéro — sinon l'animation en cours
+   * se retrouverait à annoncer l'objet d'un autre tirage.
+   */
   const queue = {
     pulls: [],
+    running: false,
     autoTimer: null,
     start(pulls) {
-      this.pulls = [...pulls];
-      this.step();
+      this.pulls.push(...pulls);
+      if (!this.running) this.step();
     },
     step() {
       clearTimeout(this.autoTimer);
       const next = this.pulls.shift();
       if (!next) {
+        this.running = false;
         PZ.closeModal();
         return;
       }
+      this.running = true;
       spinReel(next, this.pulls.length);
     },
+    /** Abandonne les animations et affiche d'un coup tout ce qui reste. */
+    skipAll(current) {
+      clearTimeout(this.autoTimer);
+      const rest = [current, ...this.pulls].filter(Boolean);
+      this.pulls = [];
+      this.running = false;
+      showRecap(rest);
+    },
   };
+
+  /** Récapitulatif : toutes les vignettes obtenues, d'un seul coup d'œil. */
+  function showRecap(pulls) {
+    const wrap = el('div', 'reel-modal');
+    wrap.appendChild(el('div', 'reel-title', `${pulls.length} objet${pulls.length > 1 ? 's' : ''} obtenu${pulls.length > 1 ? 's' : ''}`));
+
+    const grid = el('div', 'reel-multi');
+    let best = 'common';
+    const ORDER = ['common', 'rare', 'epic', 'legendary', 'mythic', 'cursed'];
+    pulls.forEach((x) => {
+      const node = el('div', 'mi');
+      node.style.setProperty('--rc', x.color);
+      node.appendChild(el('span', 'e', x.emoji));
+      node.appendChild(el('span', 'n', x.name));
+      if (x.isNew) node.appendChild(el('span', 'new-dot', 'NEW'));
+      grid.appendChild(node);
+      if (ORDER.indexOf(x.r) > ORDER.indexOf(best)) best = x.r;
+    });
+    wrap.appendChild(grid);
+
+    const xp = pulls.reduce((s, x) => s + x.xp, 0);
+    const dust = pulls.reduce((s, x) => s + x.dust, 0);
+    const line = el('div', 'reel-prize show');
+    const g = el('div', 'g');
+    g.appendChild(document.createTextNode('+'));
+    g.appendChild(el('b', null, `${fmt(xp)} XP`));
+    if (dust) {
+      g.appendChild(document.createTextNode(' · doublons revendus +'));
+      g.appendChild(el('b', null, `${fmt(dust)} 🪙`));
+    }
+    line.appendChild(g);
+    wrap.appendChild(line);
+
+    const close = el('button', 'btn btn-soft modal-close', 'Fermer');
+    close.addEventListener('click', () => PZ.closeModal());
+    wrap.appendChild(close);
+
+    PZ.openModal(wrap, { closable: true });
+    SFX.reveal(best);
+    if (['legendary', 'mythic', 'cursed'].includes(best)) PZ.confetti(110);
+  }
 
   /* ═══════════ LA COLLECTION ═══════════ */
 

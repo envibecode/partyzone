@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Noyau du client : connexion, navigation, profil, classement, présence.
- * Les jeux vivent dans leurs propres fichiers et se branchent sur `PZ`.
+ * Noyau du client : connexion, navigation, profil, notifications.
+ * Chaque écran vit dans son propre fichier et se branche sur `PZ.views`.
  */
 
 const PZ = {
@@ -9,7 +9,7 @@ const PZ = {
   me: null,
   profile: null,
   view: 'home',
-  views: {}, // nom → { enter(), leave() }
+  views: {},
 };
 window.PZ = PZ;
 
@@ -20,12 +20,19 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 PZ.$ = $;
 PZ.$$ = $$;
 
-const NBSP = ' ';
+const NBSP = ' ';
 function fmt(n) {
+  return (Math.round(Number(n) || 0)).toLocaleString('fr-FR').replace(/ /g, NBSP);
+}
+/** Format court pour les petits espaces : 12,4 k / 3,2 M. */
+function fmtShort(n) {
   const v = Math.round(Number(n) || 0);
-  return v.toLocaleString('fr-FR').replace(/ /g, NBSP);
+  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1).replace('.', ',')} M`;
+  if (Math.abs(v) >= 10000) return `${(v / 1000).toFixed(1).replace('.', ',')} k`;
+  return fmt(v);
 }
 PZ.fmt = fmt;
+PZ.fmtShort = fmtShort;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -37,10 +44,16 @@ PZ.el = el;
 
 function avatarUrl(user) {
   if (user && user.avatar) return user.avatar;
-  const seed = encodeURIComponent((user && user.name) || '?');
-  return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%232f4553'/><text x='20' y='26' font-size='18' text-anchor='middle' fill='%23b1bad3' font-family='sans-serif'>${seed.slice(0, 1).toUpperCase()}</text></svg>`;
+  const letter = ((user && user.name) || '?').slice(0, 1).toUpperCase();
+  const safe = letter.replace(/[<>&"]/g, '?');
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='#1e293e'/><text x='20' y='27' font-size='18' font-weight='700' text-anchor='middle' fill='#93a1bb' font-family='sans-serif'>${safe}</text></svg>`
+  )}`;
 }
 PZ.avatarUrl = avatarUrl;
+
+const timeOf = (at) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+PZ.timeOf = timeOf;
 
 /* ─── Notifications ────────────────────────────────────── */
 
@@ -51,7 +64,7 @@ function toast(message, kind = 'info') {
   setTimeout(() => {
     node.classList.add('out');
     setTimeout(() => node.remove(), 300);
-  }, 3600);
+  }, 3800);
 }
 PZ.toast = toast;
 
@@ -68,12 +81,12 @@ function showTip(target) {
   const t = tip.getBoundingClientRect();
   let left = r.left + r.width / 2 - t.width / 2;
   left = Math.max(8, Math.min(left, innerWidth - t.width - 8));
-  let top = r.top - t.height - 8;
-  if (top < 8) top = r.bottom + 8;
+  let top = r.top - t.height - 9;
+  if (top < 8) top = r.bottom + 9;
   tip.style.left = `${left}px`;
   tip.style.top = `${top}px`;
 }
-function hideTip() { tip.hidden = true; }
+const hideTip = () => { tip.hidden = true; };
 
 document.addEventListener('pointerover', (e) => {
   const t = e.target.closest('[data-tip]');
@@ -111,26 +124,28 @@ PZ.closeModal = closeModal;
 
 /* ─── Navigation ───────────────────────────────────────── */
 
+const STATUS = {
+  mine: 'mine', plinko: 'plinko', roulette: 'roulette',
+  blackjack: 'blackjack', vault: 'vault', admin: 'admin',
+};
+
 function go(name) {
   if (!$(`#view-${name}`)) name = 'home';
-  const previous = PZ.view;
-  if (previous === name) return;
+  if (PZ.view === name) return;
 
-  const leaving = PZ.views[previous];
+  const leaving = PZ.views[PZ.view];
   if (leaving && leaving.leave) leaving.leave();
 
   PZ.view = name;
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
-  $$('.rail-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === name));
-  $('.rail').classList.remove('open');
-  scrollTo({ top: 0, behavior: 'instant' in document.documentElement.style ? 'instant' : 'auto' });
+  $$('.topnav-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === name));
+  scrollTo({ top: 0 });
   history.replaceState(null, '', `#${name}`);
 
   const entering = PZ.views[name];
   if (entering && entering.enter) entering.enter();
 
-  const statuses = { mine: 'mine', plinko: 'plinko', roulette: 'roulette', blackjack: 'blackjack', vault: 'vault', admin: 'admin' };
-  if (PZ.socket) PZ.socket.emit('presence:status', { status: statuses[name] || 'home' });
+  if (PZ.socket) PZ.socket.emit('presence:status', { status: STATUS[name] || 'home' });
 }
 PZ.go = go;
 
@@ -141,15 +156,21 @@ document.addEventListener('click', (e) => {
   go(target.dataset.go);
 });
 
-// Le bouton « Admin » du rail n'apparaît qu'une fois les droits obtenus.
-// Pour les réclamer la première fois, on tape l'adresse à la main :
-// https://mon-site/#admin — d'où l'écoute du changement d'ancre.
+// Le bouton « Admin » reste caché tant qu'on n'a pas les droits : pour les
+// réclamer la première fois, on tape l'adresse suivie de #admin.
 addEventListener('hashchange', () => {
   const wanted = location.hash.replace('#', '');
   if (wanted && $(`#view-${wanted}`) && wanted !== PZ.view) go(wanted);
 });
 
-$('#btn-menu').addEventListener('click', () => $('.rail').classList.toggle('open'));
+const menuBtn = $('#btn-menu');
+if (menuBtn) {
+  menuBtn.addEventListener('click', () => {
+    const nav = $('#nav-left');
+    nav.classList.toggle('open');
+    $('#nav-right').classList.toggle('open');
+  });
+}
 
 /* ─── Champs de mise : ½ / 2× / Max ────────────────────── */
 
@@ -175,15 +196,11 @@ function applyProfile(profile) {
   const before = PZ.profile ? PZ.profile.coins : null;
   PZ.profile = profile;
 
-  $('#coins').textContent = fmt(profile.coins);
+  setCoinsDisplay(profile.coins);
   $('#me-level').textContent = profile.level;
   $('#me-name').textContent = PZ.me ? PZ.me.name : '';
+  $('#me-title').textContent = profile.title;
   $('#me-avatar').src = avatarUrl(PZ.me);
-
-  $('#stat-coins').textContent = fmt(profile.coins);
-  $('#stat-rounds').textContent = fmt(profile.stats.rounds || 0);
-  $('#stat-best').textContent = fmt(profile.stats.biggestWin || 0);
-  $('#stat-coll').textContent = `${profile.collected || 0}/60`;
 
   if (profile.fair) {
     $('#fair-hash').textContent = profile.fair.serverSeedHash || '—';
@@ -198,7 +215,7 @@ function applyProfile(profile) {
     }
   }
 
-  $('#rail-admin').classList.toggle('hidden', !profile.admin);
+  $('#nav-admin').classList.toggle('hidden', !profile.admin);
 
   if (before !== null && profile.coins !== before) {
     const bal = $('#balance');
@@ -211,105 +228,42 @@ function applyProfile(profile) {
 }
 PZ.applyProfile = applyProfile;
 
-/** Met à jour le solde localement, sans attendre le serveur. */
+function setCoinsDisplay(coins) {
+  $('#coins').textContent = fmtShort(coins);
+  const tk = $('#tk-coins');
+  if (tk) tk.textContent = fmt(coins);
+}
+
+/**
+ * Solde affiché.
+ *
+ * Certains jeux — la roulette en tête — encaissent avant la fin de
+ * l'animation. Si on montrait le solde tout de suite, on saurait qu'on a
+ * gagné avant même que la bille s'arrête. Un écran peut donc geler
+ * l'affichage le temps du suspense, puis le relâcher.
+ */
+let coinsFrozen = false;
+let coinsPending = null;
+
 PZ.setCoins = (coins) => {
   if (!PZ.profile) return;
   PZ.profile.coins = coins;
-  $('#coins').textContent = fmt(coins);
-  $('#stat-coins').textContent = fmt(coins);
+  if (coinsFrozen) { coinsPending = coins; return; }
+  setCoinsDisplay(coins);
 };
 
-/* ─── Classement ───────────────────────────────────────── */
-
-let lbSort = 'coins';
-
-async function loadLeaderboard() {
-  const list = $('#leaderboard');
-  try {
-    const res = await fetch(`/api/leaderboard?sort=${lbSort}&limit=15`);
-    const data = await res.json();
-    const rows = data.leaderboard || data.players || [];
-    list.replaceChildren();
-    if (!rows.length) {
-      list.appendChild(el('li', 'empty', 'Personne au tableau. Va miner.'));
-      return;
-    }
-    rows.forEach((p, i) => {
-      const li = el('li');
-      if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
-      li.appendChild(el('span', 'rk', String(i + 1)));
-
-      const img = new Image(30, 30);
-      img.src = avatarUrl(p);
-      img.alt = '';
-      li.appendChild(img);
-
-      const who = el('div', 'who');
-      who.appendChild(el('b', 'n', p.name));
-      who.appendChild(el('span', 't', `Niv. ${p.level} · ${p.title}`));
-      li.appendChild(who);
-
-      li.appendChild(el('span', 'v', lbSort === 'xp' ? `${fmt(p.xp)} XP` : `${fmt(p.coins)} 🪙`));
-      list.appendChild(li);
-    });
-  } catch {
-    list.replaceChildren(el('li', 'empty', 'Classement indisponible.'));
+PZ.freezeCoins = () => { coinsFrozen = true; };
+PZ.unfreezeCoins = () => {
+  coinsFrozen = false;
+  if (coinsPending !== null) {
+    setCoinsDisplay(coinsPending);
+    const bal = $('#balance');
+    bal.classList.remove('pulse');
+    void bal.offsetWidth;
+    bal.classList.add('pulse');
+    coinsPending = null;
   }
-}
-
-$('#lb-sort').addEventListener('click', (e) => {
-  const btn = e.target.closest('.seg');
-  if (!btn) return;
-  $$('#lb-sort .seg').forEach((b) => b.classList.toggle('active', b === btn));
-  lbSort = btn.dataset.sort;
-  loadLeaderboard();
-});
-
-/* ─── Présence ─────────────────────────────────────────── */
-
-function renderOnline(list) {
-  $('#online-count').textContent = list.length;
-  const box = $('#online');
-  box.replaceChildren();
-  list.forEach((p) => {
-    const li = el('li');
-    li.appendChild(el('span', 'dotlive'));
-    const img = new Image(28, 28);
-    img.src = avatarUrl(p);
-    img.alt = '';
-    li.appendChild(img);
-    const who = el('div', 'who');
-    who.appendChild(el('b', 'n', p.name));
-    who.appendChild(el('span', 's', p.statusLabel));
-    li.appendChild(who);
-    box.appendChild(li);
-  });
-}
-
-/* ─── Fil des gros coups ───────────────────────────────── */
-
-function pushFeed(entry) {
-  const box = $('#feed');
-  const first = box.firstElementChild;
-  if (first && first.classList.contains('empty')) first.remove();
-
-  const li = el('li');
-  const img = new Image(26, 26);
-  img.src = avatarUrl(entry);
-  img.alt = '';
-  li.appendChild(img);
-
-  const txt = el('div', 'txt');
-  txt.appendChild(el('b', null, entry.name));
-  txt.appendChild(el('span', null, ` · ${entry.game} · ${entry.text}`));
-  li.appendChild(txt);
-
-  if (entry.amount) li.appendChild(el('span', 'amt', `+${fmt(entry.amount)}`));
-  if (entry.color) li.style.boxShadow = `inset 2px 0 0 ${entry.color}`;
-
-  box.prepend(li);
-  while (box.children.length > 30) box.lastElementChild.remove();
-}
+};
 
 /* ─── Confettis ────────────────────────────────────────── */
 
@@ -322,7 +276,7 @@ function confetti(count = 130) {
   confettiCanvas.width = innerWidth;
   confettiCanvas.height = innerHeight;
   confettiCanvas.classList.add('on');
-  const colors = ['#00e701', '#f5b544', '#41d3ff', '#8f6bff', '#ff4d5e', '#ffffff'];
+  const colors = ['#2ee66b', '#ffc23d', '#3fd6ff', '#8b6bff', '#ff4d6a', '#ffffff'];
   for (let i = 0; i < count; i++) {
     ccParticles.push({
       x: innerWidth / 2 + (Math.random() - 0.5) * innerWidth * 0.5,
@@ -365,6 +319,133 @@ function ccStep() {
   }
 }
 
+/* ─── Classement ───────────────────────────────────────── */
+
+let lbSort = 'coins';
+let lbTimer = null;
+
+async function loadLeaderboard() {
+  const list = $('#leaderboard');
+  if (!list) return;
+  try {
+    const data = await (await fetch(`/api/leaderboard?sort=${lbSort}&limit=20`)).json();
+    const rows = data.leaderboard || [];
+    list.replaceChildren();
+    if (!rows.length) {
+      list.appendChild(el('li', 'empty', 'Personne au tableau. Va miner.'));
+      return;
+    }
+    rows.forEach((p, i) => {
+      const li = el('li');
+      if (PZ.me && p.id === PZ.me.id) li.classList.add('me');
+      li.appendChild(el('span', 'rk', String(i + 1)));
+
+      const img = new Image(34, 34);
+      img.src = avatarUrl(p);
+      img.alt = '';
+      li.appendChild(img);
+
+      const who = el('div', 'who');
+      who.appendChild(el('b', 'n', p.name));
+      who.appendChild(el('span', 't', `Niv. ${p.level} · ${p.title}`));
+      li.appendChild(who);
+
+      li.appendChild(el('span', 'v', lbSort === 'xp' ? `${fmt(p.xp)} XP` : `${fmt(p.coins)} 🪙`));
+      list.appendChild(li);
+    });
+  } catch {
+    list.replaceChildren(el('li', 'empty', 'Classement indisponible.'));
+  }
+}
+PZ.loadLeaderboard = loadLeaderboard;
+
+$('#lb-sort').addEventListener('click', (e) => {
+  const btn = e.target.closest('.seg');
+  if (!btn) return;
+  $$('#lb-sort .seg').forEach((b) => b.classList.toggle('active', b === btn));
+  lbSort = btn.dataset.sort;
+  loadLeaderboard();
+});
+
+PZ.views.leaderboard = {
+  enter() {
+    loadLeaderboard();
+    // Tant qu'on regarde le classement, il se rafraîchit tout seul.
+    lbTimer = setInterval(loadLeaderboard, 12000);
+  },
+  leave() { clearInterval(lbTimer); lbTimer = null; },
+};
+
+/* ─── Le fil des gros coups ────────────────────────────── */
+
+function pushFeed(entry) {
+  const box = $('#feed');
+  const first = box.firstElementChild;
+  if (first && first.classList.contains('empty')) first.remove();
+
+  const li = el('li');
+  const img = new Image(28, 28);
+  img.src = avatarUrl(entry);
+  img.alt = '';
+  li.appendChild(img);
+
+  const txt = el('div', 'txt');
+  txt.appendChild(el('b', null, entry.name));
+  txt.appendChild(el('span', null, ` · ${entry.game} · ${entry.text}`));
+  li.appendChild(txt);
+
+  if (entry.amount) li.appendChild(el('span', 'amt', `+${fmtShort(entry.amount)}`));
+  if (entry.color) li.style.boxShadow = `inset 3px 0 0 ${entry.color}`;
+
+  box.prepend(li);
+  while (box.children.length > 40) box.lastElementChild.remove();
+}
+
+/* ─── Annonces de l'administration ─────────────────────── */
+
+/**
+ * Une annonce ne doit pas se rater : au lieu d'un petit bandeau, on ouvre
+ * une fenêtre avec une scène animée. Elles sont dessinées en CSS, il n'y a
+ * donc aucun fichier à télécharger et rien ne dépend d'un service extérieur.
+ */
+const STICKERS = [
+  { emoji: '📣', anim: 'shout',  colour: '#ffc23d' },
+  { emoji: '🎉', anim: 'burst',  colour: '#2ee66b' },
+  { emoji: '🚨', anim: 'siren',  colour: '#ff4d6a' },
+  { emoji: '🎰', anim: 'shake',  colour: '#8b6bff' },
+  { emoji: '🪩', anim: 'spin',   colour: '#3fd6ff' },
+  { emoji: '🍀', anim: 'bounce', colour: '#2ee66b' },
+  { emoji: '👀', anim: 'peek',   colour: '#ffc23d' },
+  { emoji: '🔥', anim: 'flame',  colour: '#ff8a3d' },
+];
+
+function announce(text) {
+  const pick = STICKERS[(Math.random() * STICKERS.length) | 0];
+  const box = el('div', 'announce');
+  box.style.setProperty('--c', pick.colour);
+
+  const scene = el('div', 'announce-scene');
+  scene.appendChild(el('span', `sticker ${pick.anim}`, pick.emoji));
+  for (let i = 0; i < 6; i++) {
+    const spark = el('span', 'spark');
+    spark.style.setProperty('--i', String(i));
+    scene.appendChild(spark);
+  }
+  box.appendChild(scene);
+
+  box.appendChild(el('div', 'announce-kicker', 'Annonce'));
+  box.appendChild(el('p', 'announce-text', text));
+
+  const close = el('button', 'btn btn-gold modal-close', 'Compris');
+  close.addEventListener('click', closeModal);
+  box.appendChild(close);
+
+  openModal(box);
+  SFX.fanfare();
+  confetti(70);
+}
+PZ.announce = announce;
+
 /* ─── Équité ───────────────────────────────────────────── */
 
 $('#fair-form').addEventListener('submit', (e) => {
@@ -373,19 +454,6 @@ $('#fair-form').addEventListener('submit', (e) => {
   if (!value) return toast('Écris une graine.', 'error');
   PZ.socket.emit('fair:rotate', { clientSeed: value });
   $('#fair-seed').value = '';
-});
-
-/* ─── Son ──────────────────────────────────────────────── */
-
-$('#btn-sound').addEventListener('click', () => {
-  const on = SFX.toggle();
-  $('#btn-sound').querySelector('i').textContent = on ? '🔊' : '🔇';
-  $('#btn-sound').querySelector('span').textContent = on ? 'Son' : 'Muet';
-});
-
-$('#btn-logout').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
-  location.href = '/';
 });
 
 /* ══════════════ CONNEXION ══════════════ */
@@ -430,6 +498,8 @@ $('#form-guest').addEventListener('submit', async (e) => {
   start(data.user);
 });
 
+$('#me-chip').addEventListener('click', () => go('fair'));
+
 function start(user) {
   PZ.me = user;
   $('#screen-auth').classList.remove('active');
@@ -444,8 +514,8 @@ function start(user) {
   });
   socket.on('profile:update', applyProfile);
   socket.on('toast', ({ message, kind }) => toast(message, kind));
-  socket.on('online:list', ({ online }) => renderOnline(online));
   socket.on('feed', pushFeed);
+  socket.on('announce', ({ text }) => announce(text));
 
   socket.on('kicked', ({ reason }) => {
     const box = el('div');
@@ -457,11 +527,11 @@ function start(user) {
   socket.on('disconnect', () => toast('Connexion perdue… ça se reconnecte tout seul.', 'warn'));
   socket.on('connect', () => socket.emit('me:refresh'));
 
-  loadLeaderboard();
-  setInterval(loadLeaderboard, 45000);
+  document.dispatchEvent(new CustomEvent('pz:ready'));
 
   const wanted = location.hash.replace('#', '');
   if (wanted && $(`#view-${wanted}`)) go(wanted);
+  else if (PZ.views.home && PZ.views.home.enter) PZ.views.home.enter();
 }
 
 boot();

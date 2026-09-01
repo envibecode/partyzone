@@ -17,6 +17,7 @@
  */
 const crypto = require('crypto');
 const fair = require('./fair');
+const sidebets = require('./sidebets');
 
 const DECKS = 6;
 const SEATS = 5;
@@ -24,7 +25,6 @@ const BETTING_MS = 22000;
 const TURN_MS = 22000;
 const PAYOUT_MS = 7000;
 const DEAL_STEP_MS = 420;
-const BOT_THINK_MS = 1100;
 
 const MIN_BET = 10;
 const MAX_BET = 50000;
@@ -34,14 +34,6 @@ const RESHUFFLE_AT = 0.25;
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const SUITS = ['♠', '♥', '♦', '♣'];
 
-const BOT_NAMES = ['Bot Régis', 'Bot Nadia', 'Bot Kevin', 'Bot Sonia', 'Bot Marco'];
-const BOT_LINES = [
-  'Allez, une bonne carte.',
-  'Le croupier a de la chance aujourd’hui.',
-  'Je le sens bien ce coup-ci.',
-  'Bon… on va dire que c’était calculé.',
-  'Ça sent le 21.',
-];
 
 /* ─── Cartes ───────────────────────────────────────────── */
 
@@ -84,28 +76,6 @@ function buildShoe(seed) {
     [cards[i], cards[j]] = [cards[j], cards[i]];
   }
   return cards;
-}
-
-/* ─── Stratégie de base des bots ───────────────────────── */
-
-function botDecision(hand, dealerUpCard, canDouble) {
-  const { total, soft } = handValue(hand.cards);
-  const up = cardValue(dealerUpCard.r);
-
-  if (soft) {
-    if (total >= 19) return 'stand';
-    if (total === 18) return up >= 9 ? 'hit' : canDouble && up >= 3 && up <= 6 ? 'double' : 'stand';
-    if (total === 17 && canDouble && up >= 3 && up <= 6) return 'double';
-    return 'hit';
-  }
-
-  if (total >= 17) return 'stand';
-  if (total >= 13) return up >= 7 ? 'hit' : 'stand';
-  if (total === 12) return up >= 4 && up <= 6 ? 'stand' : 'hit';
-  if (total === 11) return canDouble ? 'double' : 'hit';
-  if (total === 10) return canDouble && up <= 9 ? 'double' : 'hit';
-  if (total === 9) return canDouble && up >= 3 && up <= 6 ? 'double' : 'hit';
-  return 'hit';
 }
 
 /* ─── La table ─────────────────────────────────────────── */
@@ -175,7 +145,6 @@ class Table {
       id: user.id,
       name: user.name,
       avatar: user.avatar,
-      isBot: false,
       socketId,
       connected: true,
       bet: 0,
@@ -199,96 +168,131 @@ class Table {
       this.seats = this.seats.filter((s) => s.id !== userId);
     }
     if (this.hostId === userId) {
-      const next = this.seats.find((s) => !s.isBot && s.connected);
+      const next = this.seats.find((s) => s.connected);
       this.hostId = next ? next.id : null;
     }
     if (!this.humans().some((s) => s.connected)) this.emptySince = Date.now();
   }
 
+  /** Tous les joueurs assis (il n'y a plus de bots). */
   humans() {
-    return this.seats.filter((s) => !s.isBot);
-  }
-
-  addBot() {
-    if (this.seats.length >= SEATS) return { ok: false, message: 'La table est pleine.' };
-    const used = new Set(this.seats.map((s) => s.name));
-    const name = BOT_NAMES.find((n) => !used.has(n)) || `Bot ${this.seats.length}`;
-    this.seats.push({
-      id: 'bot:' + crypto.randomBytes(4).toString('hex'),
-      name,
-      avatar: null,
-      isBot: true,
-      connected: true,
-      bet: 0,
-      hands: [],
-      activeHand: 0,
-      lastResult: null,
-      chips: 5000,
-    });
-    this.broadcast();
-    return { ok: true, message: `${name} s'assoit à la table.` };
-  }
-
-  removeBot() {
-    const index = [...this.seats].reverse().findIndex((s) => s.isBot);
-    if (index < 0) return { ok: false, message: 'Aucun bot à retirer.' };
-    const realIndex = this.seats.length - 1 - index;
-    const [bot] = this.seats.splice(realIndex, 1);
-    this.broadcast();
-    return { ok: true, message: `${bot.name} quitte la table.` };
+    return this.seats;
   }
 
   /* ── Cycle ── */
 
-  async setBet(profile, amount) {
+  async setBet(profile, amount, rawSide) {
     if (this.phase !== 'betting' && this.phase !== 'waiting') {
       return { ok: false, message: 'La main est déjà lancée, attends la suivante.' };
     }
     const seat = this.seatOf(profile.id);
     if (!seat) return { ok: false, message: 'Tu n’es pas assis à cette table.' };
 
+    // Si la table patientait, on ouvre le tour AVANT de poser la mise :
+    // `startBetting` remet les sièges à zéro, et le faire après effacerait
+    // ce qu'on vient d'enregistrer.
+    if (this.phase === 'waiting') this.startBetting();
+
     const stake = Math.floor(Number(amount) || 0);
     if (stake < MIN_BET) return { ok: false, message: `Mise minimum : ${MIN_BET} pièces.` };
     if (stake > MAX_BET) return { ok: false, message: `Mise maximum : ${MAX_BET} pièces.` };
 
-    // On rembourse l'ancienne mise avant de poser la nouvelle.
-    profile.vault.coins += seat.bet;
-    if (profile.vault.coins < stake) {
-      const missing = stake - profile.vault.coins;
-      profile.vault.coins -= seat.bet; // on remet comme avant
+    // On rembourse tout ce qui était déjà posé avant de reposer la nouvelle
+    // mise : principale et paris annexes partent et reviennent ensemble.
+    const already = seat.bet + (seat.side ? seat.side.pairs + seat.side.trio : 0);
+    profile.vault.coins += already;
+
+    const side = sidebets.normalise(rawSide, Math.max(0, profile.vault.coins - stake));
+    if (!side.ok) {
+      profile.vault.coins -= already;
+      return side;
+    }
+
+    const total = stake + side.total;
+    if (profile.vault.coins < total) {
+      const missing = total - profile.vault.coins;
+      profile.vault.coins -= already;
       return { ok: false, message: `Il te manque ${missing} pièces.` };
     }
-    profile.vault.coins -= stake;
+
+    profile.vault.coins -= total;
     seat.bet = stake;
+    seat.side = side.side;
     seat.chips = profile.vault.coins;
 
-    if (this.phase === 'waiting') this.startBetting();
-    else this.broadcast();
+    this.broadcast();
     return { ok: true, coins: profile.vault.coins };
   }
 
+  /** Active ou coupe la remise automatique de la même mise. */
+  setAuto(userId, on) {
+    const seat = this.seatOf(userId);
+    if (!seat) return { ok: false, message: 'Tu n’es pas assis à cette table.' };
+    seat.auto = Boolean(on);
+    this.broadcast();
+    return {
+      ok: true,
+      message: seat.auto
+        ? 'Mode auto : ta mise est reposée à chaque tour.'
+        : 'Mode auto coupé.',
+    };
+  }
+
+  /**
+   * Ouvre un tour de mises.
+   *
+   * La table tourne en continu dès sa création : on n'attend pas qu'un
+   * joueur mise pour lancer le compte à rebours. Qui arrive en cours de
+   * route n'a qu'à poser sa mise avant la fin du décompte.
+   */
   startBetting() {
     clearTimeout(this.timer);
     this.phase = 'betting';
     this.deadline = Date.now() + BETTING_MS;
     this.dealer = { cards: [] };
     this.activeSeat = -1;
+
     for (const seat of this.seats) {
       seat.hands = [];
       seat.activeHand = 0;
       seat.lastResult = null;
-      if (seat.isBot) seat.bet = [50, 100, 200, 500][Math.floor(Math.random() * 4)];
+      seat.side = null;
+      seat.sideResult = null;
+      // Mode auto : on repose la mise précédente tant qu'il y a de quoi.
+      if (seat.auto && seat.lastBet) this.autoRebet(seat);
     }
+
     this.broadcast();
     this.timer = setTimeout(() => this.deal(), BETTING_MS);
+  }
+
+  /** Repose la mise du tour précédent, si le solde le permet. */
+  autoRebet(seat) {
+    const profile = this.profiles && this.profiles.get(seat.id);
+    if (!profile) return;
+    const total = seat.lastBet + (seat.lastSide ? seat.lastSide.pairs + seat.lastSide.trio : 0);
+    if (profile.vault.coins < total) {
+      seat.auto = false;
+      this.say('Croupier', `${seat.name} n'a plus de quoi suivre : mode auto coupé.`);
+      return;
+    }
+    profile.vault.coins -= total;
+    seat.bet = seat.lastBet;
+    seat.side = seat.lastSide ? { ...seat.lastSide } : null;
+    seat.chips = profile.vault.coins;
+    if (this.onProfile) this.onProfile(profile);
   }
 
   deal() {
     const playing = this.seats.filter((s) => s.bet >= MIN_BET);
     if (!playing.length) {
+      // Personne n'a misé : on relance simplement un tour. La table ne
+      // s'arrête jamais tant que quelqu'un la regarde ; le concierge la
+      // ferme si elle reste vide dix minutes.
       this.phase = 'waiting';
-      this.deadline = null;
+      this.deadline = Date.now() + BETTING_MS;
       this.broadcast();
+      this.timer = setTimeout(() => this.startBetting(), 1500);
       return;
     }
 
@@ -325,6 +329,10 @@ class Table {
     }
     if (isBlackjack(this.dealer.cards)) return this.dealerTurn();
 
+    // Les paris annexes ne dépendent que de la donne : on les règle tout de
+    // suite, avant même que le premier joueur ne décide quoi que ce soit.
+    this.settleSides();
+
     this.phase = 'playing';
     this.activeSeat = -1;
     this.nextSeat();
@@ -341,37 +349,15 @@ class Table {
       if (!hand) continue;
       this.activeSeat = i;
       seat.activeHand = seat.hands.indexOf(hand);
-      this.deadline = seat.isBot ? null : Date.now() + TURN_MS;
+      this.deadline = Date.now() + TURN_MS;
       this.broadcast();
-
-      if (seat.isBot) {
-        this.stepTimer = setTimeout(() => this.playBot(seat), BOT_THINK_MS);
-      } else {
-        this.timer = setTimeout(() => this.act(seat.id, 'stand', true), TURN_MS);
-      }
+      this.timer = setTimeout(() => this.act(seat.id, 'stand', true), TURN_MS);
       return;
     }
 
     this.dealerTurn();
   }
 
-  playBot(seat) {
-    const hand = seat.hands[seat.activeHand];
-    if (!hand || hand.done) return this.nextSeat();
-    const canDouble = hand.cards.length === 2 && !hand.doubled && seat.chips >= hand.bet;
-    const move = botDecision(hand, this.dealer.cards[0], canDouble);
-    this.applyMove(seat, move, null);
-    if (Math.random() < 0.25) {
-      this.say(seat.name, BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)]);
-    }
-    if (hand.done) this.nextSeat();
-    else this.stepTimer = setTimeout(() => this.playBot(seat), BOT_THINK_MS);
-    this.broadcast();
-  }
-
-  /**
-   * Applique un coup. `profile` est nul pour un bot (pas de vraies pièces).
-   */
   applyMove(seat, move, profile) {
     const hand = seat.hands[seat.activeHand];
     if (!hand || hand.done) return { ok: false, message: 'Ce n’est pas le moment.' };
@@ -524,7 +510,7 @@ class Table {
 
       seat.lastResult = { payout, results, staked: seat.hands.reduce((s, h) => s + h.bet, 0) };
 
-      if (!seat.isBot && payout > 0) {
+      if (payout > 0) {
         const profile = this.profiles && this.profiles.get(seat.id);
         if (profile) {
           profile.vault.coins += payout;
@@ -532,9 +518,9 @@ class Table {
           if (this.onProfile) this.onProfile(profile);
         }
       }
-      if (seat.isBot) {
-        seat.chips = Math.max(500, seat.chips - seat.lastResult.staked + payout);
-      }
+      // On retient la mise pour le bouton « remiser » et le mode auto.
+      seat.lastBet = seat.bet || seat.lastBet;
+      seat.lastSide = seat.side ? { ...seat.side } : seat.lastSide;
       seat.bet = 0;
     }
 
@@ -542,6 +528,30 @@ class Table {
 
     this.broadcast();
     this.timer = setTimeout(() => this.startBetting(), PAYOUT_MS);
+  }
+
+  /** Règle « paire » et « 21+3 » à partir de la donne. */
+  settleSides() {
+    const upCard = this.dealer.cards[0];
+    for (const seat of this.seats) {
+      if (!seat.side || !seat.hands.length) continue;
+      const cards = seat.hands[0].cards;
+      if (cards.length < 2) continue;
+
+      const result = sidebets.settle(seat.side, cards, upCard);
+      seat.sideResult = result;
+
+      if (result.payout > 0) {
+        const profile = this.profiles && this.profiles.get(seat.id);
+        if (profile) {
+          profile.vault.coins += result.payout;
+          seat.chips = profile.vault.coins;
+          if (this.onProfile) this.onProfile(profile);
+        }
+        const won = [result.pairs, result.trio].filter((r) => r && r.payout > 0);
+        for (const w of won) this.say('Croupier', `${seat.name} touche ${w.name} : +${w.payout} 🪙`);
+      }
+    }
   }
 
   /* ── Divers ── */
@@ -582,10 +592,12 @@ class Table {
         id: s.id,
         name: s.name,
         avatar: s.avatar,
-        isBot: s.isBot,
         connected: s.connected,
         isYou: s.id === userId,
         bet: s.bet,
+        side: s.side || null,
+        sideResult: s.sideResult || null,
+        auto: Boolean(s.auto),
         chips: s.chips,
         active: i === this.activeSeat,
         activeHand: s.activeHand,
@@ -599,10 +611,15 @@ class Table {
           blackjack: isBlackjack(h.cards),
         })),
       })),
+      sidebets: sidebets.view(),
       you: seat
         ? {
             seated: true,
             bet: seat.bet,
+            side: seat.side || null,
+            lastBet: seat.lastBet || 0,
+            lastSide: seat.lastSide || null,
+            auto: Boolean(seat.auto),
             canAct: this.phase === 'playing' && this.seats[this.activeSeat] === seat,
             moves: this.movesFor(seat),
           }
@@ -689,7 +706,6 @@ module.exports = {
   handValue,
   isBlackjack,
   buildShoe,
-  botDecision,
   MIN_BET,
   MAX_BET,
   SEATS,

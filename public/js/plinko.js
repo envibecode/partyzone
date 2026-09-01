@@ -27,8 +27,10 @@
 
   /* ─── Géométrie ─── */
 
-  const TOP = 60;
-  const BOTTOM = H - 74;
+  const TOP = 40;
+  // Les cases du bas sont juste sous la dernière rangée de picots : on garde
+  // le strict nécessaire pour la bille qui tombe dedans.
+  const BOTTOM = H - 6;
 
   function layout() {
     pegs = [];
@@ -92,7 +94,9 @@
     for (const b of balls) {
       if (b.done) continue;
       alive = true;
-      b.t += 0.055;
+      // Cadence de chute : assez lente pour qu'on suive la bille, assez
+      // rapide pour que dix billes ne prennent pas quinze secondes.
+      b.t += 0.075;
 
       const step = Math.min(rows, Math.floor(b.t));
       const frac = Math.min(1, b.t - step);
@@ -109,13 +113,16 @@
       b.x = x0 + (x1 - x0) * e;
       b.y = TOP + (step + frac) * rowGap - Math.sin(frac * Math.PI) * rowGap * 0.16;
 
-      if (b.t >= rows + 0.6) {
+      // Arrivée en bas : on encaisse et on retire la bille du plateau.
+      // Elle n'a plus rien à y faire, et à dix billes le plateau devenait
+      // illisible.
+      if (b.t >= rows) {
         b.done = true;
         landed(b);
       }
     }
 
-    balls = balls.filter((b) => !b.done || b.t < rows + 2);
+    balls = balls.filter((b) => !b.done);
     draw();
 
     if (alive || balls.length) raf = requestAnimationFrame(loop);
@@ -131,8 +138,26 @@
       void node.offsetWidth;
       node.classList.add('hit');
     }
+    pushHistory(ball);
     if (ball.multiplier >= 1) SFX.win(Math.min(1, ball.multiplier / 20));
     else SFX.lose();
+  }
+
+  /* ─── L'historique : ce que chaque bille a rapporté ─── */
+
+  const history = $('#pk-history');
+
+  function pushHistory(ball) {
+    const empty = history.querySelector('.empty');
+    if (empty) empty.remove();
+
+    const row = el('div', `pk-hrow ${ball.win >= ball.stake ? 'up' : 'down'}`);
+    row.appendChild(el('span', 'm', `${ball.multiplier}×`));
+    row.appendChild(el('span', 'g', `${ball.win >= ball.stake ? '+' : ''}${fmt(ball.win - ball.stake)}`));
+    row.appendChild(el('span', 'p', `${fmt(ball.win)} 🪙`));
+
+    history.prepend(row);
+    while (history.children.length > 40) history.lastElementChild.remove();
   }
 
   /* ─── Cases du bas ─── */
@@ -193,8 +218,10 @@
         path: d.path,
         bucket: d.bucket,
         multiplier: d.multiplier,
+        win: d.win,
+        stake: result.staked / result.drops.length,
         x: W / 2, y: TOP, r: Math.max(4, layoutCache.colGap * 0.2),
-        t: -i * 3.2, lastStep: -1, done: false,
+        t: -i * 1.5, lastStep: -1, done: false,
       });
     });
     if (!raf) raf = requestAnimationFrame(loop);

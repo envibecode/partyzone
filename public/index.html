@@ -3,22 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f212e">
+<meta name="theme-color" content="#0a0e1a">
 <title>PartyZone — Casino entre potes</title>
 <meta name="description" content="Blackjack, roulette, Plinko et caisses à memes. Un casino en pièces virtuelles, gratuit, entre amis. Aucun achat, aucun argent réel.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%230f212e'/><circle cx='16' cy='16' r='7' fill='%2300e701'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='10' fill='%230a0e1a'/><text x='16' y='24' font-size='19' text-anchor='middle'>🍀</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
 <!-- ══════════════ CONNEXION ══════════════ -->
 <section id="screen-auth" class="screen active auth-screen">
-  <div class="auth-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span></div>
+  <div class="auth-art" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
   <div class="auth-box">
-    <div class="auth-logo"><span class="dot"></span> PartyZone</div>
+    <div class="auth-logo"><span class="clover">🍀</span> PartyZone</div>
     <h1>Le casino<br><em>où personne ne perd d’argent.</em></h1>
     <p class="auth-lede">
       Blackjack, roulette, Plinko et caisses à memes. On joue avec des pièces
@@ -26,7 +26,7 @@
     </p>
 
     <div class="auth-card">
-      <button id="btn-discord" class="btn btn-discord btn-block">
+      <button id="btn-discord" class="btn btn-discord btn-block big">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369A19.8 19.8 0 0 0 15.43 3.1a.07.07 0 0 0-.074.035c-.211.375-.445.865-.609 1.25a18.3 18.3 0 0 0-5.487 0 12 12 0 0 0-.617-1.25.07.07 0 0 0-.075-.035 19.7 19.7 0 0 0-4.885 1.27.06.06 0 0 0-.03.025C.533 9.046-.32 13.58.099 18.057a.08.08 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.08.08 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13 13 0 0 1-1.872-.892.077.077 0 0 1-.008-.128q.19-.141.365-.291a.07.07 0 0 1 .078-.01c3.927 1.793 8.18 1.793 12.061 0a.07.07 0 0 1 .079.009q.176.15.366.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.891a.077.077 0 0 0-.041.107c.36.698.772 1.363 1.225 1.993a.08.08 0 0 0 .084.028 19.8 19.8 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.663a.06.06 0 0 0-.031-.028M8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419s.956-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418m7.975 0c-1.183 0-2.157-1.085-2.157-2.419s.955-2.419 2.157-2.419c1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418"/></svg>
         Continuer avec Discord
       </button>
@@ -57,91 +57,121 @@
 <!-- ══════════════ APPLICATION ══════════════ -->
 <div id="app" class="screen app">
 
-  <!-- Rail de gauche -->
-  <nav class="rail" aria-label="Navigation">
-    <div class="rail-logo" data-go="home"><span class="dot"></span><b>PartyZone</b></div>
-    <div class="rail-nav">
-      <button class="rail-btn active" data-go="home"><i>🏠</i><span>Accueil</span></button>
-      <button class="rail-btn" data-go="mine"><i>⛏️</i><span>La Mine</span></button>
-      <div class="rail-sep">Casino</div>
-      <button class="rail-btn" data-go="blackjack"><i>🃏</i><span>Blackjack</span></button>
-      <button class="rail-btn" data-go="roulette"><i>🎡</i><span>Roulette</span></button>
-      <button class="rail-btn" data-go="plinko"><i>🔻</i><span>Plinko</span></button>
-      <button class="rail-btn" data-go="vault"><i>📦</i><span>Caisses</span></button>
-      <div class="rail-sep">Compte</div>
-      <button class="rail-btn" data-go="fair"><i>🛡️</i><span>Équité</span></button>
-      <button class="rail-btn hidden" id="rail-admin" data-go="admin"><i>🛠️</i><span>Admin</span></button>
-    </div>
-    <div class="rail-foot">
-      <button class="rail-btn" id="btn-sound"><i>🔊</i><span>Son</span></button>
-      <button class="rail-btn" id="btn-logout"><i>🚪</i><span>Quitter</span></button>
-    </div>
-  </nav>
-
-  <!-- Barre du haut -->
+  <!-- ─── Barre du haut ─── -->
   <header class="topbar">
     <button class="icon-btn only-mobile" id="btn-menu" aria-label="Menu">☰</button>
-    <div class="balance" id="balance">
-      <span class="bal-coins"><b id="coins">0</b> <i>🪙</i></span>
-      <button class="bal-mine" data-go="mine">Miner</button>
-    </div>
-    <div class="spacer"></div>
-    <button class="me-chip" id="me-chip">
-      <span class="lvl" id="me-level">1</span>
-      <img id="me-avatar" alt="" width="28" height="28">
-      <span class="me-name" id="me-name">…</span>
+
+    <nav class="topnav left" id="nav-left">
+      <button class="topnav-btn vip" data-go="mine"><i>⛏️</i> LA MINE</button>
+      <button class="topnav-btn" data-go="home">LOBBY</button>
+      <button class="topnav-btn" data-go="leaderboard">CLASSEMENT</button>
+    </nav>
+
+    <button class="brand" data-go="home">
+      <span>PARTY</span><i class="clover">🍀</i><span>ZONE</span>
     </button>
+
+    <nav class="topnav right" id="nav-right">
+      <button class="topnav-btn" data-go="vault">CAISSES</button>
+      <button class="topnav-btn" data-go="fair">ÉQUITÉ</button>
+      <button class="topnav-btn hidden" id="nav-admin" data-go="admin">ADMIN</button>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="balance" id="balance">
+        <span class="bal-coins"><i>🪙</i><b id="coins">0</b></span>
+        <button class="bal-mine" data-go="mine">Miner</button>
+      </div>
+      <button class="me-chip" id="me-chip">
+        <img id="me-avatar" alt="" width="34" height="34">
+        <span class="me-text">
+          <b id="me-name">…</b>
+          <small id="me-title">…</small>
+        </span>
+        <span class="lvl" id="me-level">1</span>
+      </button>
+    </div>
   </header>
 
-  <!-- Contenu -->
+  <!-- ─── Contenu ─── -->
   <main class="main" id="main">
 
-    <!-- ── ACCUEIL ── -->
+    <!-- ══════ LOBBY ══════ -->
     <section class="view active" id="view-home">
-      <div class="hero">
-        <div class="hero-copy">
-          <span class="kicker">Pièces virtuelles · 0 € · 0 achat</span>
-          <h1>Bienvenue au <em>PartyZone</em></h1>
-          <p>Mine tes pièces, puis va les jouer. Tous les résultats sont vérifiables :
-             la graine du serveur est publiée avant que tu mises.</p>
-          <div class="hero-actions">
-            <button class="btn btn-green" data-go="mine">⛏️ Aller miner</button>
-            <button class="btn btn-soft" data-go="blackjack">🃏 Table de blackjack</button>
+      <div class="lobby">
+
+        <!-- Colonne compte -->
+        <aside class="lobby-left">
+          <div class="tokens">
+            <div>
+              <span class="tokens-label">Tes</span>
+              <span class="tokens-name">Pièces</span>
+            </div>
+            <div class="tokens-value"><b id="tk-coins">0</b><i class="coin">🪙</i></div>
+          </div>
+
+          <div class="panel wallets">
+            <div class="wallets-head">Tes réserves</div>
+            <div class="wallet-list" id="wallets"></div>
+            <button class="wallet-add" data-go="mine">Gagner des pièces</button>
+          </div>
+        </aside>
+
+        <!-- Scène centrale -->
+        <div class="lobby-mid">
+          <div class="gamebar" id="gamebar"></div>
+
+          <div class="stage-wrap">
+            <div class="ghost-title" aria-hidden="true">PARTYZONE</div>
+            <div class="carousel" id="carousel">
+              <div class="carousel-track" id="carousel-track"></div>
+              <button class="car-nav prev" id="car-prev" aria-label="Jeu précédent">‹</button>
+              <button class="car-nav next" id="car-next" aria-label="Jeu suivant">›</button>
+            </div>
           </div>
         </div>
-        <div class="hero-stats">
-          <div><b id="stat-coins">0</b><span>pièces</span></div>
-          <div><b id="stat-rounds">0</b><span>manches</span></div>
-          <div><b id="stat-best">0</b><span>plus gros gain</span></div>
-          <div><b id="stat-coll">0</b><span>memes trouvés</span></div>
+
+        <!-- Chat -->
+        <aside class="lobby-right">
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats" id="chat-stats">— en ligne</div>
+            </div>
+            <div class="chat-log" id="chat-log"></div>
+            <form class="chat-form" id="chat-form">
+              <input class="input" id="chat-input" maxlength="240" placeholder="Écris quelque chose…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Tables ouvertes -->
+      <div class="rooms">
+        <div class="rooms-intro">
+          <span class="rooms-kicker">Les</span>
+          <h2>TABLES</h2>
+          <div class="rooms-nav">
+            <button id="rooms-prev" aria-label="Précédent">←</button>
+            <button id="rooms-next" aria-label="Suivant">→</button>
+          </div>
+          <button class="btn btn-gold" id="rooms-create">CRÉER LA MIENNE</button>
         </div>
+        <div class="rooms-track" id="rooms-track"></div>
       </div>
+    </section>
 
-      <div class="tiles">
-        <button class="tile" data-go="mine" style="--c:#f5b544">
-          <i>⛏️</i><b>La Mine</b><span>Le seul robinet à pièces. Clique, achète des améliorations, encaisse même hors ligne.</span>
-        </button>
-        <button class="tile" data-go="blackjack" style="--c:#00e701">
-          <i>🃏</i><b>Blackjack</b><span>Table à 5 sièges, 6 jeux de cartes. Avec des bots ou avec tes potes via un code.</span>
-        </button>
-        <button class="tile" data-go="roulette" style="--c:#ff4d5e">
-          <i>🎡</i><b>Roulette</b><span>Roue européenne partagée : tout le site mise sur le même tour. RTP 97,30 %.</span>
-        </button>
-        <button class="tile" data-go="plinko" style="--c:#8f6bff">
-          <i>🔻</i><b>Plinko</b><span>La bille tombe, les multiplicateurs viennent des vraies probabilités.</span>
-        </button>
-        <button class="tile" data-go="vault" style="--c:#41d3ff">
-          <i>📦</i><b>Caisses à memes</b><span>60 memes à collectionner, du commun au maudit. Les doublons se revendent.</span>
-        </button>
-        <button class="tile" data-go="fair" style="--c:#b1bad3">
-          <i>🛡️</i><b>Équité vérifiable</b><span>Chaque tirage vient d’une graine publiée d’avance. Rien n’est décidé après ta mise.</span>
-        </button>
+    <!-- ══════ CLASSEMENT ══════ -->
+    <section class="view" id="view-leaderboard">
+      <div class="view-head">
+        <h1>🏆 Classement</h1>
+        <p>Qui a le plus de pièces, et qui a le plus joué. Deux façons de lire la même soirée.</p>
       </div>
-
-      <div class="home-grid">
+      <div class="lb-grid">
         <div class="panel">
           <div class="panel-head">
-            <h2>Classement</h2>
+            <h2>Le tableau</h2>
             <div class="segs" id="lb-sort">
               <button class="seg active" data-sort="coins">Pièces</button>
               <button class="seg" data-sort="xp">Niveau</button>
@@ -156,7 +186,7 @@
       </div>
     </section>
 
-    <!-- ── LA MINE ── -->
+    <!-- ══════ LA MINE ══════ -->
     <section class="view" id="view-mine">
       <div class="view-head">
         <h1>⛏️ La Mine</h1>
@@ -165,18 +195,31 @@
       <div class="mine-grid">
         <div class="panel mine-stage">
           <div class="mine-readout">
-            <div><b id="mine-perclick">1</b><span>par clic</span></div>
-            <div><b id="mine-persec">0</b><span>par seconde</span></div>
-            <div><b id="mine-clicks">0</b><span>clics</span></div>
+            <div><b id="mine-perclick">1</b><span>par coup</span></div>
+            <div><b id="mine-crit-r">5</b><span>% de critique</span></div>
+            <div><b id="mine-clicks">0</b><span>coups</span></div>
             <div><b id="mine-earned">0</b><span>total miné</span></div>
+          </div>
+
+          <div class="stamina">
+            <div class="stamina-head">
+              <span>Endurance</span>
+              <b id="stam-val">60 / 60</b>
+            </div>
+            <div class="stamina-bar"><span id="stam-fill"></span></div>
+            <p class="fine" id="stam-note">À bout de souffle, chaque coup ne rapporte plus que 12 %.</p>
           </div>
           <button class="rock" id="rock" aria-label="Miner">
             <span class="rock-face">💎</span>
             <span class="rock-ring"></span>
           </button>
           <div class="floaters" id="floaters" aria-hidden="true"></div>
-          <p class="fine">Coup critique : <b id="mine-crit">6</b> % de chances de gagner <b id="mine-critx">10</b>×.
-             Le serveur plafonne à <b id="mine-cap">20</b> clics/seconde — l’autoclic ne sert à rien.</p>
+          <p class="fine">
+            Coup critique : <b id="mine-crit">5</b> % de chances de gagner <b id="mine-critx">7</b>×.
+            L’endurance remonte de <b id="mine-regen">3,2</b> points par seconde et le serveur
+            plafonne à <b id="mine-cap">12</b> coups/seconde : un autoclic vide juste la barre
+            plus vite et mine à perte. <b>Aucun revenu quand tu n’es pas là.</b>
+          </p>
         </div>
         <div class="panel">
           <div class="panel-head"><h2>Améliorations</h2></div>
@@ -185,9 +228,9 @@
       </div>
     </section>
 
-    <!-- ── PLINKO ── -->
+    <!-- ══════ PLINKO ══════ -->
     <section class="view" id="view-plinko">
-      <div class="game-layout">
+      <div class="game-layout three">
         <aside class="betpanel">
           <div class="bet-tabs"><button class="bet-tab active">Manuel</button></div>
           <label class="field">
@@ -212,16 +255,24 @@
             <div><span>Dernier gain</span><b id="pk-last">—</b></div>
           </div>
         </aside>
-        <div class="stage">
-          <canvas id="pk-canvas" width="760" height="620"></canvas>
+        <div class="stage pk-stage">
+          <canvas id="pk-canvas" width="760" height="588"></canvas>
           <div class="pk-buckets" id="pk-buckets"></div>
         </div>
+
+        <aside class="panel pk-side">
+          <div class="panel-head"><h2>Bille par bille</h2></div>
+          <div class="pk-hhead"><span>multi</span><span>net</span><span>reçu</span></div>
+          <div class="pk-history" id="pk-history">
+            <div class="empty">Lâche une bille pour commencer.</div>
+          </div>
+        </aside>
       </div>
     </section>
 
-    <!-- ── ROULETTE ── -->
+    <!-- ══════ ROULETTE ══════ -->
     <section class="view" id="view-roulette">
-      <div class="game-layout">
+      <div class="game-layout three rl-layout">
         <aside class="betpanel">
           <div class="rl-phase" id="rl-phase">Connexion…</div>
           <div class="rl-timer"><span id="rl-bar"></span></div>
@@ -232,6 +283,16 @@
               <button data-amt="half">½</button><button data-amt="double">2×</button><button data-amt="max">Max</button>
             </div>
           </label>
+          <div class="rl-quick">
+            <button class="btn btn-soft" id="rl-rebet">↻ Remiser</button>
+            <button class="btn btn-mini" id="rl-auto">Auto : off</button>
+          </div>
+
+          <div class="rl-setups">
+            <div class="panel-head"><h2>Configurations</h2><button class="link" id="rl-save">enregistrer</button></div>
+            <div class="rl-setup-list" id="rl-setups"><span class="fine">Pose des jetons puis enregistre-les ici.</span></div>
+          </div>
+
           <div class="rl-mine">
             <div class="panel-head"><h2>Tes mises</h2><button class="link" id="rl-clear">Tout retirer</button></div>
             <ul id="rl-bets"><li class="empty">Clique sur le tapis.</li></ul>
@@ -245,6 +306,7 @@
             <code id="rl-hash" class="hash">…</code></p>
         </aside>
         <div class="stage rl-stage">
+          <div class="rl-ticker" id="rl-ticker" aria-live="polite"></div>
           <div class="wheel-wrap">
             <canvas id="rl-canvas" width="420" height="420"></canvas>
             <div class="wheel-result" id="rl-result"></div>
@@ -252,23 +314,50 @@
           <div class="rl-history" id="rl-history"></div>
           <div class="rl-table" id="rl-table"></div>
         </div>
+
+        <aside class="rl-side">
+          <div class="panel">
+            <div class="panel-head"><h2>À cette table</h2></div>
+            <ul class="rl-players" id="rl-players-list"><li class="empty">Personne n’a encore misé.</li></ul>
+          </div>
+
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats">—</div>
+            </div>
+            <div class="chat-log" id="rl-chat-log"></div>
+            <form class="chat-form" id="rl-chat-form">
+              <input class="input" id="rl-chat-input" maxlength="240" placeholder="Écris…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
+        </aside>
       </div>
     </section>
 
-    <!-- ── BLACKJACK ── -->
+    <!-- ══════ BLACKJACK ══════ -->
     <section class="view" id="view-blackjack">
       <div class="bj-lobby" id="bj-lobby">
-        <div class="panel lobby-card">
+        <div class="view-head">
           <h1>🃏 Blackjack</h1>
-          <p>Six jeux de cartes, cinq sièges, le blackjack paie 3:2. Ouvre une table et
-             joue seul contre des bots, ou envoie le code à tes potes.</p>
-          <div class="lobby-actions">
-            <button class="btn btn-green big" id="bj-create">Ouvrir une table</button>
-            <form class="lobby-join" id="bj-join-form">
-              <input class="input code" id="bj-code" maxlength="4" placeholder="CODE" autocomplete="off">
-              <button class="btn btn-soft" type="submit">Rejoindre</button>
-            </form>
+          <p>Six jeux de cartes, cinq sièges, le blackjack paie 3:2. La table tourne en
+             continu : tu poses ta mise avant la fin du décompte et tu joues, seul ou à
+             plusieurs. Rejoins une table ouverte ou ouvre la tienne.</p>
+        </div>
+
+        <div class="bj-open">
+          <div class="panel-head">
+            <h2>Tables ouvertes</h2>
+            <div class="lobby-join">
+              <form id="bj-join-form" class="lobby-join">
+                <input class="input code" id="bj-code" maxlength="4" placeholder="CODE" autocomplete="off">
+                <button class="btn btn-soft" type="submit">Rejoindre</button>
+              </form>
+              <button class="btn btn-green" id="bj-create">Ouvrir une table</button>
+            </div>
           </div>
+          <div class="bj-open-grid" id="bj-open-grid"></div>
         </div>
       </div>
 
@@ -279,8 +368,8 @@
               <button class="link" id="bj-copy">copier</button></div>
             <div class="bj-phase" id="bj-phase">…</div>
             <div class="bj-tools">
-              <button class="btn btn-mini" id="bj-add-bot">+ bot</button>
-              <button class="btn btn-mini" id="bj-del-bot">− bot</button>
+              <button class="btn btn-mini" id="bj-auto">Auto : off</button>
+              <button class="btn btn-mini" id="bj-rebet">Remiser</button>
               <button class="btn btn-mini danger" id="bj-leave">Quitter</button>
             </div>
           </div>
@@ -299,17 +388,54 @@
             </div>
             <button class="btn btn-green" id="bj-place">Miser</button>
           </div>
+
+          <div class="sidebets" id="sidebets">
+            <div class="sb-head">
+              <h3>Paris annexes <small>réglés dès la donne</small></h3>
+              <button class="link" id="sb-info">comment ça paie ?</button>
+            </div>
+            <div class="sb-row">
+              <label class="sb-bet">
+                <span class="sb-name">PAIRE <em id="sb-rtp-pairs">—</em></span>
+                <div class="bet-input">
+                  <input type="number" id="sb-pairs" value="0" min="0" step="10">
+                </div>
+                <span class="sb-hint">Tes deux cartes forment une paire.</span>
+              </label>
+              <label class="sb-bet">
+                <span class="sb-name">21+3 <em id="sb-rtp-trio">—</em></span>
+                <div class="bet-input">
+                  <input type="number" id="sb-trio" value="0" min="0" step="10">
+                </div>
+                <span class="sb-hint">Tes deux cartes + celle du croupier font une main de poker.</span>
+              </label>
+            </div>
+          </div>
         </div>
-        <aside class="bj-side panel">
-          <div class="panel-head"><h2>Table</h2></div>
-          <ul class="bj-log" id="bj-log"></ul>
-          <form class="bj-say" id="bj-say"><input class="input" id="bj-msg" maxlength="160" placeholder="Dire un truc…"><button class="btn btn-soft">↵</button></form>
-          <p class="fine">Sabot mélangé à partir d’une graine publiée : <code class="hash" id="bj-hash">…</code></p>
+        <aside class="bj-side">
+          <div class="panel">
+            <div class="panel-head"><h2>La table</h2></div>
+            <ul class="bj-log" id="bj-log"></ul>
+            <p class="fine">Sabot mélangé à partir d’une graine publiée :
+              <code class="hash" id="bj-hash">…</code></p>
+          </div>
+
+          <div class="chat">
+            <div class="chat-head">
+              <h2>Chat <em>en direct</em></h2>
+              <div class="chat-stats">—</div>
+            </div>
+            <div class="chat-log" id="bj-chat-log"></div>
+            <form class="chat-form" id="bj-chat-form">
+              <input class="input" id="bj-chat-input" maxlength="240" placeholder="Écris…" autocomplete="off">
+              <button class="btn btn-green" type="submit" aria-label="Envoyer">➤</button>
+            </form>
+          </div>
         </aside>
       </div>
     </section>
 
-    <!-- ── CAISSES ── -->
+    <!-- ══════ CAISSES ══════ -->
     <section class="view" id="view-vault">
       <div class="view-head">
         <h1>📦 Caisses à memes</h1>
@@ -332,7 +458,7 @@
       </div>
     </section>
 
-    <!-- ── ÉQUITÉ ── -->
+    <!-- ══════ ÉQUITÉ ══════ -->
     <section class="view" id="view-fair">
       <div class="view-head">
         <h1>🛡️ Équité vérifiable</h1>
@@ -368,22 +494,16 @@
       </div>
     </section>
 
-    <!-- ── ADMIN ── -->
+    <!-- ══════ ADMIN ══════ -->
     <section class="view" id="view-admin">
       <div class="view-head"><h1>🛠️ Administration</h1></div>
       <div id="admin-root"></div>
     </section>
 
   </main>
-
-  <!-- Colonne de droite -->
-  <aside class="side" id="side">
-    <div class="side-head">En ligne <b id="online-count">0</b></div>
-    <ul class="online" id="online"></ul>
-  </aside>
 </div>
 
-<!-- Overlays -->
+<!-- Surcouches -->
 <div class="toasts" id="toasts"></div>
 <div class="tip" id="tip" hidden></div>
 <canvas id="confetti" class="confetti"></canvas>
@@ -392,6 +512,8 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/sfx.js"></script>
 <script src="/js/app.js"></script>
+<script src="/js/chat.js"></script>
+<script src="/js/lobby.js"></script>
 <script src="/js/mine.js"></script>
 <script src="/js/plinko.js"></script>
 <script src="/js/roulette.js"></script>

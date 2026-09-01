@@ -52,6 +52,8 @@ async function makeGuest(name) {
   socket.on('roulette:state', (s) => { p.roulette = s; });
   socket.on('bj:state', (s) => { p.table = s; });
   socket.on('vault:state', ({ vault, result }) => { p.vault = vault; p.lastVault = result; });
+  socket.on('roulette:setups', ({ setups }) => { p.setups = setups; });
+  socket.on('chat:message', (m) => { p.chat = [...(p.chat || []), m]; });
 
   await new Promise((resolve, reject) => {
     socket.on('connect', resolve);
@@ -76,15 +78,26 @@ function waitFor(fn, ms = 5000, what = 'condition') {
   });
 }
 
-/** Fait tourner la mine jusqu'à atteindre le solde voulu. */
-async function farm(player, target) {
-  player.socket.emit('mine:open');
-  await waitFor(() => player.mine, 4000, 'état de la mine');
-  let guard = 0;
-  while (player.profile.coins < target && guard++ < 400) {
-    player.socket.emit('mine:click', { count: 20 });
-    await wait(30);
+/**
+ * Crédite un joueur pour la suite des essais.
+ *
+ * La mine est volontairement lente — avec l'endurance, il faudrait des
+ * heures pour amasser de quoi tester le casino. On passe donc par le panel
+ * d'administration, ce qui a l'avantage d'exercer ce chemin-là aussi. Le
+ * comportement réel de la mine est vérifié dans sa propre section.
+ */
+async function topUp(player, target) {
+  if (player.profile.coins >= target) return player.profile.coins;
+  if (!player.isAdmin) {
+    player.socket.emit('admin:claim', { key: process.env.ADMIN_KEY || 'test-admin-key' });
+    await waitFor(() => player.profile.admin, 4000, `droits admin pour ${player.name}`);
+    player.isAdmin = true;
   }
+  player.socket.emit('admin:action', {
+    action: 'grant-coins',
+    payload: { id: player.user.id, amount: target - player.profile.coins + 1000 },
+  });
+  await waitFor(() => player.profile.coins >= target, 4000, 'crédit');
   return player.profile.coins;
 }
 
@@ -113,21 +126,51 @@ async function farm(player, target) {
   await wait(400);
   check('les clics rapportent', alice.profile.coins > before, `+${alice.profile.coins - before} pièces`);
 
-  // Le plafond : on envoie 200 clics d'un coup, le serveur doit en jeter.
+  // Le plafond : on envoie 200 coups d'un coup, le serveur doit en jeter.
   const capBefore = alice.mine.clicks;
   alice.socket.emit('mine:click', { count: 200 });
   await wait(300);
   alice.socket.emit('mine:open');
   await wait(300);
-  check('cadence plafonnée par le serveur', alice.mine.clicks - capBefore <= 40,
-    `${alice.mine.clicks - capBefore} clics retenus sur 200 demandés`);
+  check('cadence plafonnée par le serveur', alice.mine.clicks - capBefore <= 30,
+    `${alice.mine.clicks - capBefore} coups retenus sur 200 demandés`);
 
-  await farm(alice, 3000);
+  // L'endurance : on tape jusqu'à vider la barre, le rendement doit chuter.
+  alice.socket.emit('mine:open');
+  await wait(300);
+  const fresh = alice.mine.staminaMax;
+  let lastHit = null;
+  alice.socket.on('mine:hit', (r) => { lastHit = r; });
+  // Le plafond de cadence tape en premier, l'endurance s'épuise ensuite :
+  // il faut donc taper un moment avant de voir la barre tomber à zéro.
+  let tiredSeen = 0;
+  for (let i = 0; i < 130; i++) {
+    alice.socket.emit('mine:click', { count: 20 });
+    await wait(70);
+    if (lastHit && lastHit.tired) tiredSeen += lastHit.tired;
+  }
+  await wait(400);
+  check('l’endurance s’épuise sous un autoclic', lastHit && lastHit.stamina < fresh * 0.2,
+    `${lastHit ? lastHit.stamina : '?'} / ${fresh} restants après 9 s d'autoclic`);
+  check('les coups à vide ne rapportent presque rien', tiredSeen > 0,
+    `${tiredSeen} coups tapés dans le vide`);
+
+  // Aucun revenu hors ligne : on attend, rien ne doit tomber.
+  const idleBefore = alice.profile.coins;
+  await wait(2500);
+  alice.socket.emit('mine:open');
+  await wait(300);
+  check('aucun revenu quand on ne tape pas', alice.profile.coins === idleBefore,
+    `${alice.profile.coins} pièces, inchangé après 2,5 s`);
+
+  await topUp(alice, 3000);
   const coinsForUpgrade = alice.profile.coins;
   alice.socket.emit('mine:buy', { id: 'pick' });
   await wait(400);
   check('amélioration achetée et facturée', alice.profile.coins < coinsForUpgrade && alice.mine.upgrades[0].level === 1);
-  check('le clic rapporte plus après achat', alice.mine.perClick > 1, `${alice.mine.perClick} par clic`);
+  check('le coup rapporte plus après achat', alice.mine.perClick > 1, `${alice.mine.perClick} par coup`);
+  check('aucune amélioration ne produit hors ligne',
+    alice.mine.upgrades.every((u) => !/seconde|passif/i.test(u.next || '')));
 
   /* ── Plinko ── */
   section('Plinko');
@@ -142,7 +185,7 @@ async function farm(player, target) {
     }
   }
 
-  await farm(alice, 60000);
+  await topUp(alice, 60000);
   const pkStart = alice.profile.coins;
   let staked = 0;
   let returned = 0;
@@ -190,6 +233,12 @@ async function farm(player, target) {
   check('gain conforme à la couleur sortie', detail.won === shouldWin,
     shouldWin ? 'rouge : gagné' : `${res.result.color} : perdu`);
 
+  check('les mises de tout le monde sont publiques',
+    Array.isArray(res.table) && res.table.some((t) => t.you), `${res.table.length} joueur(s) au tapis`);
+  check('les jetons sont visibles case par case',
+    res.board && Object.keys(res.board).length > 0, `${Object.keys(res.board || {}).length} case(s) occupée(s)`);
+  check('bandeau des gagnants du dernier tour', res.lastWinners !== undefined);
+
   // Refus des mises hors phase.
   await waitFor(() => alice.roulette.phase !== 'betting', 20000, 'fermeture des mises');
   alice.toasts = [];
@@ -197,9 +246,27 @@ async function farm(player, target) {
   await wait(400);
   check('mise refusée quand la roue tourne', alice.toasts.some((t) => t.kind === 'error'));
 
+  // Remiser : on repose exactement la même chose au tour suivant.
+  await waitFor(() => alice.roulette.phase === 'betting', 45000, 'nouveau tour');
+  await topUp(alice, 2000);
+  const beforeRebet = alice.profile.coins;
+  alice.toasts = [];
+  alice.socket.emit('roulette:rebet');
+  await wait(600);
+  check('bouton remiser', alice.roulette.you && alice.roulette.you.staked === 100,
+    `${alice.profile.coins} pièces après avoir reposé (${beforeRebet} avant)`);
+
+  // Configurations enregistrées.
+  alice.socket.emit('roulette:setup-save', { name: 'Mon rouge' });
+  await wait(600);
+  alice.socket.emit('roulette:setups');
+  const saved = await waitFor(() => alice.setups, 4000, 'configurations');
+  check('configuration enregistrée', saved.some((s) => s.name === 'Mon rouge'),
+    `${saved.length} configuration(s)`);
+
   /* ── Blackjack ── */
   section('Blackjack');
-  await farm(bob, 5000);
+  await topUp(bob, 5000);
   alice.socket.emit('bj:create');
   const table = await waitFor(() => alice.table, 5000, 'création de table');
   check('table créée avec un code à 4 lettres', /^[A-Z]{4}$/.test(table.code), table.code);
@@ -209,24 +276,27 @@ async function farm(player, target) {
   await waitFor(() => bob.table && bob.table.code === table.code, 5000, 'Bob à table');
   check('deuxième joueur assis', alice.table.seats.length === 2);
 
-  alice.socket.emit('bj:bot', { action: 'add' });
-  await wait(400);
-  check('bot ajouté par l’hôte', alice.table.seats.some((s) => s.isBot));
+  check('aucun bot à la table', alice.table.seats.every((s) => !s.isBot));
 
-  bob.toasts = [];
-  bob.socket.emit('bj:bot', { action: 'add' });
-  await wait(400);
-  check('seul l’hôte gère les bots', bob.toasts.some((t) => t.kind === 'error'));
+  // La table tourne toute seule : le décompte démarre dès l'ouverture, on
+  // n'attend pas qu'un joueur mise.
+  check('la table démarre sans attendre personne',
+    ['betting', 'waiting'].includes(alice.table.phase), alice.table.phase);
+  check('grille des paris annexes publiée',
+    alice.table.sidebets && alice.table.sidebets.rtp.pairs > 80 && alice.table.sidebets.rtp.trio > 80,
+    `paire ${alice.table.sidebets.rtp.pairs} % · 21+3 ${alice.table.sidebets.rtp.trio} %`);
 
-  // Une table neuve reste en attente jusqu'à la première mise : c'est elle
-  // qui lance le compte à rebours, pas l'inverse.
-  check('table en attente tant que personne n’a misé', alice.table.phase === 'waiting');
+  await topUp(alice, 5000);
   const bjBefore = alice.profile.coins;
-  alice.socket.emit('bj:bet', { amount: 200 });
+  alice.socket.emit('bj:bet', { amount: 200, side: { pairs: 50, trio: 50 } });
   bob.socket.emit('bj:bet', { amount: 100 });
-  await wait(600);
-  check('mise débitée à la table', alice.profile.coins === bjBefore - 200);
-  check('la première mise ouvre le tour', alice.table.phase === 'betting');
+  await wait(700);
+  check('mise principale et annexes débitées ensemble',
+    alice.profile.coins === bjBefore - 300, `${bjBefore} → ${alice.profile.coins}`);
+
+  alice.socket.emit('bj:auto', { on: true });
+  await wait(300);
+  check('mode auto activé', alice.table.you.auto);
 
   await waitFor(() => alice.table.phase === 'playing' || alice.table.phase === 'payout', 40000, 'distribution');
   const mySeat = alice.table.seats.find((s) => s.isYou);
@@ -247,6 +317,9 @@ async function farm(player, target) {
   await waitFor(() => alice.table.phase === 'payout', 60000, 'règlement');
   const settled = alice.table.seats.find((s) => s.isYou);
   check('main réglée', Boolean(settled.lastResult), `mise ${settled.lastResult.staked}, retour ${settled.lastResult.payout}`);
+  check('paris annexes réglés à la donne', Boolean(settled.sideResult),
+    settled.sideResult && settled.sideResult.pairs
+      ? `paire : ${settled.sideResult.pairs.name || 'perdue'}` : 'réglés');
   check('croupier découvert au règlement', alice.table.dealer.cards.every((c) => !c.hidden));
   check('valeur du croupier calculée', alice.table.dealer.value && alice.table.dealer.value.total > 0,
     `${alice.table.dealer.value.total}`);
@@ -257,7 +330,7 @@ async function farm(player, target) {
 
   /* ── Caisses ── */
   section('Caisses à memes');
-  await farm(alice, 20000);
+  await topUp(alice, 20000);
   alice.socket.emit('vault:open');
   const vault = await waitFor(() => alice.vault, 4000, 'état du coffre');
   check('soixante memes au catalogue', vault.items.length === 60);
@@ -282,7 +355,7 @@ async function farm(player, target) {
 
   // On ouvre en masse pour vérifier que les raretés sortent dans l'ordre attendu.
   const seen = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0, cursed: 0 };
-  await farm(alice, 80000);
+  await topUp(alice, 80000);
   for (let i = 0; i < 40; i++) {
     alice.lastVault = null;
     alice.socket.emit('vault:pull', { caseId: 'starter', count: 5 });
@@ -344,10 +417,39 @@ async function farm(player, target) {
   await wait(400);
   check('mise au-dessus du solde refusée', alice.toasts.some((t) => t.kind === 'error'));
 
+  const carol = await makeGuest('Carol');
+  carol.socket.emit('admin:open', {});
+  await wait(500);
+  check('panel admin refusé à un joueur ordinaire', carol.toasts.some((t) => t.kind === 'error'));
+  carol.socket.close();
+
+  /* ── Chat ── */
+  section('Chat');
+  alice.chat = [];
+  alice.socket.emit('chat:say', { text: 'Salut la taverne !' });
+  await waitFor(() => (alice.chat || []).some((m) => m.text === 'Salut la taverne !'), 4000, 'message diffusé');
+  check('message diffusé à tout le monde',
+    (bob.chat || []).some((m) => m.text === 'Salut la taverne !'));
+
   alice.toasts = [];
-  alice.socket.emit('admin:open', {});
+  alice.socket.emit('chat:say', { text: 'Salut la taverne !' });
   await wait(400);
-  check('panel admin refusé à un joueur ordinaire', alice.toasts.some((t) => t.kind === 'error'));
+  check('répétition refusée', alice.toasts.some((t) => t.kind === 'warn'));
+
+  alice.toasts = [];
+  for (let i = 0; i < 10; i++) alice.socket.emit('chat:say', { text: `message ${i}` });
+  await wait(600);
+  check('cadence du chat limitée', alice.toasts.some((t) => t.kind === 'warn'),
+    `${alice.toasts.length} refus sur 10 envois d'affilée`);
+
+  const link = 'regarde http://exemple.fr/truc';
+  alice.chat = [];
+  await wait(1200);
+  alice.socket.emit('chat:say', { text: link });
+  await wait(600);
+  const posted = (alice.chat || []).find((m) => m.text && m.text.includes('exemple'));
+  check('les liens sont neutralisés', posted && !posted.text.includes('exemple.fr'),
+    posted ? posted.text : 'non publié');
 
   /* ── Bilan ── */
   alice.socket.close();

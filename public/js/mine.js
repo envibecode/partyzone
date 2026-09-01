@@ -2,10 +2,12 @@
 /**
  * LA MINE — le clicker.
  *
- * Le navigateur affiche tout de suite le gain estimé pour que ça reste
- * nerveux, mais c'est le serveur qui compte vraiment : il regroupe les
- * clics envoyés et plafonne la cadence. Un autoclic ne rapporte rien de
- * plus qu'une main rapide.
+ * Le navigateur anime tout de suite pour que ça reste nerveux, mais c'est
+ * le serveur qui compte : il regroupe les coups envoyés, applique
+ * l'endurance et plafonne la cadence. Un autoclic vide la barre plus vite
+ * et finit par miner à perte — il ne rapporte pas plus qu'une main humaine.
+ *
+ * Il n'y a plus aucun revenu hors ligne : fermer l'onglet ne rapporte rien.
  */
 
 (() => {
@@ -25,14 +27,37 @@
 
   function render(mine) {
     state = mine;
+    stamina = mine.stamina;
     $('#mine-perclick').textContent = fmt(mine.perClick);
-    $('#mine-persec').textContent = fmt(mine.perSecond);
+    $('#mine-crit-r').textContent = Math.round(mine.critChance * 100);
     $('#mine-clicks').textContent = fmt(mine.clicks);
     $('#mine-earned').textContent = fmt(mine.earned);
     $('#mine-crit').textContent = Math.round(mine.critChance * 100);
     $('#mine-critx').textContent = mine.critMult;
     $('#mine-cap').textContent = mine.maxClicksPerSec;
+    $('#mine-regen').textContent = String(mine.staminaRegen).replace('.', ',');
+    $('#stam-note').textContent =
+      `À bout de souffle, chaque coup ne rapporte plus que ${Math.round(mine.tiredFactor * 100)} %.`;
+    renderStamina();
     renderUpgrades(mine.upgrades);
+  }
+
+  /* ─── L'endurance ─── */
+
+  let stamina = 0;
+
+  function renderStamina() {
+    if (!state) return;
+    const max = state.staminaMax;
+    const value = Math.max(0, Math.min(max, stamina));
+    const ratio = value / max;
+
+    $('#stam-val').textContent = `${Math.round(value)} / ${max}`;
+    $('#stam-fill').style.width = `${ratio * 100}%`;
+
+    const box = $('.stamina');
+    box.classList.toggle('low', ratio <= 0.35 && ratio > 0.02);
+    box.classList.toggle('empty', ratio <= 0.02);
   }
 
   function renderUpgrades(list) {
@@ -70,8 +95,8 @@
 
   /* ─── Clic ─── */
 
-  function floater(text, crit) {
-    const node = el('span', `floater${crit ? ' crit' : ''}`, text);
+  function floater(text, crit, tired) {
+    const node = el('span', `floater${crit ? ' crit' : ''}${tired ? ' tired' : ''}`, text);
     const box = floaters.getBoundingClientRect();
     node.style.left = `${box.width / 2 - 30 + (Math.random() - 0.5) * 90}px`;
     node.style.top = `${box.height / 2 + (Math.random() - 0.5) * 40}px`;
@@ -92,14 +117,17 @@
     if (!flushTimer) flushTimer = setTimeout(flush, 120);
 
     // Estimation locale : le serveur corrigera au prochain message.
-    const gain = Math.max(1, Math.round(state.perClick));
+    const tired = stamina < 1;
+    const gain = Math.max(1, Math.round(state.perClick * (tired ? state.tiredFactor : 1)));
+    stamina = Math.max(0, stamina - 1);
+    renderStamina();
     localCoins += gain;
     PZ.setCoins(localCoins);
 
     rock.classList.remove('hit');
     void rock.offsetWidth;
     rock.classList.add('hit');
-    floater(`+${fmt(gain)}`, false);
+    floater(`+${fmt(gain)}`, false, tired);
     SFX.mine();
 
     if (e && e.detail === 0) return; // clavier : pas de vibration
@@ -111,15 +139,17 @@
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); hit(e); }
   });
 
-  /* ─── Revenu passif affiché en continu ─── */
+  /* ─── Récupération affichée en continu ─── */
 
   function startTick() {
     stopTick();
     tickTimer = setInterval(() => {
-      if (!state || !state.perSecond) return;
-      localCoins += state.perSecond / 4;
-      PZ.setCoins(Math.floor(localCoins));
-    }, 250);
+      if (!state) return;
+      // On rejoue localement la remontée d'endurance ; le serveur recale au
+      // premier coup suivant.
+      stamina = Math.min(state.staminaMax, stamina + state.staminaRegen / 5);
+      renderStamina();
+    }, 200);
   }
   function stopTick() {
     if (tickTimer) clearInterval(tickTimer);
@@ -141,10 +171,6 @@
     socket.on('mine:state', ({ mine, me, idle, result }) => {
       localCoins = me.coins;
       render(mine);
-      if (idle && idle.coins > 0) {
-        const mins = Math.round(idle.seconds / 60);
-        PZ.toast(`La foreuse a tourné sans toi : +${fmt(idle.coins)} 🪙 (${mins} min).`, 'success');
-      }
       if (result) {
         PZ.toast(result.message, result.ok ? 'success' : 'error');
         if (result.ok) SFX.upgrade();
@@ -159,6 +185,14 @@
         state.earned += result.coins;
         $('#mine-clicks').textContent = fmt(state.clicks);
         $('#mine-earned').textContent = fmt(state.earned);
+      }
+      // Le serveur fait autorité sur l'endurance.
+      if (typeof result.stamina === 'number') {
+        stamina = result.stamina;
+        renderStamina();
+      }
+      if (result.tired) {
+        PZ.toast('Tu es à bout de souffle — laisse la barre remonter.', 'warn');
       }
       if (result.crits > 0) {
         for (let i = 0; i < result.crits; i++) floater('CRITIQUE !', true);

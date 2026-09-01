@@ -109,8 +109,7 @@ async function snapshot(presence) {
         code: table.code,
         host: host ? host.name : '—',
         seated: table.seats.length,
-        humans: table.seats.filter((s) => !s.isBot).length,
-        bots: table.seats.filter((s) => s.isBot).length,
+        humans: table.seats.length,
         phase: table.phase,
         hand: table.hand,
       };
@@ -178,7 +177,7 @@ async function players({ query = '', sort = 'xp', limit = 40 } = {}) {
  * déjà vérifié par l'appelant.
  */
 async function act(actor, action, payload = {}, ctx = {}) {
-  const { io, presence } = ctx;
+  const { io, presence, chat } = ctx;
   const targetId = payload.id;
 
   /** Charge la cible et refuse si elle n'existe pas. */
@@ -218,6 +217,7 @@ async function act(actor, action, payload = {}, ctx = {}) {
       target.banReason = String(payload.reason || '').slice(0, 140) || 'Comportement inapproprié.';
       await store.saveProfile(target);
       record(actor, 'bannissement', target.name, target.banReason);
+      if (chat) chat.mute(target.id, 24 * 60, 'compte banni');
       kick(io, presence, target, target.banReason);
       return { ok: true, message: `${target.name} est banni.` };
     }
@@ -285,9 +285,57 @@ async function act(actor, action, payload = {}, ctx = {}) {
     case 'announce': {
       const text = String(payload.text || '').trim().slice(0, 200);
       if (!text) return { ok: false, message: 'Message vide.' };
-      io.emit('toast', { message: `📢 ${text}`, kind: 'info' });
+      // Une annonce doit se voir : fenêtre animée chez tout le monde, plus
+      // une trace dans le chat pour ceux qui arrivent après.
+      io.emit('announce', { text });
+      if (chat) chat.system(`📢 ${text}`, 'announce');
       record(actor, 'annonce', 'tout le site', text);
       return { ok: true, message: 'Annonce envoyée.' };
+    }
+
+    /* ── Modération du chat ── */
+
+    case 'mute': {
+      const target = await loadTarget();
+      if (isAdmin(target)) return { ok: false, message: 'On ne coupe pas la parole à un administrateur.' };
+      const minutes = Math.max(1, Math.min(1440, Math.round(Number(payload.minutes) || 10)));
+      const reason = String(payload.reason || '').slice(0, 120);
+      if (chat) chat.mute(target.id, minutes, reason);
+      record(actor, 'chat coupé', target.name, `${minutes} min${reason ? ` — ${reason}` : ''}`);
+      if (io && presence) {
+        const entry = presence.users.get(target.id);
+        if (entry) {
+          for (const socketId of entry.sockets) {
+            io.to(socketId).emit('toast', {
+              message: `Tu ne peux plus écrire dans le chat pendant ${minutes} min.${reason ? ` (${reason})` : ''}`,
+              kind: 'warn',
+            });
+          }
+        }
+      }
+      return { ok: true, message: `${target.name} est muet pendant ${minutes} min.` };
+    }
+
+    case 'unmute': {
+      const target = await loadTarget();
+      if (chat) chat.unmute(target.id);
+      record(actor, 'chat rendu', target.name);
+      return { ok: true, message: `${target.name} peut réécrire.` };
+    }
+
+    case 'delete-message': {
+      if (!chat) return { ok: false, message: 'Chat indisponible.' };
+      const done = chat.remove(String(payload.id || ''));
+      if (!done) return { ok: false, message: 'Message introuvable (déjà parti ?).' };
+      record(actor, 'message supprimé', payload.author || '—');
+      return { ok: true, message: 'Message supprimé.' };
+    }
+
+    case 'clear-chat': {
+      if (!chat) return { ok: false, message: 'Chat indisponible.' };
+      chat.clear();
+      record(actor, 'chat vidé', 'tout le site');
+      return { ok: true, message: 'Chat vidé.' };
     }
 
     default:

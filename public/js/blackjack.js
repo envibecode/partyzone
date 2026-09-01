@@ -2,13 +2,17 @@
 /**
  * BLACKJACK.
  *
- * Le serveur est seul maître : il distribue, gère les tours, décide pour
- * les bots et règle les mises. Le client affiche l'état reçu et propose
- * uniquement les coups que le serveur a déclarés légaux.
+ * Le serveur est seul maître : il distribue, mène les tours et règle les
+ * mises. Le client affiche l'état reçu et ne propose que les coups que le
+ * serveur a déclarés légaux.
+ *
+ * La table tourne en continu dès son ouverture — on n'attend personne. Il
+ * n'y a pas de bots : on joue seul contre le croupier, ou avec les gens qui
+ * rejoignent avec le code.
  */
 
 (() => {
-  const { $, fmt, el } = PZ;
+  const { $, $$, fmt, el } = PZ;
 
   let state = null;
   let lastPhase = null;
@@ -22,7 +26,7 @@
   };
 
   const PHASE_TEXT = {
-    waiting: 'En attente de joueurs',
+    waiting: 'Prochain tour…',
     betting: 'Placez vos mises',
     dealing: 'Distribution…',
     playing: 'À vous de jouer',
@@ -56,21 +60,69 @@
     }
   });
 
-  $('#bj-add-bot').addEventListener('click', () => PZ.socket.emit('bj:bot', { action: 'add' }));
-  $('#bj-del-bot').addEventListener('click', () => PZ.socket.emit('bj:bot', { action: 'remove' }));
+  /* ─── Mise, paris annexes, auto, remise ─── */
+
+  function sideValues() {
+    return {
+      pairs: Math.max(0, Math.floor(Number($('#sb-pairs').value) || 0)),
+      trio: Math.max(0, Math.floor(Number($('#sb-trio').value) || 0)),
+    };
+  }
+
+  function placeBet(amount) {
+    SFX.chip();
+    PZ.socket.emit('bj:bet', { amount, side: sideValues() });
+  }
 
   $('#bj-place').addEventListener('click', () => {
-    const amount = Math.floor(Number($('#bj-bet').value) || 0);
-    SFX.chip();
-    PZ.socket.emit('bj:bet', { amount });
+    placeBet(Math.floor(Number($('#bj-bet').value) || 0));
   });
 
-  $('#bj-say').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const text = $('#bj-msg').value.trim();
-    if (!text) return;
-    PZ.socket.emit('bj:say', { text });
-    $('#bj-msg').value = '';
+  $('#bj-rebet').addEventListener('click', () => {
+    if (!state || !state.you || !state.you.lastBet) {
+      return PZ.toast('Aucune mise précédente à reposer.', 'warn');
+    }
+    const last = state.you.lastSide || { pairs: 0, trio: 0 };
+    $('#bj-bet').value = state.you.lastBet;
+    $('#sb-pairs').value = last.pairs || 0;
+    $('#sb-trio').value = last.trio || 0;
+    placeBet(state.you.lastBet);
+  });
+
+  $('#bj-auto').addEventListener('click', () => {
+    const on = !(state && state.you && state.you.auto);
+    PZ.socket.emit('bj:auto', { on });
+  });
+
+  $('#sb-info').addEventListener('click', () => {
+    if (!state || !state.sidebets) return;
+    const sb = state.sidebets;
+    const box = el('div');
+    box.appendChild(el('h2', null, 'Les paris annexes'));
+    box.appendChild(el('p', 'fine',
+      'Ils se règlent dès la donne, avant que tu joues ta main. Ils rendent moins ' +
+      'que la table principale — c’est vrai dans tous les casinos, et voilà les chiffres exacts.'));
+
+    const mk = (title, rows, rtp) => {
+      const wrap = el('div', 'sb-table');
+      const h = el('h3', null, title);
+      h.appendChild(el('span', 'sb-rtp', ` redistribution ${String(rtp).replace('.', ',')} %`));
+      wrap.appendChild(h);
+      rows.forEach((r) => {
+        const line = el('div', 'sb-line');
+        line.appendChild(el('span', null, r.name));
+        line.appendChild(el('b', null, `${r.payout} contre 1`));
+        wrap.appendChild(line);
+      });
+      return wrap;
+    };
+    box.appendChild(mk('Paire', sb.pairs, sb.rtp.pairs));
+    box.appendChild(mk('21+3', sb.trio, sb.rtp.trio));
+
+    const close = el('button', 'btn btn-soft modal-close', 'Fermer');
+    close.addEventListener('click', PZ.closeModal);
+    box.appendChild(close);
+    PZ.openModal(box);
   });
 
   $('#bj-actions').addEventListener('click', (e) => {
@@ -86,6 +138,56 @@
     shown.clear();
     $('#bj-lobby').classList.remove('hidden');
     $('#bj-room').classList.add('hidden');
+    if (PZ.socket) PZ.socket.emit('bj:lobby');
+  }
+
+  /* ─── La liste des tables ouvertes ─── */
+
+  function renderOpen(tables) {
+    const grid = $('#bj-open-grid');
+    grid.replaceChildren();
+
+    if (!tables.length) {
+      grid.appendChild(el('div', 'empty',
+        'Aucune table ouverte. Ouvre la tienne — elle démarre tout de suite, même seul.'));
+      return;
+    }
+
+    tables.forEach((t) => {
+      const card = el('button', 'bj-open-card');
+      if (t.seats >= t.seatsMax) card.classList.add('full');
+
+      const head = el('div', 'boc-head');
+      head.appendChild(el('b', null, t.code));
+      head.appendChild(el('span', `boc-phase ${t.phase}`, PHASE_TEXT[t.phase] || t.phase));
+      card.appendChild(head);
+
+      const faces = el('div', 'room-faces');
+      t.faces.forEach((f) => {
+        const img = new Image(24, 24);
+        img.src = PZ.avatarUrl(f);
+        img.alt = '';
+        img.title = f.name;
+        faces.appendChild(img);
+      });
+      if (t.more) faces.appendChild(el('span', 'more', `+${t.more}`));
+      if (!t.faces.length) faces.appendChild(el('span', 'fine', 'table vide'));
+      card.appendChild(faces);
+
+      const foot = el('div', 'boc-foot');
+      foot.appendChild(el('span', null, `${t.seats}/${t.seatsMax} places`));
+      foot.appendChild(el('span', null, `main n° ${t.hand || 0}`));
+      card.appendChild(foot);
+
+      if (t.seats >= t.seatsMax) {
+        card.disabled = true;
+        card.appendChild(el('div', 'boc-full', 'Complète'));
+      } else {
+        card.addEventListener('click', () => PZ.socket.emit('bj:join', { code: t.code }));
+      }
+
+      grid.appendChild(card);
+    });
   }
 
   function showRoom() {
@@ -116,10 +218,18 @@
   }
 
   /** Dessine une main et n'anime que les cartes nouvellement distribuées. */
-  function fillCards(box, cards, key) {
+  function fillCards(box, cards, key, fan = false) {
     const before = shown.get(key) || 0;
     cards.forEach((c, i) => box.appendChild(cardNode(c, i >= before)));
     shown.set(key, cards.length);
+
+    // Dans un siège la place est comptée : à partir de la troisième carte
+    // on les fait se chevaucher, comme une main qu'on tient en éventail,
+    // au lieu de laisser la main déborder sur le voisin.
+    if (fan) {
+      const overlap = cards.length <= 2 ? 0 : Math.min(26, (cards.length - 2) * 8 + 10);
+      box.style.setProperty('--ov', `${overlap}px`);
+    }
   }
 
   function handValueText(hand) {
@@ -142,8 +252,16 @@
     $('#bj-bet').min = s.minBet;
     $('#bj-bet').max = s.maxBet;
 
-    $('#bj-add-bot').classList.toggle('hidden', !s.isHost);
-    $('#bj-del-bot').classList.toggle('hidden', !s.isHost);
+    // Les paris annexes : grille et redistribution réelle.
+    if (s.sidebets) {
+      $('#sb-rtp-pairs').textContent = `${String(s.sidebets.rtp.pairs).replace('.', ',')} %`;
+      $('#sb-rtp-trio').textContent = `${String(s.sidebets.rtp.trio).replace('.', ',')} %`;
+    }
+
+    const auto = Boolean(s.you && s.you.auto);
+    $('#bj-auto').textContent = `Auto : ${auto ? 'on' : 'off'}`;
+    $('#bj-auto').classList.toggle('on', auto);
+    $('#bj-rebet').disabled = !(s.you && s.you.lastBet);
 
     // Croupier
     const dealerCards = $('#bj-dealer-cards');
@@ -172,7 +290,7 @@
         seat.hands.forEach((hand, i) => {
           const holder = el('div', `hand${seat.hands.length > 1 && i !== seat.activeHand && seat.active ? ' dim' : ''}`);
           const cards = el('div', 'cards');
-          fillCards(cards, hand.cards, `${seat.id}:${i}`);
+          fillCards(cards, hand.cards, `${seat.id}:${i}`, true);
           holder.appendChild(cards);
           holder.appendChild(el('div', 'seat-val', handValueText(hand)));
           group.appendChild(holder);
@@ -187,6 +305,26 @@
       bet.appendChild(document.createTextNode('Mise '));
       bet.appendChild(el('b', null, staked ? `${fmt(staked)} 🪙` : '—'));
       node.appendChild(bet);
+
+      // Les paris annexes du siège, et ce qu'ils ont donné.
+      const side = seat.side || (seat.sideResult ? {
+        pairs: seat.sideResult.pairs ? seat.sideResult.pairs.staked : 0,
+        trio: seat.sideResult.trio ? seat.sideResult.trio.staked : 0,
+      } : null);
+      if (side && (side.pairs || side.trio)) {
+        const tags = el('div', 'seat-sides');
+        const add = (label, stake, res) => {
+          if (!stake) return;
+          const won = res && res.payout > 0;
+          const tag = el('span', `sb-tag${won ? ' won' : res ? ' lost' : ''}`,
+            won ? `${label} +${fmt(res.payout)}` : `${label} ${fmt(stake)}`);
+          if (won) tag.dataset.tip = res.name;
+          tags.appendChild(tag);
+        };
+        add('P', side.pairs, seat.sideResult && seat.sideResult.pairs);
+        add('21+3', side.trio, seat.sideResult && seat.sideResult.trio);
+        node.appendChild(tags);
+      }
 
       if (seat.lastResult && (s.phase === 'payout' || s.phase === 'betting')) {
         const r = seat.lastResult;
@@ -271,14 +409,24 @@
 
     socket.on('bj:joined', () => showRoom());
     socket.on('bj:state', render);
+    socket.on('bj:lobby', ({ tables }) => renderOpen(tables || []));
     socket.on('bj:closed', () => {
       showLobby();
       PZ.toast('La table a été fermée.', 'warn');
     });
   }
 
+  PZ.chat.mount({
+    log: $('#bj-chat-log'),
+    form: $('#bj-chat-form'),
+    input: $('#bj-chat-input'),
+  });
+
   PZ.views.blackjack = {
-    enter() { bind(); },
+    enter() {
+      bind();
+      if (!state) PZ.socket.emit('bj:lobby');
+    },
     leave() {
       if (timerRaf) cancelAnimationFrame(timerRaf);
       timerRaf = null;

@@ -29,6 +29,7 @@ const partyRank = require('./party/rank');
 const { Undercover } = require('./party/undercover');
 const { Poker } = require('./party/poker');
 const { Uno } = require('./party/uno');
+const { Belote } = require('./party/belote');
 const gate = require('./gate');
 const assets = require('./assets');
 
@@ -943,6 +944,7 @@ io.on('connection', async (socket) => {
     undercover: { build: () => new Undercover(io) },
     poker: { build: () => new Poker(io) },
     uno: { build: () => new Uno(io) },
+    belote: { build: () => new Belote(io) },
   };
 
   const partyRoom = () => partyRooms.roomOf(user.id);
@@ -1092,6 +1094,23 @@ io.on('connection', async (socket) => {
       }
     }
   }
+
+  /* ─── Belote ─── */
+
+  const blRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'belote' ? room : null;
+  };
+  const blDo = (fn) => {
+    const room = blRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  };
+
+  socket.on('bl:configure', (payload = {}) => blDo((r) => r.configure(user.id, payload)));
+  socket.on('bl:bid', ({ take, suit } = {}) => blDo((r) => r.bid(user.id, { take, suit })));
+  socket.on('bl:play', ({ cardId } = {}) => blDo((r) => r.play(user.id, { cardId })));
 
   /* ─── Uno ─── */
 

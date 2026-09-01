@@ -995,6 +995,77 @@
       </div>
     </section>
 
+    <!-- ══════ BELOTE ══════ -->
+    <!--
+      La table de belote.
+
+      Une croix, pas une liste : le partenaire est EN FACE, les adversaires
+      à gauche et à droite. C'est la seule disposition qui rende la partie
+      lisible — savoir d'un coup d'œil de quel côté vient la carte est la
+      moitié du jeu.
+
+      Le tapis reste vert, comme au blackjack : c'est un jeu de cartes de
+      table. Le reste de la page est en lime, la couleur de la section Party.
+    -->
+    <section class="view" id="view-bl" data-game="party">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-cards"/></svg> Belote</span>
+          <button class="room-code" id="bl-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="bl-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="bl-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="bl-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="bl-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>Les équipes</h2></div>
+          <div id="bl-teams"></div>
+
+          <div class="bl-settings hidden" id="bl-settings">
+            <h3>Réglages</h3>
+            <div class="segs" id="bl-target">
+              <button class="seg" data-target="301">301</button>
+              <button class="seg active" data-target="501">501</button>
+              <button class="seg" data-target="1000">1000</button>
+            </div>
+            <label class="check"><input type="checkbox" id="bl-must"> Le donneur doit prendre au second tour</label>
+          </div>
+
+          <div class="bl-log" id="bl-log"></div>
+        </aside>
+
+        <div class="stage bl-stage">
+          <div class="bl-felt" id="bl-felt">
+            <div class="bl-cross">
+              <div class="bl-seat pos-n" id="bl-n"></div>
+              <div class="bl-seat pos-w" id="bl-w"></div>
+              <div class="bl-center" id="bl-center"></div>
+              <div class="bl-seat pos-e" id="bl-e"></div>
+              <div class="bl-seat pos-s" id="bl-s"></div>
+            </div>
+            <div class="bl-trump" id="bl-trump"></div>
+          </div>
+
+          <div class="bl-hand-wrap"><div class="bl-hand" id="bl-hand"></div></div>
+          <div class="bl-actions" id="bl-actions"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="bl-chat"></div>
+          <form class="chat-form" id="bl-chat-form">
+            <input class="input" id="bl-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
     <!-- ══════ MARCHÉ ══════ -->
     <section class="view" id="view-market" data-game="market">
       <div class="view-head">
@@ -1165,6 +1236,7 @@
 <script src="/js/undercover.js"></script>
 <script src="/js/poker.js"></script>
 <script src="/js/uno.js"></script>
+<script src="/js/belote.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

@@ -44,10 +44,11 @@
       ready: true,
     },
     {
-      id: 'belote', name: 'Belote', icon: 'i-cards', colour: '#7fa8bd',
+      id: 'belote', name: 'Belote', icon: 'i-cards', colour: '#4C82F7',
       players: '4', minutes: '30 min',
-      blurb: 'En équipes de deux, avec annonces et atout. La vraie, pas la coinchée.',
-      ready: false,
+      blurb: 'En équipes de deux, face à face. Ordre des cartes différent à l’atout, ' +
+        'obligation de fournir, de couper et de monter, belote-rebelote et dix de der.',
+      ready: true,
     },
     {
       id: 'monopoly', name: 'Monopoly', icon: 'i-dice', colour: '#b08d5e',
@@ -326,11 +327,11 @@
       // Chaque jeu Party a sa vue. La table de correspondance vit ici,
       // à un seul endroit : c'est ce qui évite qu'un nouveau jeu marche
       // partout sauf au moment de rejoindre un salon.
-      PZ.go({ poker: 'pk', uno: 'uno', undercover: 'uc' }[game] || 'uc');
+      PZ.go({ poker: 'pk', uno: 'uno', belote: 'bl', undercover: 'uc' }[game] || 'uc');
     });
 
     socket.on('party:left', () => {
-      if (['uc', 'pk', 'uno'].includes(PZ.view)) PZ.go('party');
+      if (['uc', 'pk', 'uno', 'bl'].includes(PZ.view)) PZ.go('party');
     });
 
     // Un message de salon arrive tout seul, sans état complet : on l'ajoute

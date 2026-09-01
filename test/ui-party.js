@@ -241,6 +241,90 @@ async function player(browser, name) {
   check('le serveur dit quelles cartes sont jouables', playable >= 0, `${playable} jouables`);
   await a.screenshot({ path: OUT + '/uno-table.png' });
 
+  // ── BELOTE ──
+  //
+  // La belote demande un quatrième joueur : on l'invite pour cette
+  // section-là. Ce qu'on vérifie ici, en plus du secret des mains : que le
+  // serveur a bien calculé les obligations, et que la page les respecte —
+  // une carte interdite doit être désactivée, pas seulement grisée.
+  for (const p of [a, c, d]) { await p.click('#uno-leave'); }
+  await wait(600);
+  const e = await player(b, 'Zoe' + suffix);
+  for (const p of [a, c, d, e]) { await p.evaluate(() => { location.hash = '#party'; }); }
+  await wait(800);
+
+  await a.evaluate(() => window.PZ.socket.emit('party:create', { game: 'belote' }));
+  await a.waitForSelector('#view-bl.active', { timeout: 6000 });
+  const blCode = (await a.textContent('#bl-code')).trim();
+  check('table de belote ouverte', /^[A-Z]{4}$/.test(blCode), blCode);
+
+  for (const p of [c, d, e]) {
+    await p.evaluate((k) => window.PZ.socket.emit('party:join', { code: k }), blCode);
+    await p.waitForSelector('#view-bl.active', { timeout: 6000 });
+  }
+  await wait(700);
+  const teams = (await a.$$('#bl-teams .bl-team')).length;
+  check('deux équipes formées', teams === 2, `${teams}`);
+
+  await a.click('#bl-start');
+  await a.waitForFunction(() => document.querySelectorAll('#bl-hand .bl-slot').length > 0, null, { timeout: 6000 });
+  await wait(800);
+
+  const blHands = await Promise.all([a, c, d, e].map((p) =>
+    p.$$eval('#bl-hand .bl-slot', (n) => n.length)));
+  check('cinq cartes chacun avant la prise', blHands.every((h) => h === 5), blHands.join(' / '));
+  check('la retourne est visible au milieu', Boolean(await a.$('#bl-center .bl-turned .bl-card')));
+
+  // Quelqu'un prend, et tout le monde passe à huit cartes.
+  let took = false;
+  for (let round = 0; round < 10 && !took; round++) {
+    for (const p of [a, c, d, e]) {
+      const take = await p.$('#bl-actions .btn-gold') || await p.$('#bl-actions .bl-suit-btn');
+      if (take) { await take.click(); took = true; break; }
+    }
+    if (took) break;
+    for (const p of [a, c, d, e]) {
+      const pass = await p.$('#bl-actions .btn-soft');
+      if (pass) { await pass.click(); break; }
+    }
+    await wait(400);
+  }
+  check('quelqu’un a pris', took);
+  await wait(1200);
+
+  const after = await Promise.all([a, c, d, e].map((p) =>
+    p.$$eval('#bl-hand .bl-slot', (n) => n.length)));
+  check('huit cartes chacun après la prise', after.every((h) => h === 8), after.join(' / '));
+  check('l’atout est affiché en permanence',
+    /atout/i.test((await a.textContent('#bl-trump')) || ''), (await a.textContent('#bl-trump')).trim());
+
+  // Le secret : ma page ne doit contenir QUE mes huit cartes. Les autres
+  // sont des dos, qui ne portent ni rang ni couleur.
+  const visible = await a.evaluate(() =>
+    [...document.querySelectorAll('#view-bl .bl-card')].filter((n) => !n.classList.contains('back')).length);
+  check('la page ne montre que ma main', visible === 8, `${visible} cartes à visage découvert`);
+
+  // Les obligations : le serveur dit quelles cartes sont jouables, et la
+  // page désactive les autres.
+  const turnPage = (await Promise.all([a, c, d, e].map(async (p) => ({
+    p, mine: await p.evaluate(() => Boolean(window.PZ.views.bl) && document.querySelectorAll('#bl-hand .bl-slot.can:not([disabled])').length > 0),
+  })))).find((x) => x.mine);
+  check('celui dont c’est le tour a des cartes jouables', Boolean(turnPage));
+  if (turnPage) {
+    const counts = await turnPage.p.evaluate(() => ({
+      can: document.querySelectorAll('#bl-hand .bl-slot.can').length,
+      off: document.querySelectorAll('#bl-hand .bl-slot[disabled]').length,
+      all: document.querySelectorAll('#bl-hand .bl-slot').length,
+    }));
+    check('les cartes interdites sont désactivées, pas seulement grisées',
+      counts.can + counts.off >= counts.all, `${counts.can} jouables, ${counts.off} bloquées sur ${counts.all}`);
+    await turnPage.p.click('#bl-hand .bl-slot.can:not([disabled])');
+    await wait(700);
+    const played = await a.evaluate(() => document.querySelectorAll('#bl-center .bl-pile .bl-card').length);
+    check('la carte arrive sur le tapis', played >= 1, `${played} carte(s) au pli`);
+  }
+  await a.screenshot({ path: OUT + '/belote-table.png' });
+
   await b.close();
   console.log('\n' + res.filter(Boolean).length + '/' + res.length + ' vérifications');
   if (errs.length) { console.log('erreurs :'); [...new Set(errs)].slice(0, 8).forEach(e => console.log('  ' + e)); }

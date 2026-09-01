@@ -239,9 +239,21 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   await p2.waitForSelector('#app.active'); await p2.waitForFunction(()=>window.PZ&&window.PZ.profile);
   await p2.evaluate(()=>{location.hash='#blackjack';}); await wait(400);
   await p2.click('#bj-create'); await wait(2000);
+  /*
+   * On ne compare plus deux nombres.
+   *
+   * Le concierge ferme les tables vides en arrière-plan : si l'une expire
+   * pendant que la nouvelle s'ouvre, le compteur ne bouge pas et le test
+   * crie au bug alors que le panel a parfaitement fait son travail. On
+   * cherche donc le CODE précis de la table qu'on vient d'ouvrir — ce qui
+   * est de toute façon ce qu'on voulait vérifier : que le panel voit
+   * arriver une table sans qu'on recharge la page.
+   */
+  const newCode = (await p2.textContent('#bj-table-code')).trim();
   const after = await countTables();
-  check('le panel admin se met à jour sans rechargement', after === before + 1,
-    `${before} → ${after} tables, sans toucher à la page`);
+  const seen = await p.evaluate((code) => document.body.textContent.includes(code), newCode);
+  check('le panel admin se met à jour sans rechargement', seen,
+    `table ${newCode} apparue (${before} → ${after} tables), sans toucher à la page`);
   await p.screenshot({path:OUT+'/admin.png', fullPage:true});
 
   await b.close();

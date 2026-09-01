@@ -29,7 +29,8 @@ virtuelles uniquement**.
 | 🏆 **Classements** | Général par pièces, par niveau ou par rang Party, plus un **classement du mois** sur le bénéfice net. |
 | 🗺️ **À venir** | Une page qui dit franchement ce qui est en chantier, ce qui reste à décider (publicité, abonnements) et ce qui est déjà en ligne. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
-| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Trois jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8, blindes qui montent, pots secondaires) et **Uno** (2 à 10). Loup-garou, Belote et Monopoly sont annoncés dans le hall mais pas encore jouables. |
+| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Quatre jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8), **Uno** (2 à 10) et **Belote** (4). Loup-garou et Monopoly sont annoncés dans le hall mais pas encore jouables. |
+| 🂡 **Belote** | À quatre, en deux équipes face à face. L'**ordre des cartes change à l'atout** (Valet, 9, As, 10, Roi, Dame, 8, 7 — contre As, 10, Roi, Dame, Valet ailleurs), les deux tours d'enchère avec la retourne, et toutes les obligations : **fournir**, **couper**, **surcouper**, **monter à l'atout** — avec la seule exception qui compte, on ne coupe pas le pli de son partenaire. **Belote-rebelote** annoncée automatiquement par le serveur (l'oublier coûte 20 points et personne n'a envie de perdre là-dessus), **dix de der**, **capot** à 252, et le contrat : le preneur doit faire **82 sur 162**, sinon il est dedans et l'adversaire ramasse tout. Le serveur calcule les coups légaux et **explique** chaque refus — « il faut fournir à cœur », « à l'atout il faut monter ». |
 | 🎴 **Uno** | Les 108 cartes, avec les règles qu'on oublie toujours : **un seul 0 par couleur** (donc deux fois plus rare qu'un 7), les **+2 qui se cumulent** (réglable par l'hôte), le **+4 contestable** — le serveur sait si tu bluffais, et c'est le menteur qui ramasse — et les **2 cartes de pénalité** pour qui oublie d'annoncer, à condition qu'un adversaire le remarque dans les quatre secondes. Un tour trop long ou un joueur déconnecté ne bloque jamais la table : le serveur pioche et passe. |
 | 🚧 **Porte d'ouverture** | Tant que le site n'a pas ouvert, **toute** adresse renvoie un compte à rebours — pas de page qui fuit parce qu'on connaît son URL, et les websockets sont fermés aussi. L'ouverture se fait **toute seule à la date prévue** (2 septembre 2026, midi, heure de Paris) ; le panel admin permet d'ouvrir plus tôt, de refermer, ou de changer la date. Un « accès équipe » discret sur la page d'attente et sur l'écran de connexion accepte la clé `ADMIN_KEY` et donne un laissez-passer de douze heures. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
@@ -252,6 +253,7 @@ npm run test:party     # une partie d'Undercover et une main de poker, à 4 clie
 npm run test:poker     # 60 tournois simulés : aucun jeton créé ni perdu
 npm run test:bj        # les cinq places, les spectateurs, l'exclusion, le départ immédiat
 npm run test:uno       # 60 parties d'Uno simulées : aucune carte créée ni perdue
+npm run test:belote    # 40 parties de belote : 32 cartes et 162 points, à chaque donne
 npm run test:ui        # parcours navigateur du casino + captures d'écran
 npm run test:ui-party  # parcours navigateur de la section Party
 ```
@@ -280,6 +282,16 @@ les bugs qui font mal ne sont pas « le +2 ne fait pas piocher », ce sont les
 fuites — une carte défaussée deux fois, une main qui garde une carte déjà
 posée. Elles ne se voient pas en jouant, la partie continue simplement un
 peu faussée.
+
+`npm run test:belote` fait la même chose pour la belote, avec **deux**
+invariants. Les 32 cartes d'abord — mains, pli en cours, plis ramassés, la
+retourne. Et surtout : **chaque donne distribue exactement 162 points**, pas
+161, pas 163 (sauf capot, 252 d'un seul côté). Le banc d'essai recalcule le
+décompte par un autre chemin que le moteur et compare : si les deux tombent
+d'accord sur cent trente donnes, le comptage est juste. Il tente aussi
+volontairement des coups interdits — plus de cinq cents par exécution — et
+exige qu'ils soient refusés **avec une explication**, parce qu'un moteur de
+belote qui accepte tout est un jeu de bataille.
 
 `npm run test:poker` ne demande pas de serveur : il joue soixante tournois
 entiers au hasard, avec beaucoup de tapis pour fabriquer des pots secondaires,

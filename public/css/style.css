@@ -1275,8 +1275,17 @@ select.input { cursor: pointer; }
 }
 
 /* La règle de la maison, sérigraphiée sur le tapis comme dans un vrai club. */
+/* Sur le feutre du blackjack, le sigle ne flotte pas : il coiffe la règle
+   de la maison. Un blason au-dessus de sa devise — et surtout, il n'est
+   plus au milieu du tapis, là où les joueurs posent leurs cartes. */
+.felt .felt-mark {
+  position: static; display: block;
+  width: 104px; height: 40px; margin: 0 auto 9px;
+  opacity: .13;
+}
+
 .felt-rules {
-  position: absolute; left: 0; right: 0; top: 39%;
+  position: absolute; left: 0; right: 0; top: 36%;
   text-align: center; pointer-events: none;
   font-size: var(--t-sm); font-weight: 600; letter-spacing: .22em;
   text-transform: uppercase; color: rgba(212, 175, 106, .42);
@@ -2606,13 +2615,68 @@ button.seat.free:hover {
 /* ─── Poker ─── */
 
 .pk-stage { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── LA TABLE DE POKER ──
+   Même menuiserie que le feutre du blackjack — bourrelet de cuir, filet
+   doré, lampe au-dessus — mais un feutre BORDEAUX, pas vert. Deux jeux de
+   cartes de table sur le même site doivent se reconnaître à la couleur du
+   tapis avant même d'avoir lu quoi que ce soit ; c'est ce que fait un vrai
+   casino, où le poker est dans une autre salle que le blackjack.
+
+   Les joueurs sont en haut, le pot et le tableau au milieu : on regarde
+   ses adversaires par-dessus les cartes communes, pas l'inverse. */
 .pk-table {
-  position: relative; padding: 26px 20px 20px; border-radius: 22px;
+  position: relative;
+  align-self: stretch;
+  display: flex; flex-direction: column;
+  padding: 34px 30px 34px;
+  border-radius: 26px;
   background:
-    radial-gradient(120% 90% at 50% 30%, rgba(212, 175, 106, .09), transparent 70%),
-    linear-gradient(170deg, rgba(255, 255, 255, .04), rgba(0, 0, 0, .34));
-  border: 1px solid var(--line-firm);
+    /* la lampe au-dessus du tapis */
+    radial-gradient(600px 300px at 50% -8%, rgba(255, 236, 214, .10), transparent 68%),
+    /* le feutre bordeaux, plus clair au centre comme sous un éclairage */
+    radial-gradient(120% 100% at 50% 30%, #5B1F30 0%, #431725 48%, #2A0E18 100%);
+  border: 1px solid rgba(212, 175, 106, .22);
+  box-shadow:
+    inset 0 0 0 10px rgba(0, 0, 0, .30),           /* le bourrelet de cuir */
+    inset 0 0 0 11px rgba(212, 175, 106, .20),     /* le filet doré */
+    inset 0 30px 80px -30px rgba(0, 0, 0, .7),
+    var(--shadow-3);
 }
+
+/* L'ovale imprimé sur le tapis, celui qui délimite la zone de jeu. */
+.pk-table::before {
+  content: '';
+  position: absolute; left: 9%; right: 9%; top: 34%; bottom: 8%;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ── LA MARQUE DE LA MAISON ──
+   Le sigle du site, sérigraphié au centre du tapis comme le logo d'un
+   club sur son feutre. Très pâle : on doit le voir en passant la main
+   dessus, pas le lire. C'est le seul endroit du jeu où la marque
+   apparaît, et c'est ce qui fait que la table appartient à CE site. */
+.felt-mark {
+  position: absolute; left: 50%; top: 50%;
+  width: 220px; height: 110px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: .07;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2.4'%3E%3Ccircle cx='12' cy='16' r='8.5'/%3E%3Ccircle cx='21' cy='16' r='8.5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Les joueurs d'abord, puis le pot, puis les cartes communes. L'ordre du
+   HTML sert la lecture d'écran ; celui-ci sert le regard. */
+.pk-table .pk-seats { order: 0; margin-bottom: 28px; }
+/* Le sigle descend sous les cartes communes, sur le feutre laissé libre :
+   le seul endroit de la table où rien ne vient se poser dessus. */
+.pk-table .felt-mark { top: auto; bottom: 14px; transform: translateX(-50%); width: 150px; height: 62px; opacity: .06; }
+.pk-table .pk-pot   { order: 1; }
+.pk-table .pk-board { order: 2; }
+
 .pk-pot { display: flex; align-items: baseline; justify-content: center; gap: 9px; margin-bottom: 14px; }
 .pk-pot span { font-size: 10.5px; font-weight: 800; letter-spacing: .18em; color: var(--dim); }
 .pk-pot b { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -2644,11 +2708,14 @@ button.seat.free:hover {
 .pseat {
   width: 148px; display: flex; flex-direction: column; gap: 6px; align-items: center;
   padding: 10px; border-radius: 14px;
-  background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
+  /* Une plaque posée sur le feutre : assez sombre pour que le nom se lise,
+     assez transparente pour qu'on voie qu'elle est POSÉE sur le tapis. */
+  background: rgba(10, 4, 8, .42); border: 1px solid rgba(255, 255, 255, .07);
+  backdrop-filter: blur(2px);
   transition: border-color .2s, box-shadow .2s, opacity .2s;
 }
 .pseat.turn { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(212, 175, 106, .35), 0 0 26px -8px rgba(212, 175, 106, .8); }
-.pseat.you { background: rgba(212, 175, 106, .06); }
+.pseat.you { background: rgba(212, 175, 106, .10); }
 .pseat.folded { opacity: .42; }
 .pseat.busted { opacity: .3; }
 .pseat.away { border-style: dashed; }
@@ -3237,6 +3304,10 @@ button.seat.free:hover {
 
 .uno-table {
   position: relative;
+  /* Même raison que l'éventail : `.stage` centre, donc sans `stretch` le
+     tapis se réduisait à la largeur de la pile — une boîte flottante au
+     milieu au lieu d'une table. */
+  align-self: stretch;
   display: grid; place-items: center;
   min-height: 210px;
   padding: var(--s-4) var(--s-5);
@@ -3273,6 +3344,9 @@ button.seat.free:hover {
 }
 
 .uno-top { position: relative; display: grid; place-items: center; }
+/* Au salon, aucune carte n'est encore posée : sans ça, le conteneur vide
+   et son écart poussaient la pioche à gauche du centre de la table. */
+.uno-top:empty { display: none; }
 /* La couleur demandée, écrite sous la pile. Après un joker, la carte du
    dessus ne la dit plus — c'est la première cause de coup refusé. */
 .uno-color-say {
@@ -3334,19 +3408,23 @@ button.seat.free:hover {
    de vignettes. Celle qu'on survole se lève, celle qu'on ne peut pas jouer
    descend et perd sa couleur — sans disparaître, parce qu'on réfléchit
    avec sa main entière. */
-.uno-hand-wrap { overflow-x: auto; overflow-y: visible; padding: 22px 0 4px; }
+/* `.stage` centre ses enfants (align-items: center) : sans `stretch`, ce
+   cadre prenait la largeur de la main elle-même. Le calcul d'écartement
+   se mordait la queue — il mesurait ce qu'il venait de produire. */
+.uno-hand-wrap { align-self: stretch; overflow-x: auto; overflow-y: visible; padding: 22px 0 4px; }
 .uno-hand {
   display: flex; justify-content: center; align-items: flex-end;
   min-height: 118px; padding: 0 var(--s-4);
 }
 /* L'écartement.
-   À -22 px sur des cartes de 72, on ne voyait qu'une languette de chaque
-   carte du milieu : impossible de lire sa main sans la survoler une par
-   une. À -12 px le chiffre et la couleur restent visibles partout, et
-   l'éventail garde sa forme. */
+   `--shown` est la largeur visible de chaque carte, calculée en JS pour
+   que la main entre toujours dans la largeur disponible : l'éventail se
+   resserre à mesure qu'on ramasse des cartes, au lieu de déborder et
+   d'imposer une barre de défilement. La valeur ici n'est que le repli
+   si le calcul n'a pas encore tourné. */
 .uno-slot {
   padding: 0; background: none; border: 0; cursor: pointer;
-  margin-left: -12px; flex: none;
+  margin-left: calc(var(--shown, 60px) - 72px); flex: none;
   transform: rotate(var(--rot)) translateY(var(--lift));
   transform-origin: bottom center;
   transition: transform var(--t-base) var(--ease), filter var(--t-base) var(--ease), opacity var(--t-base) var(--ease);
@@ -3408,8 +3486,17 @@ button.seat.free:hover {
 
 .uno-settings { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
 .uno-settings h3 { font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3); }
-.uno-settings .segs { margin-top: var(--s-3); width: 100%; }
-.uno-settings .seg { flex: 1; }
+
+/* Une ligne de réglage : le libellé à gauche, le sélecteur à droite. Le
+   sélecteur ne dépasse plus, parce que les chiffres seuls tiennent là où
+   « 5 manches » débordait de la colonne. */
+.set-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-3); margin-top: var(--s-3);
+}
+.set-row > span { font: var(--ty-fine); color: var(--t-mid); }
+.set-row .segs { flex: none; }
+.set-row .seg { min-width: 30px; padding: 6px 10px; text-align: center; }
 
 .uno-log { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
 .uno-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
@@ -3674,8 +3761,7 @@ button.seat.free:hover {
 
 .bl-settings { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
 .bl-settings h3 { font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3); }
-.bl-settings .segs { width: 100%; margin-bottom: var(--s-3); }
-.bl-settings .seg { flex: 1; }
+.bl-settings .set-row { margin-bottom: var(--s-3); }
 
 .bl-log { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
 .bl-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
@@ -3724,4 +3810,532 @@ button.seat.free:hover {
   .bl-pile { width: 130px; height: 130px; }
   .bl-hand { gap: 3px; }
   .bl-trump { position: static; margin: 0 auto var(--s-3); width: max-content; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   QUI EST LÀ — la colonne des connectés
+
+   Ce n'est pas un panneau : c'est de la chrome, au même titre que la
+   barre du haut. Donc pas de dégradé, pas de halo, pas de flou — un
+   fond creusé, une charnière d'un pixel, et des noms lisibles. Le seul
+   élément coloré de la colonne est la pastille de niveau, et encore :
+   elle ne s'allume qu'à partir du dixième.
+
+   Le tri vient du serveur (niveau décroissant) et ne se discute pas ici.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* `display: flex` bat la règle [hidden] du navigateur : sans cette ligne,
+   la colonne reste visible même refermée. Même piège que la modale et
+   l'intro, plus haut. */
+.rail[hidden], .rail-veil[hidden] { display: none; }
+
+.rail {
+  position: fixed; z-index: 45;
+  top: var(--top); right: 0; bottom: 0; width: 252px;
+  display: flex; flex-direction: column;
+  background: var(--ink-1);
+  border-left: 1px solid var(--hair);
+}
+
+.rail-head {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 13px var(--s-4) 11px;
+  border-bottom: 1px solid var(--hair);
+}
+.rail-title { display: flex; align-items: baseline; gap: 7px; flex: 1; min-width: 0; }
+.rail-eyebrow {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+/* Le compteur est un nombre qu'on relit souvent : chiffres tabulaires,
+   pour qu'il ne danse pas quand quelqu'un arrive ou part. */
+#rail-count {
+  font: 700 13px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-hi);
+}
+.rail-x {
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: var(--r-inline); color: var(--t-low);
+}
+.rail-x:hover { color: var(--t-hi); background: var(--ink-3); }
+
+.rail-list {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--s-2) var(--s-2) var(--s-5);
+  scrollbar-width: thin;
+}
+
+/* Une ligne = une tête, un nom, ce qu'il est en train de faire. Le fond
+   n'apparaît qu'au survol : au repos c'est une liste, pas une pile de
+   cartes. */
+.rail-row {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 7px 9px;
+  border-radius: var(--r-control);
+  text-align: left; color: inherit;
+  transition: background var(--t-fast) var(--ease);
+}
+.rail-row:hover { background: var(--ink-3); }
+.rail-row.me { background: var(--brand-wash); }
+
+.rail-face { position: relative; flex: none; }
+.rail-face img {
+  width: 28px; height: 28px; border-radius: var(--r-circle);
+  display: block; background: var(--ink-3);
+}
+/* Le point d'état est sur l'avatar, pas à côté : c'est la personne qui
+   est occupée, pas la ligne. Vert au hall, ambre en jeu — deux états,
+   pas huit. */
+.rail-face i {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 9px; height: 9px; border-radius: var(--r-circle);
+  border: 2px solid var(--ink-1);
+  background: var(--win);
+}
+.rail-row.busy .rail-face i { background: var(--g-mine); }
+.rail-row:hover .rail-face i { border-color: var(--ink-3); }
+
+.rail-who { flex: 1; min-width: 0; }
+.rail-who b {
+  display: block; font: var(--ty-label); color: var(--t-hi);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rail-who span {
+  display: block; font-size: 11.5px; color: var(--t-low);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* La pastille de niveau. En dessous de 10 elle reste grise : un niveau 3
+   n'est pas une distinction, et tout allumer n'allume plus rien. */
+.rail-lvl {
+  flex: none; min-width: 22px; text-align: center;
+  padding: 3px 5px; border-radius: var(--r-inline);
+  font: 700 11px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-low); background: var(--ink-3);
+}
+.rail-lvl.hot { color: var(--brand-lit); background: var(--brand-wash); }
+
+.rail-empty {
+  padding: var(--s-5) var(--s-4);
+  font: var(--ty-fine); color: var(--t-low); text-align: center;
+}
+
+/* Le compteur sur le bouton de la barre du haut. */
+.icon-btn { position: relative; }
+.icon-badge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: grid; place-items: center;
+  border-radius: var(--r-circle);
+  background: var(--brand); color: #fff;
+  border: 2px solid var(--ink-1);
+  font: 700 9.5px/1 var(--f-num); font-variant-numeric: tabular-nums;
+}
+
+/* ── ANCRÉE ──
+   À partir de 1440 px il reste de la place à droite : la colonne s'y
+   installe pour de bon et la page se décale, plutôt que de passer
+   par-dessus le contenu. */
+@media (min-width: 1440px) {
+  body.rail-on .main {
+    max-width: calc(1560px + 252px);
+    padding-right: calc(var(--s-5) + 252px);
+  }
+  body.rail-on .rail-x { display: none; }
+  .rail-veil { display: none; }
+}
+
+/* ── EN TIROIR ──
+   En dessous, la colonne glisse par-dessus la page avec un voile
+   derrière : on la consulte, on la referme. Elle n'est jamais ouverte
+   d'office — la place est trop précieuse. */
+@media (max-width: 1439px) {
+  .rail {
+    box-shadow: var(--e-float);
+    animation: rail-in var(--t-base) var(--ease-out);
+  }
+  .rail-veil {
+    position: fixed; inset: 0; z-index: 44;
+    background: rgba(7, 6, 12, .55);
+  }
+}
+@keyframes rail-in { from { transform: translateX(16px); opacity: 0; } }
+
+@media (max-width: 520px) {
+  .rail { width: min(300px, 86vw); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MONOPOLY
+
+   Le plateau est l'écran. Onze cases sur onze, et le carré vide au milieu
+   — celui que le plateau laisse toujours libre — sert de tableau de bord.
+   Pas de panneau flottant, pas de fenêtre : ce qui se passe se lit là où
+   on regarde déjà.
+
+   Le fond du plateau est le vert pâle des vrais plateaux, mais désaturé
+   jusqu'à tenir dans une interface sombre : assez pour qu'on reconnaisse
+   un plateau, assez peu pour que les huit couleurs de groupes restent les
+   seules choses vives de l'écran.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.mono-stage { align-content: start; gap: var(--s-4); }
+
+.mono-board {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  grid-template-rows: repeat(11, minmax(0, 1fr));
+  aspect-ratio: 1;
+  /* `.stage` est une colonne flex : sans `min-height: 0`, la hauteur
+     minimale du contenu du milieu l'emporte sur le rapport 1/1 et le
+     plateau devient un rectangle. */
+  min-height: 0; flex: none;
+  width: 100%; max-width: 760px; margin: 0 auto;
+  padding: 6px;
+  border-radius: var(--r-tile);
+  background:
+    radial-gradient(120% 100% at 50% 30%, #1B3A2E 0%, #142A22 55%, #0D1C17 100%);
+  border: 1px solid rgba(212, 175, 106, .18);
+  box-shadow:
+    inset 0 0 0 7px rgba(0, 0, 0, .30),
+    inset 0 0 0 8px rgba(212, 175, 106, .16),
+    var(--e-lift);
+  gap: 2px;
+}
+
+/* ── UNE CASE ──
+   Une bande de couleur tournée vers l'intérieur du plateau, un nom, un
+   chiffre. Le liseré du propriétaire est sur le bord extérieur : on voit
+   d'un coup d'œil quelles parts du plateau appartiennent à qui. */
+.mono-cell {
+  position: relative;
+  display: flex; flex-direction: column;
+  padding: 0; overflow: hidden;
+  border-radius: 3px;
+  background: var(--ink-1);
+  border: 1px solid var(--hair);
+  text-align: left; color: var(--t-mid);
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.mono-cell:hover { background: var(--ink-3); border-color: var(--hair-firm); }
+.mono-cell.open { border-color: var(--g-party); background: var(--ink-3); }
+
+/* La bande de couleur pointe vers le centre du plateau, comme sur un vrai
+   plateau posé à plat. */
+.mono-band { flex: none; display: block; }
+.mono-cell.bas    .mono-band { order: -1; height: 9px; width: 100%; }
+.mono-cell.haut   .mono-band { order: 9;  height: 9px; width: 100%; }
+.mono-cell.gauche { flex-direction: row; }
+.mono-cell.gauche .mono-band { order: 9;  width: 9px; height: 100%; }
+.mono-cell.droite { flex-direction: row; }
+.mono-cell.droite .mono-band { order: -1; width: 9px; height: 100%; }
+
+.mono-cell-body {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 2px 3px;
+}
+.mono-ico { font-size: 12px; line-height: 1; opacity: .75; }
+.mono-name {
+  font: 600 8px/1.12 var(--f-ui);
+  color: var(--t-mid);
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+}
+.mono-price {
+  font: 700 8px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-low);
+}
+.mono-cell.owned .mono-price { color: var(--t-hi); }
+.mono-cell.mortgaged .mono-price { color: var(--warn); }
+
+/* Le liseré du propriétaire : trois pixels sur le bord extérieur. */
+.mono-cell.owned::after {
+  content: '';
+  position: absolute; inset: auto 0 0 0; height: 3px;
+  background: var(--own);
+}
+.mono-cell.gauche.owned::after { inset: 0 auto 0 0; width: 3px; height: auto; }
+.mono-cell.droite.owned::after { inset: 0 0 0 auto; width: 3px; height: auto; }
+.mono-cell.haut.owned::after   { inset: 0 0 auto 0; height: 3px; width: auto; }
+.mono-cell.mortgaged { opacity: .55; }
+
+/* Les coins sont des cases entières : pas de bande, une icône centrée. */
+.mono-cell.coin .mono-cell-body { align-items: center; text-align: center; justify-content: center; }
+.mono-cell.coin .mono-ico { font-size: 20px; opacity: .9; }
+.mono-cell.coin .mono-name { -webkit-line-clamp: 2; }
+
+/* Les constructions, dessinées : quatre maisons ou un hôtel. */
+.mono-build {
+  position: absolute; top: 1px; left: 2px; right: 2px;
+  display: flex; gap: 1px; pointer-events: none;
+}
+.mono-cell.haut .mono-build { top: auto; bottom: 1px; }
+.mono-house {
+  width: 5px; height: 5px; border-radius: 1px;
+  background: var(--win); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .6);
+}
+.mono-hotel {
+  width: 13px; height: 6px; border-radius: 1px;
+  background: var(--lose); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .6);
+}
+
+/* Les pions : de vraies pastilles empilées dans le coin de la case. */
+.mono-pawns {
+  position: absolute; bottom: 1px; right: 1px;
+  display: flex; flex-wrap: wrap-reverse; justify-content: flex-end;
+  gap: 1px; max-width: 80%; pointer-events: none;
+}
+.mono-pawn {
+  display: grid; place-items: center;
+  width: 15px; height: 15px; border-radius: var(--r-circle);
+  font-size: 9px; line-height: 1;
+  background: var(--ink-0);
+  box-shadow: inset 0 0 0 1.5px var(--own);
+}
+/* Celui dont c'est le tour est le seul à porter un halo. */
+.mono-pawn.now { box-shadow: inset 0 0 0 1.5px var(--own), 0 0 0 2px color-mix(in srgb, var(--own) 45%, transparent); }
+
+/* ── LE MILIEU ── */
+
+.mono-middle {
+  grid-row: 2 / 11; grid-column: 2 / 11;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-4); padding: var(--s-4);
+  min-width: 0; min-height: 0; overflow: hidden;
+}
+.mono-mid-top { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); }
+
+.mono-dice { display: flex; align-items: center; gap: var(--s-3); min-height: 34px; }
+/* Un dé se voit, un chiffre se lit : on dessine les points. */
+.mono-die {
+  width: 34px; height: 34px; border-radius: 7px;
+  background: linear-gradient(165deg, #FDFDFD, #E3E6EC);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12), 0 3px 8px -3px rgba(0, 0, 0, .8);
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  padding: 4px; gap: 1px;
+  animation: die-in .28s var(--ease-out);
+}
+@keyframes die-in { from { transform: rotate(-24deg) scale(.7); opacity: 0; } }
+.mono-die i { width: 6px; height: 6px; border-radius: 50%; background: #16131F; align-self: center; justify-self: center; }
+/* La disposition des points, face par face. C'est ce qui fait qu'on
+   reconnaît un dé sans compter. */
+.mono-die[data-face="1"] i:nth-child(1) { grid-area: 2 / 2; }
+.mono-die[data-face="2"] i:nth-child(1) { grid-area: 1 / 1; }
+.mono-die[data-face="2"] i:nth-child(2) { grid-area: 3 / 3; }
+.mono-die[data-face="3"] i:nth-child(1) { grid-area: 1 / 1; }
+.mono-die[data-face="3"] i:nth-child(2) { grid-area: 2 / 2; }
+.mono-die[data-face="3"] i:nth-child(3) { grid-area: 3 / 3; }
+.mono-die[data-face="4"] i:nth-child(1) { grid-area: 1 / 1; }
+.mono-die[data-face="4"] i:nth-child(2) { grid-area: 1 / 3; }
+.mono-die[data-face="4"] i:nth-child(3) { grid-area: 3 / 1; }
+.mono-die[data-face="4"] i:nth-child(4) { grid-area: 3 / 3; }
+.mono-die[data-face="5"] i:nth-child(1) { grid-area: 1 / 1; }
+.mono-die[data-face="5"] i:nth-child(2) { grid-area: 1 / 3; }
+.mono-die[data-face="5"] i:nth-child(3) { grid-area: 2 / 2; }
+.mono-die[data-face="5"] i:nth-child(4) { grid-area: 3 / 1; }
+.mono-die[data-face="5"] i:nth-child(5) { grid-area: 3 / 3; }
+.mono-die[data-face="6"] i:nth-child(1) { grid-area: 1 / 1; }
+.mono-die[data-face="6"] i:nth-child(2) { grid-area: 1 / 3; }
+.mono-die[data-face="6"] i:nth-child(3) { grid-area: 2 / 1; }
+.mono-die[data-face="6"] i:nth-child(4) { grid-area: 2 / 3; }
+.mono-die[data-face="6"] i:nth-child(5) { grid-area: 3 / 1; }
+.mono-die[data-face="6"] i:nth-child(6) { grid-area: 3 / 3; }
+
+.mono-double {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--g-party);
+}
+
+.mono-turn { font: var(--ty-sub); color: var(--t-mid); text-align: center; }
+.mono-turn.mine { color: var(--t-hi); }
+
+/* La carte tirée : un rectangle posé sur le tapis, pas une notification. */
+.mono-card { min-height: 0; }
+.mono-draw {
+  max-width: 300px; padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--ink-2); border: 1px solid var(--hair-firm);
+  box-shadow: var(--e-lift);
+  animation: card-in .3s var(--ease-out);
+}
+@keyframes card-in { from { transform: translateY(-8px) rotate(-1.5deg); opacity: 0; } }
+.mono-draw > span {
+  display: block; margin-bottom: 4px;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow); text-transform: uppercase;
+}
+.mono-draw.chance > span { color: var(--g-mine); }
+.mono-draw.caisse > span { color: var(--g-plinko); }
+.mono-draw p { font: var(--ty-fine); color: var(--t-hi); }
+
+.mono-actions {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: var(--s-3); max-width: 100%;
+}
+.mono-actions .btn { min-width: 130px; }
+.mono-hint { font: var(--ty-fine); color: var(--t-low); text-align: center; max-width: 46ch; }
+.mono-debt {
+  font: var(--ty-fine); color: var(--lose); text-align: center; max-width: 46ch;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-control);
+  background: var(--lose-wash);
+}
+
+/* ── LES JOUEURS ── */
+
+.mono-seat {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 9px; border-radius: var(--r-control);
+  border: 1px solid transparent;
+}
+.mono-seat + .mono-seat { margin-top: 2px; }
+.mono-seat.turn { background: var(--ink-3); border-color: color-mix(in srgb, var(--own) 45%, transparent); }
+.mono-seat.out { opacity: .4; }
+.mono-seat.away { opacity: .55; }
+.mono-seat-token {
+  display: grid; place-items: center; flex: none;
+  width: 26px; height: 26px; border-radius: var(--r-circle);
+  font-size: 13px; background: var(--ink-0);
+  box-shadow: inset 0 0 0 2px var(--own);
+}
+.mono-seat-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mono-seat-info b { font: var(--ty-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mono-seat-info span { font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+.mono-tag {
+  margin-left: 6px; padding: 1px 5px; border-radius: var(--r-inline);
+  font: 600 9.5px/1.4 var(--f-ui); font-style: normal;
+  background: var(--warn-wash); color: var(--warn);
+}
+.mono-seat-count {
+  flex: none; min-width: 22px; text-align: center;
+  padding: 3px 5px; border-radius: var(--r-inline);
+  font: 700 11px/1 var(--f-num); color: var(--t-mid); background: var(--ink-4);
+}
+.mono-swap {
+  flex: none; width: 24px; height: 24px; border-radius: var(--r-inline);
+  color: var(--t-low); background: var(--ink-3); font-size: 13px;
+}
+.mono-swap:hover { color: var(--t-hi); background: var(--ink-4); }
+
+.mono-settings, .mono-bank, .mono-log {
+  margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair);
+}
+.mono-settings h3, .mono-bank h3 {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3);
+}
+.mono-settings .mono-hint, .mono-bank .mono-hint { text-align: left; margin: var(--s-2) 0; }
+.mono-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
+.mono-line:first-child { color: var(--t-mid); }
+
+/* ── LES TITRES ── */
+
+.mono-deeds { align-self: stretch; width: 100%; max-width: 760px; margin: 0 auto; }
+.mono-deeds-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
+.mono-deeds-head h3 {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+.mono-deeds-head .mono-hint { text-align: right; }
+
+.mono-deed-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--s-2); }
+.mono-deed {
+  border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+  border-left: 4px solid var(--own);
+  overflow: hidden;
+}
+.mono-deed.open { grid-column: 1 / -1; border-color: var(--hair-firm); }
+.mono-deed.mortgaged { opacity: .6; }
+.mono-deed-head {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--s-3); padding: 8px 11px; text-align: left; color: inherit;
+}
+.mono-deed-head b { font: var(--ty-label); color: var(--t-hi); }
+.mono-deed-head span { font: 700 11px/1 var(--f-num); color: var(--t-low); flex: none; }
+.mono-deed-body { padding: 0 11px 11px; }
+
+.mono-scale { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 2px; margin-bottom: var(--s-3); }
+.mono-scale div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 4px 7px; border-radius: var(--r-inline); background: var(--ink-1);
+}
+.mono-scale div.now { background: var(--brand-wash); }
+.mono-scale span { font: var(--ty-fine); font-size: 10.5px; color: var(--t-low); }
+.mono-scale b { font: 700 11.5px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--t-hi); }
+
+.mono-deed-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s-3); }
+
+/* ── L'ÉCHANGE ── */
+
+.mono-trade { width: min(680px, 90vw); }
+.mono-trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); margin-top: var(--s-4); }
+.mono-trade-col h3 {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3);
+}
+.mono-trade-cells { display: flex; flex-direction: column; gap: 3px; max-height: 240px; overflow-y: auto; margin-bottom: var(--s-3); }
+.mono-pick {
+  padding: 7px 9px; border-radius: var(--r-inline);
+  background: var(--ink-2); border: 1px solid var(--hair);
+  border-left: 3px solid var(--own);
+  font: var(--ty-fine); color: var(--t-mid); text-align: left;
+}
+.mono-pick:hover { background: var(--ink-3); }
+.mono-pick.on { background: var(--brand-wash); color: var(--t-hi); border-color: var(--brand); border-left-color: var(--own); }
+.mono-trade-foot { margin-top: var(--s-4); }
+
+.mono-offer { max-width: 420px; }
+.mono-offer h3 { font: var(--ty-sub); margin-bottom: var(--s-3); }
+.mono-offer p { font: var(--ty-fine); color: var(--t-mid); margin-bottom: 4px; }
+.mono-offer p b { color: var(--t-low); }
+.mono-offer-acts { display: flex; gap: var(--s-3); margin-top: var(--s-3); justify-content: center; }
+
+/* ── LE TABLEAU FINAL ── */
+
+.mono-result { width: min(460px, 90vw); }
+.mono-final { list-style: none; margin: var(--s-4) 0; }
+.mono-final li {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 10px; border-radius: var(--r-control);
+  border-top: 1px solid var(--hair);
+}
+.mono-final li.top { background: var(--brand-wash); }
+.mono-final-rank { font: 700 12px/1 var(--f-num); color: var(--t-low); width: 16px; }
+.mono-final b { flex: 1; font: var(--ty-label); }
+.mono-final i { font-style: normal; font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+.mono-final em { font-style: normal; font: 700 14px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--t-hi); }
+
+/* ── MOBILE ──
+   Onze colonnes ne tiennent pas sur un téléphone si l'on veut lire les
+   noms. On garde le plateau — c'est le jeu — mais on le laisse déborder
+   dans son propre cadre défilant, et on descend tout le reste dessous.
+   Les boutons du tour sortent du plateau et passent en bas, à portée de
+   pouce : c'est la seule chose sur laquelle on appuie vraiment. */
+@media (max-width: 760px) {
+  .mono-name { font-size: 6.5px; -webkit-line-clamp: 2; }
+  .mono-price { font-size: 6.5px; }
+  .mono-pawn { width: 11px; height: 11px; font-size: 7px; }
+  .mono-die { width: 26px; height: 26px; }
+  .mono-die i { width: 4px; height: 4px; }
+  .mono-middle { padding: var(--s-2); gap: var(--s-2); }
+  .mono-actions .btn { min-width: 0; font-size: 12px; padding: 8px 12px; }
+  .mono-draw { max-width: 100%; padding: 6px 8px; }
+  .mono-draw p { font-size: 10.5px; }
+  .mono-trade-grid { grid-template-columns: 1fr; }
+  .mono-deed-list { grid-template-columns: 1fr; }
+}
+
+/* La ligne d'argent d'un joueur : le liquide en clair, la fortune en
+   sourdine juste à côté. Deux chiffres qui ne servent pas au même moment. */
+/* La fortune passe à la ligne plutôt que d'être tronquée : dans une partie
+   courte c'est elle qui départage, on ne peut pas l'escamoter. */
+.mono-wallet { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.mono-wallet b {
+  font: 700 12px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-mid);
+}
+.mono-seat.turn .mono-wallet b { color: var(--t-hi); }
+.mono-wallet i {
+  font-style: normal; font: 400 10px/1 var(--f-ui); color: var(--t-off);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }

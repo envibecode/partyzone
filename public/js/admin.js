@@ -78,6 +78,7 @@
     if (data.gate) root.appendChild(renderGate(data.gate));
     root.appendChild(renderPlayers({ total: data.total, players: data.players || [] }));
     root.appendChild(renderTables(data.tables || []));
+    root.appendChild(renderMarket(data.market || []));
     root.appendChild(renderLog(data.log || []));
     root.appendChild(renderBroadcast());
   }
@@ -281,6 +282,74 @@
       btn.addEventListener('click', () => send('close-table', { code: t.code }));
       cell.appendChild(btn);
       row.appendChild(cell);
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    panel.appendChild(scroll);
+    return panel;
+  }
+
+  /* ─── Marché ─── */
+
+  /**
+   * Les offres en vitrine, la plus surévaluée en tête.
+   *
+   * Le rapport au prix de revente automatique est la colonne qui compte :
+   * une bricole affichée à cinquante fois sa valeur n'est pas une vente,
+   * c'est un transfert de pièces entre deux comptes qui se connaissent.
+   * Retirer l'offre rend l'objet à son vendeur — on ne confisque rien.
+   */
+  function renderMarket(listings) {
+    const panel = el('div', 'panel');
+    panel.style.marginTop = '12px';
+    const head = el('div', 'panel-head');
+    head.appendChild(el('h2', null, `Marché (${listings.length} offre${listings.length > 1 ? 's' : ''})`));
+    head.appendChild(el('span', 'section-meta', 'Triées par rapport au prix de revente : les plus douteuses en haut.'));
+    panel.appendChild(head);
+
+    if (!listings.length) {
+      panel.appendChild(el('div', 'empty', 'Aucune offre en vente.'));
+      return panel;
+    }
+
+    const scroll = el('div', 'adm-scroll');
+    const table = el('table', 'adm-table');
+    const thead = el('thead');
+    const tr = el('tr');
+    ['Objet', 'Rareté', 'Vendeur', 'Prix', '×', 'Valeur', ''].forEach((h) => tr.appendChild(el('th', null, h)));
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    listings.forEach((l) => {
+      const row = el('tr');
+
+      const nameCell = el('td');
+      nameCell.appendChild(el('span', null, `${l.emoji} ${l.name}`));
+      row.appendChild(nameCell);
+
+      const rarity = el('td', null, l.rarity);
+      rarity.style.color = l.color;
+      row.appendChild(rarity);
+
+      row.appendChild(el('td', null, l.seller || '—'));
+      row.appendChild(el('td', null, `${fmt(l.price)} ¤`));
+      row.appendChild(el('td', null, String(l.count)));
+
+      // « ×3,4 » se lit d'un coup ; au-delà de dix fois la valeur, on le
+      // signale en rouge sans rien décider à la place de l'administrateur.
+      const ratio = el('td', null, l.ratio === null ? '—' : `×${String(l.ratio).replace('.', ',')}`);
+      if (l.ratio !== null && l.ratio >= 10) ratio.style.color = 'var(--lose)';
+      row.appendChild(ratio);
+
+      const cell = el('td');
+      const btn = el('button', 'btn-mini danger', 'Retirer');
+      btn.title = 'Retire l’offre et rend l’objet à son vendeur';
+      btn.addEventListener('click', () => send('market-remove', { listingId: l.id }));
+      cell.appendChild(btn);
+      row.appendChild(cell);
+
       tbody.appendChild(row);
     });
     table.appendChild(tbody);

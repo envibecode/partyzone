@@ -71,7 +71,9 @@
   /* ─── La pile et la pioche ─── */
 
   function renderMiddle(s) {
-    $('#uno-left').textContent = s.drawLeft != null ? s.drawLeft : '—';
+    // Avant la distribution il n'y a pas de pioche : « 0 » laisserait
+    // croire que le paquet est vide.
+    $('#uno-left').textContent = (s.phase === 'lobby' || s.drawLeft == null) ? '—' : s.drawLeft;
 
     const top = $('#uno-top');
     top.replaceChildren();
@@ -174,7 +176,50 @@
 
       box.appendChild(wrap);
     });
+
+    fitHand();
   }
+
+  /**
+   * L'éventail se resserre pour tenir dans la largeur.
+   *
+   * On avait un chevauchement fixe de 12 px : à sept cartes c'était juste,
+   * à quinze la main sortait du cadre et il fallait faire défiler une
+   * barre horizontale pour voir ses propres cartes. On n'a jamais fait ça
+   * avec un vrai jeu de cartes — on serre les doigts.
+   *
+   * On garde toujours au moins 24 px visibles par carte : c'est la largeur
+   * du chiffre dans le coin. En dessous on ne lirait plus rien, alors on
+   * laisse le défilement reprendre la main — cas d'un téléphone très
+   * étroit avec une main de vingt cartes, et là il est légitime.
+   */
+  const CARD_W = 72;    // doit suivre .uno-card dans le CSS
+  const CARD_H = 108;
+  const MIN_SHOWN = 24;
+
+  function fitHand() {
+    const box = $('#uno-hand');
+    const n = box.querySelectorAll('.uno-slot').length;
+    if (!n) return;
+
+    // Les cartes des bords sont PIVOTÉES : une carte de 72×108 inclinée de
+    // 16° occupe près de 100 px de large. C'est ce débordement-là qu'on
+    // oubliait, et qui laissait une barre de défilement malgré un calcul
+    // juste par ailleurs. On lui réserve sa place des deux côtés.
+    const maxRot = ((n - 1) / 2) * Math.min(3.4, 34 / n) * Math.PI / 180;
+    const wide = CARD_W * Math.cos(maxRot) + CARD_H * Math.sin(maxRot);
+    const overhang = Math.max(0, (wide - CARD_W) / 2);
+
+    const wrap = box.parentElement;
+    // 32 px : la respiration de .uno-hand (padding gauche + droite).
+    const room = wrap.clientWidth - 32 - 2 * overhang;
+    let shown = CARD_W;
+    if (n > 1 && room > CARD_W) shown = (room - CARD_W) / (n - 1);
+    shown = Math.max(MIN_SHOWN, Math.min(CARD_W - 12, shown));
+    box.style.setProperty('--shown', `${Math.floor(shown)}px`);
+  }
+
+  addEventListener('resize', () => { if (PZ.view === 'uno') fitHand(); });
 
   /* ─── Poser une carte ─── */
 

@@ -334,6 +334,23 @@ class Table {
    */
   startBetting() {
     clearTimeout(this.timer);
+
+    // Un siège quitté en pleine main est gardé le temps de la main, pour
+    // qu'une reconnexion retrouve ses cartes. La main est finie : on le
+    // libère. Sans ça, partir au milieu d'un tour laissait un fantôme
+    // assis pour toujours — une des cinq places bloquée, et un nom affiché
+    // à une table que la personne avait quittée depuis longtemps.
+    const ghosts = this.seats.filter((s) => !s.connected);
+    if (ghosts.length) {
+      this.seats = this.seats.filter((s) => s.connected);
+      for (const seat of ghosts) this.profiles.delete(seat.id);
+      if (this.hostId && !this.seatOf(this.hostId)) {
+        const next = this.seats.find((s) => s.connected);
+        this.hostId = next ? next.id : null;
+      }
+      notifyLobby();
+    }
+
     this.phase = 'betting';
     this.deadline = Date.now() + BETTING_MS;
     this.dealer = { cards: [] };
@@ -789,6 +806,15 @@ class Table {
 
 /* ─── Registre ─────────────────────────────────────────── */
 
+/**
+ * Le hall des tables doit se rafraîchir même quand personne n'a cliqué :
+ * une place libérée en fin de main change le « 3/5 » affiché à l'accueil.
+ * `index.js` branche ici sa diffusion du hall.
+ */
+let lobbyListener = null;
+function onLobbyChange(fn) { lobbyListener = fn; }
+function notifyLobby() { if (lobbyListener) lobbyListener(); }
+
 function createTable(io, store) {
   const code = makeCode();
   const table = new Table(code, io, store);
@@ -851,6 +877,7 @@ module.exports = {
   getTable,
   closeTable,
   startJanitor,
+  onLobbyChange,
   tables,
   handValue,
   isBlackjack,

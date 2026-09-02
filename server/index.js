@@ -21,7 +21,7 @@ const market = require('./market');
 const rakeback = require('./rakeback');
 const blackjack = require('./blackjack');
 const { Roulette } = require('./roulette');
-const { Presence } = require('./presence');
+const { Presence, STATUS_LABEL } = require('./presence');
 const { Chat } = require('./chat');
 const admin = require('./admin');
 const partyRooms = require('./party/rooms');
@@ -30,6 +30,7 @@ const { Undercover } = require('./party/undercover');
 const { Poker } = require('./party/poker');
 const { Uno } = require('./party/uno');
 const { Belote } = require('./party/belote');
+const { Monopoly } = require('./party/monopoly');
 const gate = require('./gate');
 const assets = require('./assets');
 
@@ -927,7 +928,10 @@ io.on('connection', async (socket) => {
   socket.on('me:refresh', () => sendMe());
 
   socket.on('presence:status', ({ status } = {}) => {
-    if (['home', 'mine', 'plinko', 'roulette', 'blackjack', 'vault', 'admin'].includes(status)) {
+    // La liste des états connus vit dans `presence.js` : la recopier ici
+    // en oubliant la moitié, c'est exactement ce qui faisait afficher
+    // « Dans le hall » à quelqu'un assis au poker.
+    if (Object.prototype.hasOwnProperty.call(STATUS_LABEL, status)) {
       presence.setStatus(user.id, status);
     }
   });
@@ -945,6 +949,7 @@ io.on('connection', async (socket) => {
     poker: { build: () => new Poker(io) },
     uno: { build: () => new Uno(io) },
     belote: { build: () => new Belote(io) },
+    monopoly: { build: () => new Monopoly(io) },
   };
 
   const partyRoom = () => partyRooms.roomOf(user.id);
@@ -1095,6 +1100,41 @@ io.on('connection', async (socket) => {
     }
   }
 
+  /* ─── Monopoly ─── */
+
+  /**
+   * Le salon du joueur, à condition que ce soit bien une partie de
+   * Monopoly. On revérifie le jeu à chaque message : un client bricolé ne
+   * doit pas pouvoir envoyer « mono:roll » à une table de belote.
+   */
+  const monoRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'monopoly' ? room : null;
+  };
+  const monoDo = (fn) => {
+    const room = monoRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+    if (result && result.ok && result.message) socket.emit('toast', { message: result.message, kind: 'info' });
+  };
+
+  socket.on('mono:configure', (payload = {}) => monoDo((r) => r.configure(user.id, payload)));
+  socket.on('mono:roll', () => monoDo((r) => r.roll(user.id)));
+  socket.on('mono:buy', () => monoDo((r) => r.buy(user.id)));
+  socket.on('mono:pass', () => monoDo((r) => r.pass(user.id)));
+  socket.on('mono:end', () => monoDo((r) => r.endTurn(user.id)));
+  socket.on('mono:build', ({ cell } = {}) => monoDo((r) => r.build(user.id, Number(cell))));
+  socket.on('mono:sell', ({ cell } = {}) => monoDo((r) => r.sell(user.id, Number(cell))));
+  socket.on('mono:mortgage', ({ cell } = {}) => monoDo((r) => r.mortgage(user.id, Number(cell))));
+  socket.on('mono:unmortgage', ({ cell } = {}) => monoDo((r) => r.unmortgage(user.id, Number(cell))));
+  socket.on('mono:jail-pay', () => monoDo((r) => r.payJail(user.id)));
+  socket.on('mono:jail-card', () => monoDo((r) => r.useFreeCard(user.id)));
+  socket.on('mono:pay', () => monoDo((r) => r.pay(user.id)));
+  socket.on('mono:bankrupt', () => monoDo((r) => r.bankrupt(user.id)));
+  socket.on('mono:offer', (payload = {}) => monoDo((r) => r.offer(user.id, payload)));
+  socket.on('mono:trade', ({ accept } = {}) => monoDo((r) => r.respondTrade(user.id, Boolean(accept))));
+
   /* ─── Belote ─── */
 
   const blRoom = () => {
@@ -1200,6 +1240,9 @@ io.on('connection', async (socket) => {
 });
 
 blackjack.startJanitor();
+// Une place libérée toute seule (siège quitté en pleine main, récupéré en
+// fin de main) doit rafraîchir le hall sans que personne n'ait cliqué.
+blackjack.onLobbyChange(broadcastLobby);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

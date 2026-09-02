@@ -238,6 +238,11 @@
     </nav>
 
     <div class="topbar-right" id="nav-right">
+      <button class="icon-btn" id="btn-rail" data-tip="Qui est en ligne (touche E)" aria-label="Joueurs connectés">
+        <svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-users"/></svg>
+        <span class="icon-badge" id="rail-dot" hidden>0</span>
+      </button>
+
       <button class="icon-btn" id="btn-lb" data-tip="Le classement (touche C)" aria-label="Classement">
         <svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-trophy"/></svg>
       </button>
@@ -613,8 +618,10 @@
               <div class="cards" id="bj-dealer-cards"></div>
             </div>
 
-            <!-- La règle de la maison, sérigraphiée sur le tapis. -->
+            <!-- Le sigle de la maison au-dessus de sa règle, sérigraphiés
+                 sur le tapis comme le blason d'un club sur son feutre. -->
             <div class="felt-rules" aria-hidden="true">
+              <span class="felt-mark"></span>
               Blackjack paie 3 pour 2
               <small>Le croupier tire jusqu’à 16 et reste sur 17</small>
             </div>
@@ -902,6 +909,8 @@
 
         <div class="stage pk-stage">
           <div class="pk-table">
+            <!-- Le sigle de la maison, sérigraphié sur le feutre. -->
+            <div class="felt-mark" aria-hidden="true"></div>
             <div class="pk-pot" id="pk-pot"></div>
             <div class="pk-board" id="pk-board"></div>
             <div class="pk-seats" id="pk-seats"></div>
@@ -956,10 +965,16 @@
           <div class="uno-settings hidden" id="uno-settings">
             <h3>Réglages</h3>
             <label class="check"><input type="checkbox" id="uno-stacking" checked> Les +2 se cumulent</label>
-            <div class="segs" id="uno-rounds">
-              <button class="seg" data-rounds="1">1 manche</button>
-              <button class="seg active" data-rounds="3">3 manches</button>
-              <button class="seg" data-rounds="5">5 manches</button>
+            <!-- « 1 manche / 3 manches / 5 manches » ne tient pas dans une
+                 colonne de 250 px : le mot passe en libellé, les chiffres
+                 restent dans le sélecteur. -->
+            <div class="set-row">
+              <span>Manches</span>
+              <div class="segs" id="uno-rounds">
+                <button class="seg" data-rounds="1">1</button>
+                <button class="seg active" data-rounds="3">3</button>
+                <button class="seg" data-rounds="5">5</button>
+              </div>
             </div>
           </div>
 
@@ -1028,10 +1043,13 @@
 
           <div class="bl-settings hidden" id="bl-settings">
             <h3>Réglages</h3>
-            <div class="segs" id="bl-target">
-              <button class="seg" data-target="301">301</button>
-              <button class="seg active" data-target="501">501</button>
-              <button class="seg" data-target="1000">1000</button>
+            <div class="set-row">
+              <span>Partie en</span>
+              <div class="segs" id="bl-target">
+                <button class="seg" data-target="301">301</button>
+                <button class="seg active" data-target="501">501</button>
+                <button class="seg" data-target="1000">1000</button>
+              </div>
             </div>
             <label class="check"><input type="checkbox" id="bl-must"> Le donneur doit prendre au second tour</label>
           </div>
@@ -1060,6 +1078,82 @@
           <div class="room-msgs" id="bl-chat"></div>
           <form class="chat-form" id="bl-chat-form">
             <input class="input" id="bl-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ MONOPOLY ══════ -->
+    <!--
+      Le plateau français, onze cases sur onze.
+
+      Le plateau EST l'écran : tout ce qui se passe se lit dessus, et le
+      milieu du plateau — la place laissée vide par les quarante cases —
+      accueille les dés, la carte qu'on vient de tirer et les boutons du
+      tour. C'est là qu'on regarde de toute façon.
+
+      À gauche les joueurs et leurs fortunes, en dessous du plateau ses
+      propres titres avec de quoi bâtir, hypothéquer et échanger. À droite
+      le salon, comme dans les trois autres jeux Party.
+    -->
+    <section class="view" id="view-mono" data-game="party">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-dice"/></svg> Monopoly</span>
+          <button class="room-code" id="mono-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="mono-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="mono-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="mono-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="mono-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>À la table</h2></div>
+          <div id="mono-seats"></div>
+
+          <div class="mono-settings hidden" id="mono-settings">
+            <h3>Réglages</h3>
+            <div class="set-row">
+              <span>Partie en</span>
+              <div class="segs" id="mono-laps">
+                <button class="seg active" data-laps="30">30</button>
+                <button class="seg" data-laps="60">60</button>
+                <button class="seg" data-laps="0">∞</button>
+              </div>
+            </div>
+            <p class="mono-hint" id="mono-laps-hint">Au bout de 30 tours de table, le plus riche gagne.</p>
+            <label class="check"><input type="checkbox" id="mono-doublego"> Départ payé double si on tombe pile dessus</label>
+          </div>
+
+          <div class="mono-bank" id="mono-bank"></div>
+          <div class="mono-log" id="mono-log"></div>
+        </aside>
+
+        <div class="stage mono-stage">
+          <div class="mono-board" id="mono-board">
+            <div class="mono-middle">
+              <div class="mono-mid-top">
+                <div class="mono-dice" id="mono-dice"></div>
+                <div class="mono-turn" id="mono-turn">—</div>
+              </div>
+              <div class="mono-card" id="mono-card"></div>
+              <div class="mono-actions" id="mono-actions"></div>
+            </div>
+          </div>
+
+          <div class="mono-deeds" id="mono-deeds"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="mono-chat"></div>
+          <form class="chat-form" id="mono-chat-form">
+            <input class="input" id="mono-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
             <button class="btn btn-soft" type="submit">→</button>
           </form>
         </aside>
@@ -1211,6 +1305,28 @@
     </section>
 
   </main>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       QUI EST LÀ
+
+       Une colonne de noms, du plus haut niveau au plus bas. Sur grand
+       écran elle est ancrée en permanence à droite ; en dessous elle
+       s'ouvre par le bouton de la barre du haut et se referme au clic
+       à côté. Un joueur en train de jouer porte le nom de sa table.
+       ══════════════════════════════════════════════════════════════════ -->
+  <aside class="rail" id="rail" hidden aria-label="Joueurs connectés">
+    <div class="rail-head">
+      <div class="rail-title">
+        <span class="rail-eyebrow">En ligne</span>
+        <b id="rail-count">—</b>
+      </div>
+      <button class="rail-x" id="rail-close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="rail-list" id="rail-list"></div>
+  </aside>
+  <div class="rail-veil" id="rail-veil" hidden></div>
 </div>
 
 <!-- Surcouches -->
@@ -1237,6 +1353,7 @@
 <script src="/js/poker.js"></script>
 <script src="/js/uno.js"></script>
 <script src="/js/belote.js"></script>
+<script src="/js/monopoly.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

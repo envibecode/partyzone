@@ -52,9 +52,10 @@
     },
     {
       id: 'monopoly', name: 'Monopoly', icon: 'i-dice', colour: '#b08d5e',
-      players: '2 à 6', minutes: '1 h et des poussières',
-      blurb: 'Les propriétés, les maisons, la prison, et l’amitié qui s’effrite.',
-      ready: false,
+      players: '2 à 6', minutes: '45 min en partie courte',
+      blurb: 'Le plateau français, toutes les règles : monopoles, maisons et hôtels, ' +
+        'hypothèques, échanges, prison. Réglable en 30 ou 60 tours pour finir avant la nuit.',
+      ready: true,
     },
   ];
 
@@ -327,11 +328,11 @@
       // Chaque jeu Party a sa vue. La table de correspondance vit ici,
       // à un seul endroit : c'est ce qui évite qu'un nouveau jeu marche
       // partout sauf au moment de rejoindre un salon.
-      PZ.go({ poker: 'pk', uno: 'uno', belote: 'bl', undercover: 'uc' }[game] || 'uc');
+      PZ.go({ poker: 'pk', uno: 'uno', belote: 'bl', monopoly: 'mono', undercover: 'uc' }[game] || 'uc');
     });
 
     socket.on('party:left', () => {
-      if (['uc', 'pk', 'uno', 'bl'].includes(PZ.view)) PZ.go('party');
+      if (['uc', 'pk', 'uno', 'bl', 'mono'].includes(PZ.view)) PZ.go('party');
     });
 
     // Un message de salon arrive tout seul, sans état complet : on l'ajoute

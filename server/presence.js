@@ -21,6 +21,8 @@ const STATUS_LABEL = {
   party: 'Dans le hall Party',
   undercover: 'À l’Undercover',
   poker: 'Au poker',
+  uno: 'À l’Uno',
+  belote: 'À la belote',
   admin: 'Au panel admin',
 };
 

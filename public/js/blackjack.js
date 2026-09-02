@@ -506,6 +506,13 @@
     leave() {
       if (timerRaf) cancelAnimationFrame(timerRaf);
       timerRaf = null;
+      // Partir de la page, c'est partir de la table. Sans ça on restait
+      // assis pour le serveur : une des cinq places bloquée, son nom
+      // affiché au hall, et la table qui attendait une mise fantôme.
+      if (state && PZ.socket) {
+        PZ.socket.emit('bj:leave');
+        showLobby();
+      }
     },
   };
 })();

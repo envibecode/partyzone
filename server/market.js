@@ -125,7 +125,10 @@ function cancel(profile, state, listingId) {
   if (index < 0) return { ok: false, message: 'Cette offre n’existe plus.' };
 
   const listing = market.listings[index];
-  if (listing.sellerId !== profile.id && !profile.admin) {
+  // Un administrateur passe par `takeDown` : ici on rend l'objet au profil
+  // qui appelle, donc laisser passer un admin lui offrirait l'objet de
+  // quelqu'un d'autre. Ce n'est pas un raccourci, c'est un vol.
+  if (listing.sellerId !== profile.id) {
     return { ok: false, message: 'Ce n’est pas ton offre.' };
   }
 
@@ -134,6 +137,50 @@ function cancel(profile, state, listingId) {
 
   const item = BY_ID.get(listing.itemId);
   return { ok: true, message: `${item ? item.name : 'Objet'} retiré de la vente.`, listing };
+}
+
+/* ─── Retrait par un administrateur ────────────────────── */
+
+/**
+ * Sort une offre de la vitrine sans toucher aux coffres.
+ *
+ * L'objet doit revenir à SON vendeur, pas à l'administrateur qui a cliqué :
+ * l'appelant charge le profil du vendeur et le crédite. On rend donc ici
+ * l'offre retirée, à charge de qui appelle d'aller rendre l'objet.
+ */
+function takeDown(state, listingId) {
+  const market = ensure(state);
+  const index = market.listings.findIndex((l) => l.id === Number(listingId));
+  if (index < 0) return { ok: false, message: 'Cette offre n’existe plus.' };
+  const [listing] = market.listings.splice(index, 1);
+  return { ok: true, listing, item: BY_ID.get(listing.itemId) || null };
+}
+
+/** Toutes les offres, telles quelles, pour le panel d'administration. */
+function all(state) {
+  const market = ensure(state);
+  return market.listings.map((l) => {
+    const item = BY_ID.get(l.itemId);
+    return {
+      id: l.id,
+      itemId: l.itemId,
+      name: item ? item.name : l.itemId,
+      emoji: item ? item.emoji : '❔',
+      r: item ? item.r : null,
+      rarity: item ? RARITIES[item.r].name : '—',
+      color: item ? RARITIES[item.r].color : '#888',
+      base: item ? baseValue(item) : 0,
+      // Le rapport au prix de revente automatique : c'est ce qui saute aux
+      // yeux quand une offre est là pour transférer des pièces, pas pour vendre.
+      ratio: item ? Math.round((l.price / baseValue(item)) * 10) / 10 : null,
+      price: l.price,
+      count: l.count,
+      seller: l.sellerName,
+      sellerId: l.sellerId,
+      at: l.at,
+      expiresAt: l.expiresAt,
+    };
+  }).sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
 }
 
 /* ─── Acheter ──────────────────────────────────────────── */
@@ -300,6 +347,6 @@ function view(profile, state, { sort = 'recent', rarity = 'all', search = '' } =
 }
 
 module.exports = {
-  ensure, list, cancel, buy, sweep, view, priceRange, baseValue,
+  ensure, list, cancel, takeDown, all, buy, sweep, view, priceRange, baseValue,
   FEE, MAX_LISTINGS, LISTING_MS,
 };

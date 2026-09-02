@@ -282,6 +282,14 @@
     if (!socket || socket.__lobbyBound) return;
     socket.__lobbyBound = true;
 
+    // Le chat de l'accueil est un emplacement comme celui de la roulette ou
+    // de la table de blackjack : sans ce branchement il reste une boîte vide.
+    PZ.chat.mount({
+      log: $('#chat-log'),
+      form: $('#chat-form'),
+      input: $('#chat-input'),
+    });
+
     socket.on('bj:lobby', ({ tables }) => {
       openTables = (tables || []).length;
       renderRooms(tables || []);

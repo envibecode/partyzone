@@ -138,7 +138,8 @@ const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
   blackjack: 'blackjack', vault: 'vault', slots: 'slots',
   medals: 'medals', admin: 'admin',
-  party: 'party', uc: 'undercover', pk: 'poker', market: 'market', soon: 'home',
+  party: 'party', uc: 'undercover', pk: 'poker', uno: 'uno', bl: 'belote',
+  market: 'market', soon: 'home',
 };
 
 function go(name) {
@@ -525,6 +526,121 @@ addEventListener('keydown', (e) => {
 });
 
 
+/* ─── Qui est là ───────────────────────────────────────── */
+
+/**
+ * La colonne des connectés, visible depuis n'importe quelle page.
+ *
+ * Le serveur envoie déjà la liste triée par niveau décroissant : on ne
+ * la retrie pas ici, sinon deux endroits décideraient de la même chose.
+ * Cliquer sur quelqu'un ouvre la page où il est — pas sa table, on n'a
+ * pas son code, mais l'endroit d'où l'on peut le rejoindre.
+ */
+const RAIL_DEST = {
+  mine: 'mine', plinko: 'plinko', roulette: 'roulette', blackjack: 'blackjack',
+  vault: 'vault', slots: 'slots', medals: 'medals', market: 'market',
+  party: 'party', undercover: 'party', poker: 'party', uno: 'party', belote: 'party',
+};
+
+const railEl = $('#rail');
+const railVeil = $('#rail-veil');
+const railList = $('#rail-list');
+let railOpen = false;
+let railLast = [];
+
+/** Ancrée à droite dès qu'il y a la place, en tiroir en dessous. */
+function railDocked() { return innerWidth >= 1440; }
+
+function setRail(open, { remember = true } = {}) {
+  railOpen = open;
+  railEl.hidden = !open;
+  railVeil.hidden = !open || railDocked();
+  document.body.classList.toggle('rail-on', open);
+  if (remember) {
+    try { localStorage.setItem('pz-rail', open ? '1' : '0'); } catch { /* navigation privée */ }
+  }
+  if (open) renderRail(railLast);
+}
+
+function renderRail(online) {
+  railLast = online;
+
+  const badge = $('#rail-dot');
+  badge.textContent = String(online.length);
+  badge.hidden = !online.length;
+
+  if (!railOpen) return;
+  $('#rail-count').textContent = String(online.length);
+  railList.replaceChildren();
+
+  if (!online.length) {
+    railList.appendChild(el('div', 'rail-empty', 'Personne d’autre pour l’instant.'));
+    return;
+  }
+
+  online.forEach((p) => {
+    const mine = PZ.me && p.id === PZ.me.id;
+    const busy = p.status && p.status !== 'home';
+    const dest = RAIL_DEST[p.status];
+
+    const row = el(dest ? 'button' : 'div', `rail-row${busy ? ' busy' : ''}${mine ? ' me' : ''}`);
+
+    const face = el('span', 'rail-face');
+    const img = new Image(28, 28);
+    img.src = avatarUrl(p);
+    img.alt = '';
+    face.appendChild(img);
+    face.appendChild(el('i'));
+    row.appendChild(face);
+
+    const who = el('span', 'rail-who');
+    who.appendChild(el('b', null, mine ? `${p.name} (toi)` : p.name));
+    who.appendChild(el('span', null, p.statusLabel || 'En ligne'));
+    row.appendChild(who);
+
+    const lvl = el('span', `rail-lvl${p.level >= 10 ? ' hot' : ''}`, String(p.level));
+    lvl.title = p.title || '';
+    row.appendChild(lvl);
+
+    if (dest) {
+      row.title = `Aller ${p.statusLabel ? p.statusLabel.toLowerCase() : 'là-bas'}`;
+      row.addEventListener('click', () => {
+        if (!railDocked()) setRail(false);
+        go(dest);
+      });
+    }
+
+    railList.appendChild(row);
+  });
+}
+
+$('#btn-rail').addEventListener('click', () => setRail(!railOpen));
+$('#rail-close').addEventListener('click', () => setRail(false));
+railVeil.addEventListener('click', () => setRail(false));
+
+// Sur un écran large la colonne reste ; si la fenêtre rétrécit, le voile
+// doit apparaître, et inversement. On ne la referme pas de force.
+addEventListener('resize', () => {
+  if (railOpen) railVeil.hidden = railDocked();
+});
+
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && railOpen && !railDocked()) return setRail(false);
+  if (e.key !== 'e' && e.key !== 'E') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+  if (!modal.hidden) return;
+  setRail(!railOpen);
+});
+
+// Ouverte d'office seulement là où elle ne mange rien : sur grand écran.
+(() => {
+  let saved = null;
+  try { saved = localStorage.getItem('pz-rail'); } catch { /* rien */ }
+  setRail(saved === null ? railDocked() : saved === '1', { remember: false });
+})();
+
 /* ─── Le fil des gros coups ────────────────────────────── */
 
 function pushFeed(entry) {
@@ -816,6 +932,7 @@ function start(user) {
     if (staff && !profile.admin) socket.emit('admin:claim', { key: staff });
   });
   socket.on('profile:update', applyProfile);
+  socket.on('online:list', ({ online }) => renderRail(online || []));
   socket.on('toast', ({ message, kind }) => toast(message, kind));
   socket.on('feed', pushFeed);
   socket.on('announce', ({ text, kind }) => announce(text, kind));

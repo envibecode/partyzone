@@ -325,6 +325,118 @@ async function player(browser, name) {
   }
   await a.screenshot({ path: OUT + '/belote-table.png' });
 
+  // ── MONOPOLY ──
+  //
+  // Ce qu'on vérifie ici : que le plateau est complet et carré, que les
+  // pions y sont, que le loyer s'écrit sur les cases prises, et surtout que
+  // la page n'invente aucune règle — elle affiche les boutons que le
+  // serveur autorise, et un titre de propriété montre le barème que le
+  // serveur a envoyé.
+  for (const p of [a, c, d, e]) { await p.click('#bl-leave').catch(() => {}); }
+  await wait(600);
+  for (const p of [a, c, d]) { await p.evaluate(() => { location.hash = '#party'; }); }
+  await wait(800);
+
+  await a.evaluate(() => window.PZ.socket.emit('party:create', { game: 'monopoly' }));
+  await a.waitForSelector('#view-mono.active', { timeout: 6000 });
+  const moCode = (await a.textContent('#mono-code')).trim();
+  check('salon de Monopoly ouvert', /^[A-Z]{4}$/.test(moCode), moCode);
+
+  for (const p of [c, d]) {
+    await p.evaluate((k) => window.PZ.socket.emit('party:join', { code: k }), moCode);
+    await p.waitForSelector('#view-mono.active', { timeout: 6000 });
+  }
+  await wait(700);
+
+  const board = await a.evaluate(() => {
+    const r = document.querySelector('#mono-board').getBoundingClientRect();
+    return {
+      cases: document.querySelectorAll('.mono-cell').length,
+      carre: Math.abs(r.width - r.height) < 3,
+      coins: document.querySelectorAll('.mono-cell.coin').length,
+      bandes: document.querySelectorAll('.mono-band').length,
+      joueurs: document.querySelectorAll('.mono-seat').length,
+    };
+  });
+  check('quarante cases sur le plateau', board.cases === 40, `${board.cases}`);
+  check('le plateau est carré', board.carre === true);
+  check('quatre coins', board.coins === 4, `${board.coins}`);
+  // Une bande de couleur par terrain, et rien sur les gares, les services
+  // ni les coins : c'est ce qui rend les huit groupes lisibles d'un coup.
+  check('vingt-deux bandes de couleur, une par terrain',
+    board.bandes === 22, `${board.bandes} bandes`);
+  check('les trois joueurs sont au salon avant le lancement',
+    board.joueurs === 3, `${board.joueurs}`);
+
+  await a.evaluate(() => window.PZ.socket.emit('party:start'));
+  await wait(1200);
+
+  const started = await a.evaluate(() => ({
+    pions: document.querySelectorAll('.mono-pawn').length,
+    surDepart: document.querySelectorAll('[data-cell="0"] .mono-pawn').length,
+    argent: [...document.querySelectorAll('.mono-wallet b')].map((n) => n.textContent.trim()),
+  }));
+  check('trois pions sur le plateau', started.pions === 3, `${started.pions}`);
+  check('tous sur la case Départ', started.surDepart === 3, `${started.surDepart}`);
+  check('1 500 chacun au départ',
+    started.argent.every((t) => t.replace(/\s|\u202f/g, '') === '1500¤'),
+    started.argent.join(' · '));
+
+  // On joue jusqu'à ce que quelqu'un achète une case : c'est le moment où
+  // le loyer doit apparaître sur le plateau.
+  let bought = false;
+  for (let n = 0; n < 60 && !bought; n++) {
+    for (const p of [a, c, d]) {
+      const labels = await p.$$eval('#mono-actions .btn', (ns) => ns.map((x) => x.textContent.trim()));
+      if (!labels.length) continue;
+      const want = labels.find((t) => t.startsWith('Acheter'))
+        || labels.find((t) => t.startsWith('Lancer'))
+        || labels.find((t) => t.startsWith('Terminer'))
+        || labels[0];
+      const nodes = await p.$$('#mono-actions .btn');
+      const idx = labels.indexOf(want);
+      if (nodes[idx]) { await nodes[idx].click().catch(() => {}); await wait(160); }
+      break;
+    }
+    bought = await a.evaluate(() => document.querySelectorAll('.mono-cell.owned').length > 0);
+  }
+  check('une case finit par être achetée', bought === true);
+
+  const owned = await a.evaluate(() => {
+    const node = document.querySelector('.mono-cell.owned');
+    return {
+      loyer: (node.querySelector('.mono-price') || {}).textContent || '',
+      liseré: getComputedStyle(node).getPropertyValue('--own').trim(),
+      journal: document.querySelectorAll('.mono-line').length,
+    };
+  });
+  // Sur la case, le loyer s'écrit sans le signe monétaire : à huit pixels
+  // il n'est plus qu'un carré. « loyer 8 » se lit, « 8 ⌷ » non.
+  check('la case prise affiche son loyer', /^loyer \d/.test(owned.loyer), owned.loyer);
+  check('et le liseré de son propriétaire', owned.liseré !== 'transparent' && owned.liseré !== '', owned.liseré);
+  check('le journal raconte la partie', owned.journal > 0, `${owned.journal} ligne(s)`);
+
+  // Un titre de propriété : le barème vient du serveur, la page l'affiche.
+  // Ce n'est pas forcément « a » qui a acheté : on cherche la page du
+  // propriétaire plutôt que de supposer.
+  const owner = (await Promise.all([a, c, d].map(async (p) => ({
+    p, has: await p.evaluate(() => Boolean(document.querySelector('.mono-deed-head'))),
+  })))).find((x) => x.has);
+  check('le propriétaire voit son titre sous le plateau', Boolean(owner));
+  if (owner) {
+    await owner.p.click('.mono-deed-head');
+    await wait(300);
+    const deed = await owner.p.evaluate(() => ({
+      ouvert: document.querySelectorAll('.mono-deed.open').length,
+      actions: [...document.querySelectorAll('.mono-deed-acts .btn-mini')].map((n) => n.textContent.trim()),
+    }));
+    check('le titre s’ouvre', deed.ouvert === 1, `${deed.ouvert}`);
+    check('avec de quoi hypothéquer',
+      deed.actions.some((t) => /Hypothéquer/.test(t)), deed.actions.join(', ') || 'aucune action');
+  }
+
+  await a.screenshot({ path: OUT + '/mono-table.png' });
+
   await b.close();
   console.log('\n' + res.filter(Boolean).length + '/' + res.length + ' vérifications');
   if (errs.length) { console.log('erreurs :'); [...new Set(errs)].slice(0, 8).forEach(e => console.log('  ' + e)); }

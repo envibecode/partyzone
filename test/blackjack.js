@@ -169,9 +169,59 @@ async function topUp(player, target) {
   check('l’exclu est prévenu', idle.toasts.some((t) => /retiré/.test(t.message || '')));
   check('l’exclu peut continuer à regarder', idle.table.seated === false && idle.table.watching === true);
 
+  /* ── LE SIÈGE FANTÔME ──
+     Partir en pleine main garde le siège le temps de la main : c'est ce
+     qui permet de revenir après une coupure. Mais il devait être libéré
+     à la main suivante — il ne l'était pas, et une des cinq places
+     restait bloquée par quelqu'un parti depuis longtemps. */
+  section('Quitter en pleine main libère la place');
+  // On vide la table des figurants : à deux joueurs qui misent tous les
+  // deux, la main part tout de suite et le banc d'essai ne passe pas
+  // trois minutes à regarder tourner des chronomètres.
+  watcher.socket.emit('bj:leave');
+  await waitFor(() => host.table.seats.length === 1, 6000, 'table à un joueur');
+
+  const ghost = await guest('Fantome' + tag);
+  await topUp(ghost, 20000);
+  ghost.socket.emit('bj:join', { code });
+  await waitFor(() => ghost.table && ghost.table.seated === true, 6000, 'fantôme assis');
+  const before = host.table.seats.length;
+  check('deux joueurs à la table', before === 2, `${before}`);
+
+  await waitFor(() => host.table.phase === 'betting', 40000, 'phase de mises');
+  ghost.socket.emit('bj:bet', { amount: 100 });
+  host.socket.emit('bj:bet', { amount: 100 });
+  await waitFor(() => host.table.phase === 'playing', 12000, 'main lancée');
+
+  // On part au milieu de la main, exactement comme en cliquant « Quitter »
+  // ou en changeant de page pendant que les cartes sont sur le tapis.
+  ghost.socket.emit('bj:leave');
+  await wait(400);
+  check('le siège est gardé pendant la main en cours',
+    host.table.seats.some((s) => s.id === ghost.user.id),
+    `${host.table.seats.length} sièges`);
+
+  // On reste sur nos cartes dès que c'est à nous, pour ne pas attendre le
+  // chrono de décision.
+  const standWhenAsked = setInterval(() => {
+    if (host.table && host.table.phase === 'playing' && host.table.you && host.table.you.canAct) {
+      host.socket.emit('bj:move', { move: 'stand' });
+    }
+  }, 300);
+
+  await waitFor(() => host.table.phase === 'betting'
+    && !host.table.seats.some((s) => s.id === ghost.user.id), 90000, 'siège libéré');
+  clearInterval(standWhenAsked);
+  check('la place est rendue au tour suivant',
+    host.table.seats.length === before - 1,
+    `${host.table.seats.length} joueur (au lieu de ${before})`);
+  check('le hall recompte les places libres',
+    host.table.seatsFree === 5 - host.table.seats.length,
+    `${host.table.seatsFree} libres`);
+
   console.log('\n──────────────────────────────');
   console.log(failures === 0 ? 'Tout est passé.' : `${failures} vérification(s) en échec.`);
-  [host, watcher, idle].forEach((p) => p.socket.close());
+  [host, watcher, idle, ghost].forEach((p) => p.socket.close());
   process.exit(failures ? 1 : 0);
 })().catch((err) => {
   console.error('\nLe banc d’essai a échoué :', err.message);

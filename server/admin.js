@@ -19,6 +19,7 @@ const store = require('./store');
 const blackjack = require('./blackjack');
 const collection = require('./data/collection');
 const gifts = require('./gifts');
+const market = require('./market');
 const { CASES } = require('./data/cases');
 
 const MAX_LOG = 60;
@@ -128,6 +129,9 @@ async function snapshot(presence) {
     // La liste des caisses distribuables, pour que le panel puisse proposer
     // un menu déroulant plutôt que de faire taper un identifiant à la main.
     cases: CASES.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji, price: c.price })),
+    // Les offres du marché, les plus chères par rapport à leur valeur en
+    // premier : c'est là que se cachent les transferts déguisés.
+    market: market.all(await store.siteState()),
   };
 }
 
@@ -431,6 +435,46 @@ async function act(actor, action, payload = {}, ctx = {}) {
       if (!done) return { ok: false, message: 'Message introuvable (déjà parti ?).' };
       record(actor, 'message supprimé', payload.author || '—');
       return { ok: true, message: 'Message supprimé.' };
+    }
+
+    /*
+     * RETIRER UNE OFFRE DU MARCHÉ.
+     *
+     * L'objet retourne au vendeur, pas à l'administrateur : on retire une
+     * vitrine, on ne confisque pas. Le vendeur est prévenu et voit son
+     * objet revenir dans son coffre, en ligne ou non.
+     */
+    case 'market-remove': {
+      const state = await store.siteState();
+      const result = market.takeDown(state, payload.listingId);
+      if (!result.ok) return result;
+
+      store.touchState();
+      await store.flushState();
+
+      const { listing } = result;
+      const label = result.item ? result.item.name : listing.itemId;
+      const seller = await store.findProfile(listing.sellerId);
+      if (seller) {
+        seller.vault.items[listing.itemId] = (seller.vault.items[listing.itemId] || 0) + listing.count;
+        await store.saveProfile(seller);
+        pushProfile(io, presence, seller);
+        if (io && presence) {
+          const entry = presence.users.get(seller.id);
+          if (entry) {
+            for (const socketId of entry.sockets) {
+              io.to(socketId).emit('toast', {
+                message: `Ton offre « ${label} » a été retirée du marché par un administrateur. L’objet est revenu dans ton coffre.`,
+                kind: 'warn',
+              });
+            }
+          }
+        }
+      }
+
+      if (io) io.emit('market:changed', {});
+      record(actor, 'offre retirée', listing.sellerName || '—', `${listing.count} × ${label} à ${listing.price} ¤`);
+      return { ok: true, message: `Offre retirée. ${listing.count} × ${label} rendu${listing.count > 1 ? 's' : ''} à ${listing.sellerName || 'son vendeur'}.` };
     }
 
     case 'clear-chat': {

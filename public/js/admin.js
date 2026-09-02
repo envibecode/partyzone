@@ -78,6 +78,7 @@
     if (data.gate) root.appendChild(renderGate(data.gate));
     root.appendChild(renderPlayers({ total: data.total, players: data.players || [] }));
     root.appendChild(renderTables(data.tables || []));
+    root.appendChild(renderLedger(data.ledger));
     root.appendChild(renderMarket(data.market || []));
     root.appendChild(renderLog(data.log || []));
     root.appendChild(renderBroadcast());
@@ -287,6 +288,98 @@
     table.appendChild(tbody);
     scroll.appendChild(table);
     panel.appendChild(scroll);
+    return panel;
+  }
+
+  /* ─── Économie ─── */
+
+  /**
+   * Le registre : ce que le site fabrique et ce qu'il détruit.
+   *
+   * La ligne qui compte est le NET. S'il est positif tous les jours, la
+   * masse monétaire gonfle, et au bout de quelques mois plus rien n'a de
+   * valeur — une caisse à 500 pièces ne veut rien dire quand tout le monde
+   * en a deux millions. C'est le seul tableau du panel qu'il faut regarder
+   * une fois par semaine.
+   *
+   * Les jeux n'apparaissent pas en « créé » ou « détruit » : une mise
+   * n'est ni l'un ni l'autre, elle est risquée. Ce qu'on compte pour eux,
+   * c'est le solde — et la redistribution réellement observée, qui doit
+   * coller au chiffre affiché sur leur tuile.
+   */
+  function renderLedger(led) {
+    const panel = el('div', 'panel');
+    panel.style.marginTop = '12px';
+    const head = el('div', 'panel-head');
+    head.appendChild(el('h2', null, 'Économie'));
+    head.appendChild(el('span', 'section-meta', 'Pièces créées et détruites — les 14 derniers jours'));
+    panel.appendChild(head);
+
+    if (!led || !led.daily || !led.daily.length) {
+      panel.appendChild(el('div', 'empty', 'Rien d’enregistré pour l’instant. Le registre se remplit dès qu’on joue.'));
+      return panel;
+    }
+
+    // Le bilan en trois chiffres, dont un seul compte vraiment.
+    const grid = el('div', 'adm-grid');
+    grid.appendChild(stat(fmt(led.total.mint), 'pièces créées'));
+    grid.appendChild(stat(fmt(led.total.burn), 'pièces détruites'));
+    const net = stat(`${led.total.net > 0 ? '+' : ''}${fmt(led.total.net)}`, 'création nette');
+    net.classList.add(led.total.net > 0 ? 'bad' : 'good');
+    grid.appendChild(net);
+    panel.appendChild(grid);
+
+    // La courbe : une barre par jour, au-dessus ou en dessous de zéro.
+    const peak = Math.max(1, ...led.daily.map((d) => Math.abs(d.net)));
+    const chart = el('div', 'led-chart');
+    led.daily.forEach((d) => {
+      const col = el('div', `led-day${d.net > 0 ? ' up' : ' down'}`);
+      const bar = el('span');
+      bar.style.height = `${Math.max(2, Math.round((Math.abs(d.net) / peak) * 100))}%`;
+      col.appendChild(bar);
+      col.dataset.tip = `${d.day} — ${d.net > 0 ? '+' : ''}${fmt(d.net)} (créé ${fmt(d.mint)}, détruit ${fmt(d.burn)})`;
+      col.appendChild(el('i', null, d.day.slice(8)));
+      chart.appendChild(col);
+    });
+    panel.appendChild(chart);
+
+    const scroll = el('div', 'adm-scroll');
+    const table = el('table', 'adm-table');
+    const thead = el('thead');
+    const tr = el('tr');
+    ['Source', 'Créé', 'Détruit', 'Net', 'Misé', 'Manches', 'RTP réel'].forEach((h) => tr.appendChild(el('th', null, h)));
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    led.sources.forEach((sv) => {
+      const row = el('tr');
+      row.appendChild(el('td', null, sv.source));
+      row.appendChild(el('td', null, sv.mint ? fmt(sv.mint) : '—'));
+      row.appendChild(el('td', null, sv.burn ? fmt(sv.burn) : '—'));
+      const n = el('td', null, `${sv.net > 0 ? '+' : ''}${fmt(sv.net)}`);
+      n.style.color = sv.net > 0 ? 'var(--lose)' : 'var(--win)';
+      row.appendChild(n);
+      row.appendChild(el('td', null, sv.staked ? fmt(sv.staked) : '—'));
+      row.appendChild(el('td', null, sv.rounds ? fmt(sv.rounds) : '—'));
+      row.appendChild(el('td', null, sv.rtp === null ? '—' : `${String(sv.rtp).replace('.', ',')} %`));
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    panel.appendChild(scroll);
+
+    // La sauvegarde, au même endroit : c'est le geste qu'on fait quand on
+    // vient de regarder les chiffres et qu'ils font peur.
+    const foot = el('div', 'led-foot');
+    const dl = el('a', 'btn btn-soft', '⤓ Exporter toute la base en JSON');
+    dl.href = '/api/admin/export';
+    dl.setAttribute('download', '');
+    foot.appendChild(dl);
+    foot.appendChild(el('span', 'section-meta',
+      'Profils, collections, marché, registre — tout, dans un fichier. À garder de côté avant une grosse mise à jour.'));
+    panel.appendChild(foot);
+
     return panel;
   }
 

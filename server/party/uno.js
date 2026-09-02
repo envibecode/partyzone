@@ -778,11 +778,20 @@ class Uno extends Room {
     };
   }
 
+  /** Reprendre après un redémarrage du serveur, chronomètre à neuf. */
+  resume() {
+    if (this.phase !== 'playing') return;
+    this.armTurn();
+    this.note('Le serveur a redémarré — la manche reprend.');
+    this.broadcast();
+  }
+
   broadcast() {
     for (const player of this.players) {
       const state = this.stateFor(player.id);
       for (const socketId of player.sockets) this.io.to(socketId).emit('uno:state', state);
     }
+    this.broadcastWatchers('uno:state');
   }
 
   destroy() {

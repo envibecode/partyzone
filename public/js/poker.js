@@ -289,6 +289,8 @@
   function render(s) {
     const before = state;
     state = s;
+    PZ.watchBanner(s);
+    $('#view-pk').classList.toggle('watching', Boolean(s.watching));
 
     PZ.roomChrome('pk', s, {
       startLabel: 'Lancer le tournoi',

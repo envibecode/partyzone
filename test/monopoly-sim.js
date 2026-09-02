@@ -191,6 +191,21 @@ function playOne(seed, { verbose = false } = {}) {
       continue;
     }
 
+    if (game.step === 'auction') {
+      // Une enchère : on monte parfois, on passe souvent. Le but n'est pas
+      // de bien enchérir mais de passer par tous les chemins — la montée,
+      // le passage, la clôture sur un seul survivant, et la clôture sans
+      // aucune offre.
+      const who = game.auctionWho();
+      if (!who) { game.closeAuction(); continue; }
+      const a = game.auction;
+      const up = a.high + 10 + Math.floor(rand() * 40);
+      if (rand() < 0.45 && up <= game.cash(who)) game.bid(who, up);
+      else game.passBid(who);
+      if (!invariants(game, 'enchère')) return null;
+      continue;
+    }
+
     if (game.step === 'end') {
       // On construit tant qu'on peut, une case au hasard à chaque fois.
       for (let k = 0; k < 6; k++) {
@@ -474,10 +489,74 @@ function tryTrade(game, id, rand) {
     check('les invariants tiennent à chaque action', failures === 0 || played === 40,
       `${totalActions} actions vérifiées`);
     check('toutes les phases du tour ont été traversées',
-      ['roll', 'decide', 'end', 'debt'].every((s) => steps.has(s)),
+      ['roll', 'decide', 'end', 'debt', 'auction'].every((s) => steps.has(s)),
       [...steps].join(', '));
     check('la limite de tours termine bien des parties', byLaps > 0, `${byLaps} par les tours`);
     check('et les faillites aussi', byBankrupt > 0, `${byBankrupt} par faillite`);
+  }
+
+  /* ── LES ENCHÈRES ── */
+  section('Les enchères');
+  {
+    const g = table(['A', 'B', 'C']);
+    g.start('j0');
+    g.money.set('j0', 5000); g.money.set('j1', 5000); g.money.set('j2', 5000);
+
+    // On force une case libre sous le pion du joueur courant, puis il passe.
+    g.turn = 0;
+    g.step = 'decide';
+    g.pendingBuy = { cellIndex: 1, price: 60 };
+    g.pass('j0');
+    check('refuser ouvre une enchère', g.step === 'auction', g.step);
+    check('la case mise aux enchères est la bonne', g.auction.cell === 1);
+    check('elle démarre sans offre', g.auction.high === 0);
+
+    const first = g.auctionWho();
+    check('ce n’est pas au joueur courant de commencer', Boolean(first));
+    check('on ne peut pas enchérir hors de son tour',
+      g.bid(first === 'j1' ? 'j2' : 'j1', 100).ok === false);
+    check('on ne peut pas enchérir plus que ce qu’on a',
+      g.bid(first, 99999).ok === false, g.bid(first, 99999).message);
+
+    g.bid(first, 100);
+    check('l’offre est enregistrée', g.auction.high === 100 && g.auction.bidder === first);
+    check('il faut dépasser l’offre en cours',
+      g.bid(g.auctionWho(), 100).ok === false, g.bid(g.auctionWho(), 50).message);
+
+    // Les deux autres passent : le premier enchérisseur emporte la case.
+    let guard = 0;
+    while (g.step === 'auction' && guard++ < 8) {
+      const who = g.auctionWho();
+      if (!who) break;
+      g.passBid(who);
+    }
+    check('l’enchère se conclut', g.step !== 'auction', g.step);
+    check('la case revient au plus offrant', g.cells[1].ownerId === first);
+    check('et elle est payée', g.cash(first) === 4900, `${g.cash(first)}`);
+
+    // Personne ne mise : la case reste libre.
+    g.turn = 0;
+    g.step = 'decide';
+    g.pendingBuy = { cellIndex: 3, price: 60 };
+    g.pass('j0');
+    guard = 0;
+    while (g.step === 'auction' && guard++ < 8) {
+      const who = g.auctionWho();
+      if (!who) break;
+      g.passBid(who);
+    }
+    check('sans aucune offre, la case reste libre', g.cells[3].ownerId === null);
+
+    // Et le réglage se coupe.
+    const h = table(['A', 'B']);
+    h.configure('j0', { auctions: false });
+    h.start('j0');
+    h.turn = 0;
+    h.step = 'decide';
+    h.pendingBuy = { cellIndex: 1, price: 60 };
+    h.pass('j0');
+    check('sans enchères, on passe directement au tour suivant',
+      h.step !== 'auction', h.step);
   }
 
   /* ── LES DÉS ── */

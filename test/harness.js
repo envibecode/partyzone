@@ -58,11 +58,17 @@ async function makeGuest(baseName) {
     mine: null, plinko: null, roulette: null, table: null, vault: null,
     medals: null, season: null, slots: null, gifts: null,
     lastPlinko: null, lastVault: null, lastSlots: null, toasts: [],
+    // Ce que les défis du jour ont versé pendant le banc d'essai : ce sont
+    // de vraies pièces, elles doivent entrer dans les comptes.
+    questCoins: 0, questsDone: [],
   };
 
   socket.on('me', ({ user, profile }) => { p.user = user; p.profile = profile; });
   socket.on('profile:update', (profile) => { p.profile = profile; });
   socket.on('toast', (t) => p.toasts.push(t));
+  socket.on('quest:done', ({ done }) => {
+    for (const q of done || []) { p.questCoins += q.coins; p.questsDone.push(q.label); }
+  });
   socket.on('mine:state', ({ mine }) => { p.mine = mine; });
   socket.on('plinko:state', ({ config }) => { p.plinko = config; });
   socket.on('plinko:result', (r) => { p.lastPlinko = r; });
@@ -229,8 +235,11 @@ async function topUp(player, target) {
   const pkRtp = (returned / staked) * 100;
   check('RTP Plinko observé proche de l’annoncé', Math.abs(pkRtp - 96.85) < 12,
     `${pkRtp.toFixed(1)} % observé pour 96,85 % annoncé (600 billes, ça bouge)`);
-  check('solde cohérent avec les gains', alice.profile.coins === pkStart - staked + returned,
-    `${alice.profile.coins} = ${pkStart} − ${staked} + ${returned}`);
+  // Les défis du jour peuvent tomber pendant la série et créditer des
+  // pièces : ce n'est pas une fuite, c'est une récompense. On la compte.
+  check('solde cohérent avec les gains',
+    alice.profile.coins === pkStart - staked + returned + alice.questCoins,
+    `${alice.profile.coins} = ${pkStart} − ${staked} + ${returned}${alice.questCoins ? ` + ${alice.questCoins} de défis` : ''}`);
 
   /* ── Roulette ── */
   section('Roulette');

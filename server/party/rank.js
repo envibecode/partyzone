@@ -1,4 +1,5 @@
 'use strict';
+const ledger = require('../ledger');
 /**
  * LE RANG PARTY.
  *
@@ -115,7 +116,10 @@ function record(profile, gameId, { won = false, players = 3, rounds = 1 } = {}) 
     coins += reward;
     levelsGained.push({ level: p.rewarded, coins: reward });
   }
-  if (coins > 0) profile.vault.coins += coins;
+  if (coins > 0) {
+    profile.vault.coins += coins;
+    ledger.mint('rang Party', coins);
+  }
 
   return {
     gained,

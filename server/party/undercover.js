@@ -398,6 +398,22 @@ class Undercover extends Room {
 
   /* ─── Minuterie ─── */
 
+  /**
+   * Reprendre après un redémarrage du serveur.
+   *
+   * Chaque phase a son minuteur ; on relance celui de la phase en cours
+   * avec un temps complet, pour que personne ne saute son tour à cause
+   * d'un déploiement.
+   */
+  resume() {
+    if (this.phase === 'lobby' || this.phase === 'over') return;
+    if (this.phase === 'describe') this.armTurn();
+    else if (this.phase === 'vote') this.setDeadline(VOTE_MS, () => this.closeVote());
+    else this.setDeadline(REVEAL_MS, () => this.afterReveal());
+    this.system('Le serveur a redémarré — la partie reprend.', 'warn');
+    this.broadcast();
+  }
+
   setDeadline(ms, onTimeout) {
     clearTimeout(this.timer);
     this.deadline = Date.now() + ms;
@@ -454,6 +470,7 @@ class Undercover extends Room {
       const state = this.stateFor(player.id);
       for (const socketId of player.sockets) this.io.to(socketId).emit('uc:state', state);
     }
+    this.broadcastWatchers('uc:state');
   }
 }
 

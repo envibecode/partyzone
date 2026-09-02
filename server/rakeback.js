@@ -1,4 +1,5 @@
 'use strict';
+const ledger = require('./ledger');
 /**
  * LE RAKEBACK.
  *
@@ -85,6 +86,7 @@ function claim(profile, now = Date.now()) {
   r.claimed += amount;
   r.lastClaimAt = now;
   profile.vault.coins += amount;
+  ledger.mint('rakeback', amount);
 
   return { ok: true, amount, coins: profile.vault.coins };
 }

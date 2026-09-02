@@ -23,6 +23,7 @@ const STATUS_LABEL = {
   poker: 'Au poker',
   uno: 'À l’Uno',
   belote: 'À la belote',
+  monopoly: 'Au Monopoly',
   admin: 'Au panel admin',
 };
 

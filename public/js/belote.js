@@ -91,6 +91,7 @@
         + (seat.partner ? ' mate' : '')
         + (seat.you ? ' you' : '')
         + (seat.connected ? '' : ' away');
+      box.dataset.who = seat.id;
 
       const head = el('div', 'bl-who');
       const img = new Image(26, 26);
@@ -383,8 +384,50 @@
 
   /* ─── Rendu ─── */
 
+  /**
+   * Ses annonces, affichées comme un fait acquis.
+   *
+   * Le serveur les calcule pour tout le monde, comme belote-rebelote : à
+   * une vraie table on peut oublier d'annoncer sa tierce et perdre vingt
+   * points bêtement, ici non. La bannière dit aussi quand c'est l'autre
+   * camp qui marque — sinon on croit qu'elles n'ont servi à rien.
+   */
+  function renderAnnounces(s) {
+    const box = $('#bl-announce');
+    if (!box) return;
+    box.replaceChildren();
+    const a = s.announces;
+    if (!a || (!a.mine.length && a.team === null)) { box.hidden = true; return; }
+    box.hidden = false;
+
+    if (a.mine.length) {
+      const mine = el('div', 'bl-ann-mine');
+      mine.appendChild(el('b', null, 'Tes annonces'));
+      a.mine.forEach((x) => {
+        const row = el('span', 'bl-ann');
+        row.appendChild(el('i', null, x.label));
+        row.appendChild(el('em', null, `${x.points}`));
+        mine.appendChild(row);
+      });
+      box.appendChild(mine);
+    }
+
+    if (a.team !== null && a.team !== undefined) {
+      const mineTeam = (s.seats || []).find((x) => x.you);
+      const won = mineTeam && mineTeam.team === a.team;
+      const line = el('p', `bl-ann-verdict${won ? ' won' : ''}`);
+      line.textContent = won
+        ? `Votre camp marque ${a.points[a.team]} points d’annonces.`
+        : `C’est l’autre camp qui marque les annonces (${a.points[a.team]} points).`;
+      box.appendChild(line);
+    }
+  }
+
   function render(s) {
     state = s;
+    renderAnnounces(s);
+    PZ.watchBanner(s);
+    $('#view-bl').classList.toggle('watching', Boolean(s.watching));
     PZ.go('bl');
 
     $('#bl-code').textContent = s.code;
@@ -447,6 +490,12 @@
   });
 
   /* ─── Branchement ─── */
+
+
+  // La barre de réactions, sous le chat du salon, et le repère qui dit
+  // au-dessus de quel siège afficher la bulle.
+  PZ.seatFinder['bl'] = (id) => document.querySelector(`#view-bl .bl-seat[data-who="${id}"]`);
+  $('#bl-chat-form').parentElement.appendChild(PZ.reactionBar());
 
   function bind() {
     const socket = PZ.socket;

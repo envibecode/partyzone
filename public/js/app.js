@@ -138,7 +138,7 @@ const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
   blackjack: 'blackjack', vault: 'vault', slots: 'slots',
   medals: 'medals', admin: 'admin',
-  party: 'party', uc: 'undercover', pk: 'poker', uno: 'uno', bl: 'belote',
+  party: 'party', uc: 'undercover', pk: 'poker', uno: 'uno', bl: 'belote', mono: 'monopoly',
   market: 'market', soon: 'home',
 };
 
@@ -641,6 +641,70 @@ addEventListener('keydown', (e) => {
   setRail(saved === null ? railDocked() : saved === '1', { remember: false });
 })();
 
+/* ─── L'invitation ─────────────────────────────────────── */
+
+/**
+ * « Léa vient d'ouvrir une table de belote. »
+ *
+ * Trois règles de politesse, et elles comptent autant que le code :
+ *
+ *  · On ne dérange pas quelqu'un qui joue déjà. Si tu es à une table de
+ *    blackjack ou dans un salon Party, l'invitation ne s'affiche pas —
+ *    tu la retrouveras dans le hall.
+ *  · Elle s'efface toute seule au bout de vingt secondes. Une invitation
+ *    qu'on n'a pas prise reste une invitation, pas un reproche.
+ *  · Une seule à la fois. La deuxième remplace la première plutôt que
+ *    d'empiler des bandeaux.
+ */
+const INVITE_MS = 20000;
+const BUSY_VIEWS = new Set(['uc', 'pk', 'uno', 'bl', 'mono', 'blackjack']);
+let inviteTimer = null;
+let inviteRoom = null;
+
+function showInvite(inv) {
+  if (BUSY_VIEWS.has(PZ.view)) return;
+
+  inviteRoom = inv;
+  const box = $('#invite');
+  $('#invite-face').src = avatarUrl({ name: inv.host, avatar: inv.hostAvatar });
+  $('#invite-who').textContent = inv.host;
+  // « une table d'Uno », pas « une table de Uno ». Un détail, mais c'est
+  // le genre de détail qui fait qu'un site a l'air écrit par quelqu'un.
+  const jeu = inv.gameName || inv.game;
+  const de = /^[AEIOUYÀÂÉÈÊÎÔÙÛ]/i.test(jeu) ? 'd’' : 'de ';
+  $('#invite-what').textContent = `ouvre une table ${de}${jeu} · code ${inv.code}`;
+
+  box.hidden = false;
+  // La mèche : on voit le temps qui reste plutôt que de se demander si
+  // le bandeau va rester là toute la soirée.
+  const fuse = $('#invite-fuse');
+  fuse.style.transition = 'none';
+  fuse.style.transform = 'scaleX(1)';
+  requestAnimationFrame(() => {
+    fuse.style.transition = `transform ${INVITE_MS}ms linear`;
+    fuse.style.transform = 'scaleX(0)';
+  });
+
+  clearTimeout(inviteTimer);
+  inviteTimer = setTimeout(hideInvite, INVITE_MS);
+}
+
+function hideInvite() {
+  clearTimeout(inviteTimer);
+  inviteTimer = null;
+  inviteRoom = null;
+  $('#invite').hidden = true;
+}
+
+$('#invite-go').addEventListener('click', () => {
+  if (!inviteRoom) return;
+  const code = inviteRoom.code;
+  hideInvite();
+  go('party');
+  PZ.socket.emit('party:join', { code });
+});
+$('#invite-no').addEventListener('click', hideInvite);
+
 /* ─── Le fil des gros coups ────────────────────────────── */
 
 function pushFeed(entry) {
@@ -933,6 +997,17 @@ function start(user) {
   });
   socket.on('profile:update', applyProfile);
   socket.on('online:list', ({ online }) => renderRail(online || []));
+  socket.on('party:invite', showInvite);
+
+  // Un défi qui tombe : la fenêtre le dit, les pièces sont déjà là.
+  socket.on('quest:done', ({ done }) => {
+    (done || []).forEach((q, i) => {
+      setTimeout(() => {
+        toast(`Défi accompli — ${q.label} · +${fmt(q.coins)} ¤`, 'success');
+        if (window.SFX) SFX.win(1);
+      }, i * 700);
+    });
+  });
   socket.on('toast', ({ message, kind }) => toast(message, kind));
   socket.on('feed', pushFeed);
   socket.on('announce', ({ text, kind }) => announce(text, kind));

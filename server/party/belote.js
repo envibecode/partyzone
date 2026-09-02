@@ -92,6 +92,98 @@ function buildDeck() {
 
 const isTrump = (card, trump) => card.s === trump;
 const orderOf = (card, trump) => (isTrump(card, trump) ? ORDER_TRUMP : ORDER_PLAIN)[card.r];
+
+/* ═══════════ LES ANNONCES ═══════════
+ *
+ * Tierce, cinquante, cent, et les carrés. Trois pièges, et ce sont eux qui
+ * font que la moitié des implémentations sont fausses :
+ *
+ *  1. LES SÉQUENCES SUIVENT L'ORDRE DES CARTES, PAS CELUI DE L'ATOUT.
+ *     7-8-9 est une tierce même à l'atout, où le 9 vaut pourtant plus que
+ *     le roi. L'atout change la force et les points, jamais la SUITE.
+ *
+ *  2. SEULE LA MEILLEURE ÉQUIPE MARQUE.
+ *     On compare la plus forte annonce des deux camps ; le perdant ne
+ *     marque rien du tout, même s'il avait trois tierces. Le gagnant, lui,
+ *     marque TOUTES les siennes. C'est ce qui rend l'annonce risquée : la
+ *     montrer révèle son jeu, et peut ne rien rapporter.
+ *
+ *  3. LES CARRÉS DE 8 ET DE 7 NE VALENT RIEN.
+ *     Ils existent, ils ne comptent pas. Les oublier fait marquer cent
+ *     points à quelqu'un qui n'a rien.
+ */
+
+/** L'ordre des séquences : A K Q J 10 9 8 7, quel que soit l'atout. */
+const SEQ_ORDER = { A: 8, K: 7, Q: 6, J: 5, '10': 4, '9': 3, '8': 2, '7': 1 };
+
+const SEQ_POINTS = { 3: 20, 4: 50, 5: 100, 6: 100, 7: 100, 8: 100 };
+const SEQ_NAME = { 3: 'tierce', 4: 'cinquante', 5: 'cent', 6: 'cent', 7: 'cent', 8: 'cent' };
+
+/** Les carrés qui comptent. Le 8 et le 7 n'y sont pas, et c'est la règle. */
+const FOUR_POINTS = { J: 200, '9': 150, A: 100, '10': 100, K: 100, Q: 100 };
+
+/**
+ * Toutes les annonces d'une main.
+ *
+ * Renvoie une liste triée de la plus forte à la plus faible, avec de quoi
+ * les comparer entre équipes : `points`, puis `rank` (la hauteur de la
+ * séquence) pour départager deux annonces de même valeur.
+ */
+function announcementsOf(hand) {
+  const out = [];
+
+  /* ── Les carrés ── */
+  for (const rank of Object.keys(FOUR_POINTS)) {
+    const four = hand.filter((c) => c.r === rank);
+    if (four.length === 4) {
+      out.push({
+        kind: 'carre', rank, points: FOUR_POINTS[rank],
+        // Un carré bat toujours n'importe quelle séquence, même un cent :
+        // on le hisse au-dessus par sa hauteur de comparaison.
+        rank2: 100 + SEQ_ORDER[rank],
+        label: `carré de ${{ J: 'valets', A: 'as', K: 'rois', Q: 'dames', '10': 'dix', '9': 'neuf' }[rank] || rank}`,
+        cards: four.map((c) => c.id),
+      });
+    }
+  }
+
+  /* ── Les séquences ── */
+  for (const suit of SUITS) {
+    const ranked = hand
+      .filter((c) => c.s === suit)
+      .sort((a, b) => SEQ_ORDER[a.r] - SEQ_ORDER[b.r]);
+    let run = [];
+    for (let i = 0; i < ranked.length; i++) {
+      if (!run.length || SEQ_ORDER[ranked[i].r] === SEQ_ORDER[run[run.length - 1].r] + 1) {
+        run.push(ranked[i]);
+      } else {
+        if (run.length >= 3) out.push(seqFrom(run, suit));
+        run = [ranked[i]];
+      }
+    }
+    if (run.length >= 3) out.push(seqFrom(run, suit));
+  }
+
+  return out.sort((a, b) => b.points - a.points || b.rank2 - a.rank2);
+}
+
+function seqFrom(run, suit) {
+  const n = Math.min(8, run.length);
+  const top = run[run.length - 1];
+  return {
+    kind: 'suite', points: SEQ_POINTS[n], rank2: SEQ_ORDER[top.r], length: n, suit,
+    label: `${SEQ_NAME[n]} à ${top.r} de ${SUIT_NAME[suit]}`,
+    cards: run.map((c) => c.id),
+  };
+}
+
+/** Vraie si `a` bat `b` : d'abord la valeur, puis la hauteur. */
+function beats(a, b) {
+  if (!b) return true;
+  if (!a) return false;
+  if (a.points !== b.points) return a.points > b.points;
+  return a.rank2 > b.rank2;
+}
 const pointsOf = (card, trump) => (isTrump(card, trump) ? POINTS_TRUMP : POINTS_PLAIN)[card.r];
 
 function cardLabel(card) {
@@ -199,7 +291,11 @@ class Belote extends Room {
     /* La donne en cours. */
     this.hands = new Map();
     this.trump = null;
-    this.taker = null;          // id du preneur
+    this.taker = null;
+    this.declared = {};
+    this.announceTeam = null;
+    this.announcePoints = [0, 0];
+    this.announceList = [];          // id du preneur
     this.turned = null;         // la retourne
     this.bidTurn = 0;
     this.bidRound = 1;
@@ -436,6 +532,43 @@ class Belote extends Room {
       if (hasK && hasQ) this.beloteBy = this.teamOf(id);
     }
 
+    /*
+     * LES ANNONCES.
+     *
+     * Le serveur les calcule pour tout le monde, comme belote-rebelote.
+     * À une vraie table on les annonce au premier pli et on les montre au
+     * deuxième ; ici il n'y a personne à qui mentir, donc autant les
+     * compter juste — et surtout, ça évite qu'on perde cent points parce
+     * qu'on n'a pas vu sa propre tierce.
+     *
+     * Seule la meilleure équipe marque, et elle marque TOUTES ses annonces.
+     */
+    this.declared = {};
+    let best = null;
+    let bestTeam = null;
+    for (const id of this.order) {
+      const list = announcementsOf(this.handOf(id));
+      if (!list.length) continue;
+      this.declared[id] = list;
+      if (beats(list[0], best)) { best = list[0]; bestTeam = this.teamOf(id); }
+    }
+
+    this.announceTeam = bestTeam;
+    this.announcePoints = [0, 0];
+    this.announceList = [];
+    if (bestTeam !== null) {
+      for (const id of this.order) {
+        if (this.teamOf(id) !== bestTeam) continue;
+        for (const a of this.declared[id] || []) {
+          this.announcePoints[bestTeam] += a.points;
+          this.announceList.push({ by: this.nameOf(id), label: a.label, points: a.points });
+        }
+      }
+      if (this.announcePoints[bestTeam] > 0) {
+        this.note(`Annonces : ${this.announceList.map((a) => `${a.label} (${a.by})`).join(', ')} — ${this.announcePoints[bestTeam]} points.`);
+      }
+    }
+
     this.phase = 'playing';
     this.turnIndex = (this.dealerIndex + 1) % 4;   // la gauche du donneur entame
     this.armTurn();
@@ -592,20 +725,26 @@ class Belote extends Room {
     // Il faut avoir joué LES DEUX cartes pour marquer les vingt points.
     if (this.beloteBy !== null && this.beloteShown >= 2) belote[this.beloteBy] = 20;
 
+    // Les annonces comptent comme la belote : à part du pli, acquises même
+    // quand l'équipe chute.
+    const announce = [this.announcePoints[0] || 0, this.announcePoints[1] || 0];
+    const bonus = [belote[0] + announce[0], belote[1] + announce[1]];
+
     let final = [0, 0];
     let verdict;
 
     if (capot !== null) {
       final[capot] = CAPOT_POINTS;
       verdict = capot === takerTeam ? 'capot' : 'capot-contre';
-    } else if (raw[takerTeam] + belote[takerTeam] >= CONTRACT) {
-      final = [raw[0] + belote[0], raw[1] + belote[1]];
+    } else if (raw[takerTeam] + bonus[takerTeam] >= CONTRACT) {
+      final = [raw[0] + bonus[0], raw[1] + bonus[1]];
       verdict = 'rempli';
     } else {
-      // Dedans : l'adversaire ramasse tout. Les belotes restent à leur
-      // propriétaire, y compris quand c'est le camp qui chute.
-      final[other] = TOTAL_POINTS + belote[other];
-      final[takerTeam] = belote[takerTeam];
+      // Dedans : l'adversaire ramasse tout. Les belotes et les annonces
+      // restent à leur propriétaire, y compris quand c'est le camp qui
+      // chute — c'est la règle, et elle console un peu.
+      final[other] = TOTAL_POINTS + bonus[other];
+      final[takerTeam] = bonus[takerTeam];
       verdict = 'dedans';
     }
 
@@ -623,6 +762,9 @@ class Belote extends Room {
       raw,
       belote,
       beloteTeam: this.beloteShown >= 2 ? this.beloteBy : null,
+      announce,
+      announceTeam: this.announceTeam,
+      announceList: this.announceList,
       lastTrickTeam,
       final,
       verdict,
@@ -761,6 +903,14 @@ class Belote extends Room {
       // les belotes : c'est ce qu'on compte de tête en jouant.
       running: [0, 1].map((t) => this.won[t].reduce((s, c) => s + pointsOf(c, this.trump), 0)),
       belote: { team: this.beloteBy, shown: this.beloteShown },
+      // On voit ses propres annonces, et on sait quelle équipe marque —
+      // mais pas le détail de celles des autres avant la fin de la donne.
+      announces: {
+        mine: this.declared && this.declared[playerId] ? this.declared[playerId] : [],
+        team: this.announceTeam,
+        points: this.announcePoints || [0, 0],
+        list: this.phase === 'deal-end' ? this.announceList : [],
+      },
 
       log: this.log,
       summary: this.phase === 'deal-end' ? this.summary : null,
@@ -769,11 +919,21 @@ class Belote extends Room {
     };
   }
 
+  /** Reprendre après un redémarrage du serveur, chronomètre à neuf. */
+  resume() {
+    if (this.phase === 'playing') this.armTurn();
+    else if (this.phase === 'bidding') this.armBid();
+    else return;
+    this.note('Le serveur a redémarré — la donne reprend.');
+    this.broadcast();
+  }
+
   broadcast() {
     for (const player of this.players) {
       const state = this.stateFor(player.id);
       for (const socketId of player.sockets) this.io.to(socketId).emit('bl:state', state);
     }
+    this.broadcastWatchers('bl:state');
   }
 
   destroy() {
@@ -786,4 +946,5 @@ module.exports = {
   Belote, MIN, MAX,
   buildDeck, legalCards, trickWinner, pointsOf, orderOf, isTrump, cardLabel,
   SUITS, RANKS, SUIT_NAME, SUIT_SIGN, TOTAL_POINTS, CAPOT_POINTS, CONTRACT,
+  announcementsOf, beats, SEQ_ORDER, FOUR_POINTS,
 };

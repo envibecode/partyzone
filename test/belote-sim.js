@@ -156,7 +156,11 @@ function auditDeal(table, stats) {
   }
 
   const attributed = s.final[0] + s.final[1];
-  const beloteTotal = s.belote[0] + s.belote[1];
+  // Les annonces s'ajoutent aux 162 exactement comme la belote : à part du
+  // pli, acquises même quand l'équipe chute. L'invariant devient donc
+  // « 162 + belotes + annonces », et pas un point de plus.
+  const announceTotal = (s.announce || [0, 0])[0] + (s.announce || [0, 0])[1];
+  const beloteTotal = s.belote[0] + s.belote[1] + announceTotal;
 
   if (s.verdict === 'rempli') {
     if (attributed !== TOTAL_POINTS + beloteTotal) {
@@ -168,8 +172,9 @@ function auditDeal(table, stats) {
       throw new Error(`dedans : ${attributed} attribués au lieu de ${TOTAL_POINTS + beloteTotal}`);
     }
     // Le preneur ne garde QUE ses belotes.
-    if (s.final[s.takerTeam] !== s.belote[s.takerTeam]) {
-      throw new Error(`dedans : le preneur garde ${s.final[s.takerTeam]} au lieu de ses seules belotes (${s.belote[s.takerTeam]})`);
+    const keeps = s.belote[s.takerTeam] + (s.announce || [0, 0])[s.takerTeam];
+    if (s.final[s.takerTeam] !== keeps) {
+      throw new Error(`dedans : le preneur garde ${s.final[s.takerTeam]} au lieu de ses seules belotes et annonces (${keeps})`);
     }
     stats.down++;
   } else {
@@ -180,10 +185,19 @@ function auditDeal(table, stats) {
   }
 
   if (s.beloteTeam !== null) stats.belotes++;
-  if (s.verdict === 'rempli' && s.raw[s.takerTeam] + s.belote[s.takerTeam] < 82) {
+  if (s.announceTeam !== null && s.announceTeam !== undefined) {
+    stats.announces++;
+    stats.announcePoints += (s.announce || [0, 0])[s.announceTeam] || 0;
+    // La règle la plus vite oubliée : le camp perdant ne marque RIEN.
+    if ((s.announce || [0, 0])[1 - s.announceTeam] !== 0) {
+      throw new Error('les deux camps ont marqué des annonces : seule la meilleure équipe marque');
+    }
+    stats.oneSided++;
+  }
+  if (s.verdict === 'rempli' && s.raw[s.takerTeam] + s.belote[s.takerTeam] + (s.announce || [0, 0])[s.takerTeam] < 82) {
     throw new Error('contrat déclaré rempli avec moins de 82 points');
   }
-  if (s.verdict === 'dedans' && s.raw[s.takerTeam] + s.belote[s.takerTeam] >= 82) {
+  if (s.verdict === 'dedans' && s.raw[s.takerTeam] + s.belote[s.takerTeam] + (s.announce || [0, 0])[s.takerTeam] >= 82) {
     throw new Error('contrat déclaré chuté avec 82 points ou plus');
   }
 }
@@ -255,6 +269,7 @@ function checkRules() {
   const stats = {
     deals: 0, takes: 0, secondRound: 0, made: 0, down: 0, capots: 0,
     belotes: 0, refused: 0, trumpsPlayed: 0, dealSeen: 0, reasons: new Set(),
+    announces: 0, announcePoints: 0, oneSided: 0,
   };
 
   try {
@@ -304,6 +319,10 @@ function checkRules() {
     stats.made > 0 && stats.down > 0, `${stats.made} remplis, ${stats.down} dedans`);
   ok('des prises au second tour', stats.secondRound > 0, `${stats.secondRound} fois`);
   ok('des belote-rebelote comptées', stats.belotes > 0, `${stats.belotes} fois`);
+  ok('des annonces détectées et comptées', stats.announces > 0,
+    `${stats.announces} donnes avec annonces, ${stats.announcePoints} points au total`);
+  ok('seule la meilleure équipe marque ses annonces',
+    stats.oneSided === stats.announces, `${stats.oneSided}/${stats.announces}`);
   ok('les coups interdits sont bien refusés', stats.refused > 50, `${stats.refused} refus`);
   ok('les refus sont expliqués, pas juste refusés', stats.reasons.size >= 3,
     [...stats.reasons].map((r) => `« ${r} »`).join(' '));

@@ -4339,3 +4339,370 @@ button.seat.free:hover {
   font-style: normal; font: 400 10px/1 var(--f-ui); color: var(--t-off);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LE REGISTRE D'ÉCONOMIE
+
+   Une barre par jour, au-dessus ou en dessous de la ligne d'équilibre.
+   Au-dessus : le site a fabriqué des pièces ce jour-là. En dessous : il en
+   a détruit. Une suite de barres rouges vers le haut, c'est l'inflation
+   qui commence — et c'est tout ce qu'il faut voir d'un coup d'œil.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.led-chart {
+  display: flex; align-items: stretch; gap: 3px;
+  height: 90px; margin: var(--s-4) 0 var(--s-3);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hair-firm);
+  position: relative;
+}
+.led-day {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  position: relative;
+}
+.led-day span {
+  display: block; width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+/* Fabriquer des pièces est le risque, pas la réussite : c'est donc le
+   rouge qui monte, et le vert qui descend. */
+.led-day.up span   { background: color-mix(in srgb, var(--lose) 70%, transparent); }
+.led-day.down span { background: color-mix(in srgb, var(--win) 70%, transparent); }
+.led-day:hover span { opacity: .75; }
+.led-day i {
+  position: absolute; bottom: -15px; left: 0; right: 0;
+  font: 400 9.5px/1 var(--f-num); font-style: normal;
+  color: var(--t-off); text-align: center;
+}
+
+.adm-stat.bad b  { color: var(--lose); }
+.adm-stat.good b { color: var(--win); }
+
+.led-foot {
+  display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap;
+  margin-top: var(--s-4); padding-top: var(--s-3);
+  border-top: 1px solid var(--hair);
+}
+.led-foot .section-meta { flex: 1; min-width: 220px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   L'INVITATION
+
+   Un bandeau bas et discret, en bas à gauche — loin des boutons du jeu et
+   loin des toasts qui sortent à droite. Il porte une mèche qui se consume :
+   on voit le temps qu'il reste plutôt que de se demander s'il va rester là
+   toute la soirée.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.invite[hidden] { display: none; }
+.invite {
+  position: fixed; z-index: 60;
+  left: var(--s-5); bottom: var(--s-5);
+  display: flex; align-items: center; gap: var(--s-3);
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 11px 12px 11px 11px;
+  border-radius: var(--r-panel);
+  background: var(--ink-2);
+  border: 1px solid var(--hair-firm);
+  box-shadow: var(--e-float);
+  overflow: hidden;
+  animation: invite-in var(--t-slow) var(--ease-out);
+}
+@keyframes invite-in { from { transform: translateY(14px); opacity: 0; } }
+
+.invite img { border-radius: var(--r-circle); flex: none; background: var(--ink-3); }
+.invite-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.invite-text b { font: var(--ty-label); color: var(--t-hi); }
+.invite-text span {
+  font: var(--ty-fine); font-size: 11.5px; color: var(--t-mid);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.invite .btn { flex: none; }
+.invite-x {
+  flex: none; display: grid; place-items: center;
+  width: 24px; height: 24px; border-radius: var(--r-inline);
+  color: var(--t-off);
+}
+.invite-x:hover { color: var(--t-mid); background: var(--ink-3); }
+
+/* La mèche : elle se consume de droite à gauche pendant vingt secondes. */
+.invite-fuse {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--g-party);
+  transform-origin: left center;
+}
+
+@media (max-width: 520px) {
+  .invite { left: var(--s-3); right: var(--s-3); bottom: var(--s-3); max-width: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LES RÉACTIONS
+
+   Six boutons sous le chat du salon, et une bulle qui monte deux secondes
+   au-dessus du siège de celui qui a cliqué. C'est le regard qu'on lance à
+   la table, pas une conversation — donc rien ne s'accumule, rien ne reste,
+   et il n'y a pas d'historique.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.react-bar {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-top: var(--s-3); padding-top: var(--s-3);
+  border-top: 1px solid var(--hair);
+}
+.react-btn {
+  flex: 1; min-width: 34px; height: 32px;
+  border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+  font-size: 15px; line-height: 1;
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.react-btn:hover { background: var(--ink-4); }
+.react-btn:active { transform: scale(.9); }
+
+.react-pop {
+  position: fixed; z-index: 200;
+  transform: translate(-50%, 0);
+  font-size: 30px; line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .6));
+  animation: react-rise 2s var(--ease-out) forwards;
+}
+/* Elle monte, s'écarte un peu au hasard, et s'efface. Deux réactions
+   simultanées ne se superposent donc pas exactement. */
+@keyframes react-rise {
+  0%   { transform: translate(-50%, 0) scale(.4); opacity: 0; }
+  18%  { transform: translate(-50%, -14px) scale(1.15); opacity: 1; }
+  30%  { transform: translate(-50%, -20px) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -74px) scale(.9); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LE SPECTATEUR
+
+   Une barre franche en haut de la vue : on regarde, on ne joue pas. Sans
+   elle, on cherche pendant trente secondes pourquoi aucun bouton ne
+   répond. Et pendant qu'on regarde, les commandes du salon disparaissent
+   plutôt que d'être grisées — un bouton absent ne se clique pas.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.watch-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-4); flex-wrap: wrap;
+  margin-bottom: var(--s-3); padding: 10px 14px;
+  border-radius: var(--r-panel);
+  background: var(--ink-2);
+  border: 1px solid var(--hair-firm);
+  border-left: 3px solid var(--g-party);
+}
+.watch-bar span { font: var(--ty-label); color: var(--t-mid); }
+
+.view.watching .room-acts .btn-gold,
+.view.watching .uno-settings,
+.view.watching .bl-settings,
+.view.watching .mono-settings,
+.view.watching .react-bar,
+.view.watching .chat-form,
+.view.watching .mono-deeds,
+.view.watching .mono-swap { display: none; }
+
+/* Le nombre de gens qui regardent une partie, dans la liste des salons. */
+.proom-eyes {
+  display: block; margin-top: 2px;
+  font: 400 10px/1 var(--f-ui); font-style: normal; color: var(--t-off);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LES DÉFIS DU JOUR
+
+   Trois lignes, une barre chacune. Un défi accompli se coche et RESTE :
+   voir ce qu'on a déjà fait vaut autant que voir ce qu'il reste, et une
+   ligne qui s'efface donne l'impression d'avoir rêvé.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.quests[hidden] { display: none; }
+.quest-list { display: flex; flex-direction: column; gap: var(--s-2); }
+
+.quest {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 11px 13px;
+  border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+}
+.quest.done { border-color: color-mix(in srgb, var(--win) 35%, transparent); }
+
+.quest-mark {
+  flex: none; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: var(--r-circle);
+  border: 1.5px solid var(--hair-firm);
+  font: 700 12px/1 var(--f-ui); color: var(--t-off);
+}
+.quest.done .quest-mark {
+  border-color: transparent; background: var(--win); color: var(--ink-0);
+}
+
+.quest-body { flex: 1; min-width: 0; }
+.quest-body b { display: block; font: var(--ty-label); color: var(--t-hi); }
+.quest-body > span { display: block; font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); margin-bottom: 6px; }
+
+.quest-track { height: 3px; border-radius: 2px; background: var(--ink-4); overflow: hidden; }
+.quest-track i {
+  display: block; height: 100%; border-radius: 2px;
+  background: var(--brand);
+  transition: width var(--t-slow) var(--ease-out);
+}
+.quest.done .quest-track i { background: var(--win); }
+
+.quest-side { flex: none; text-align: right; }
+.quest-side b {
+  display: block;
+  font: 700 13px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-mid);
+}
+.quest.done .quest-side b { color: var(--win); }
+.quest-side span { font: 400 10.5px/1.4 var(--f-ui); color: var(--t-off); }
+
+@media (max-width: 520px) {
+  .quest-body > span { display: none; }   /* l'intitulé suffit sur un téléphone */
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MON PROFIL
+
+   Une page de chiffres, donc une page qui doit se lire de haut en bas
+   sans effort : l'identité, les six chiffres qui comptent, puis chaque
+   sujet dans son panneau. Le bénéfice net est le premier, et il est le
+   seul coloré — c'est celui qui dit si on joue bien.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.me-head {
+  display: flex; align-items: center; gap: var(--s-4);
+  padding-bottom: var(--s-5); border-bottom: 1px solid var(--hair);
+}
+.me-head img { border-radius: var(--r-circle); background: var(--ink-3); flex: none; }
+.me-who { flex: 1; min-width: 0; }
+.me-who h2 { font: var(--ty-title); color: var(--t-hi); }
+.me-who > span { font: var(--ty-fine); color: var(--t-mid); }
+.me-xp {
+  height: 4px; margin: 9px 0 5px; max-width: 380px;
+  border-radius: 2px; background: var(--ink-4); overflow: hidden;
+}
+.me-xp i { display: block; height: 100%; background: var(--brand); border-radius: 2px; }
+.me-who small { font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+
+.me-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-2); margin-top: var(--s-4);
+}
+.mstat {
+  padding: 13px 14px; border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+}
+.mstat b {
+  display: block;
+  font: 700 21px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-hi); letter-spacing: -.01em;
+}
+.mstat span { display: block; margin-top: 5px; font: var(--ty-fine); font-size: 11.5px; color: var(--t-mid); }
+.mstat i { display: block; margin-top: 3px; font: 400 10.5px/1.4 var(--f-ui); font-style: normal; color: var(--t-off); }
+.mstat.good b { color: var(--win); }
+.mstat.bad b  { color: var(--lose); }
+
+.me-note {
+  margin-top: var(--s-3); padding: 11px 13px;
+  border-radius: var(--r-control); background: var(--ink-1);
+  border-left: 3px solid var(--hair-firm);
+  font: var(--ty-fine); color: var(--t-mid); max-width: 78ch;
+}
+
+.me-collect { height: 6px; border-radius: 3px; background: var(--ink-4); overflow: hidden; margin: var(--s-3) 0; }
+.me-collect i { display: block; height: 100%; background: var(--g-vault); border-radius: 3px; }
+
+.me-quests { display: flex; flex-direction: column; gap: 3px; margin-top: var(--s-3); }
+.me-quest {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3);
+  padding: 8px 10px; border-radius: var(--r-inline); background: var(--ink-1);
+}
+.me-quest b { font: var(--ty-label); color: var(--t-mid); }
+.me-quest span { font: 700 11.5px/1 var(--f-num); color: var(--t-low); flex: none; }
+.me-quest.done b { color: var(--t-hi); }
+.me-quest.done span { color: var(--win); }
+
+/* ── LE PALMARÈS ── */
+
+.palm { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
+.palm:first-of-type { border-top: 0; padding-top: 0; }
+.palm-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.palm-head h3 { font: var(--ty-sub); color: var(--t-hi); }
+.palm-head span { font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+
+.palm-list { list-style: none; margin-top: var(--s-3); display: flex; flex-direction: column; gap: 2px; }
+.palm-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; border-radius: var(--r-control);
+}
+.palm-list li.top { background: var(--brand-wash); }
+.palm-rank { width: 15px; font: 700 12px/1 var(--f-num); color: var(--t-off); flex: none; }
+.palm-list img { border-radius: var(--r-circle); background: var(--ink-3); flex: none; }
+.palm-list b { flex: 1; min-width: 0; font: var(--ty-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palm-list i { font-style: normal; font: var(--ty-fine); font-size: 11px; color: var(--t-low); flex: none; }
+.palm-list em {
+  font-style: normal; flex: none; min-width: 42px; text-align: right;
+  font: 700 12.5px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--t-mid);
+}
+.palm-list li.top em { color: var(--g-party); }
+
+.palm-never {
+  margin-top: var(--s-2); padding: 7px 10px;
+  border-radius: var(--r-inline); background: var(--lose-wash);
+  font: var(--ty-fine); font-size: 11.5px; color: var(--t-mid);
+}
+
+/* L'enchère : la case, l'offre en cours, et trois boutons de montée. À une
+   vraie table on lève la main — le champ de saisie existe pour qui veut un
+   chiffre précis, mais il n'est pas ce qu'on voit en premier. */
+.mono-auction {
+  width: min(340px, 100%);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--ink-2); border: 1px solid var(--hair-firm);
+  box-shadow: var(--e-lift);
+}
+.mono-auction-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.mono-auction-head b { font: var(--ty-label); color: var(--t-hi); }
+.mono-auction-head span { font: var(--ty-fine); font-size: 10.5px; color: var(--t-off); }
+.mono-auction-now {
+  margin: var(--s-3) 0; text-align: center;
+  font: 700 19px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--t-hi);
+}
+.mono-auction-steps { display: flex; gap: 6px; margin-bottom: var(--s-2); }
+.mono-auction-steps .btn { flex: 1; min-width: 0; }
+.mono-auction-free { display: flex; gap: 6px; margin-bottom: var(--s-2); }
+.mono-auction-free .input { flex: 1; min-width: 0; }
+
+/* Les annonces de belote : ses propres combinaisons, et qui marque. Le
+   serveur les calcule pour tout le monde — comme belote-rebelote, on ne
+   perd pas cent points parce qu'on n'a pas vu sa propre tierce. */
+.bl-announce[hidden] { display: none; }
+.bl-announce { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair); }
+.bl-ann-mine > b {
+  display: block; margin-bottom: 6px;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+.bl-ann {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3);
+  padding: 5px 8px; border-radius: var(--r-inline); background: var(--ink-1);
+}
+.bl-ann + .bl-ann { margin-top: 2px; }
+.bl-ann i { font-style: normal; font: var(--ty-fine); font-size: 11.5px; color: var(--t-mid); }
+.bl-ann em {
+  font-style: normal; flex: none;
+  font: 700 12px/1 var(--f-num); font-variant-numeric: tabular-nums; color: var(--g-party);
+}
+.bl-ann-verdict {
+  margin-top: var(--s-2); font: var(--ty-fine); font-size: 11px; color: var(--t-low);
+}
+.bl-ann-verdict.won { color: var(--g-party); }

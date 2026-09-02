@@ -275,6 +275,65 @@
     PZ.socket.emit('bj:create');
   });
 
+  /* ═══════════ Les défis du jour ═══════════ */
+
+  /**
+   * Trois barres, et le temps qu'il reste.
+   *
+   * Un défi accompli ne disparaît pas : il se coche et reste là. Voir ce
+   * qu'on a déjà fait vaut autant que voir ce qu'il reste à faire, et une
+   * ligne qui s'efface donne l'impression d'avoir rêvé.
+   */
+  let questState = null;
+
+  function renderQuests(q) {
+    if (!q) return;
+    questState = q;
+    const box = $('#quests-box');
+    box.hidden = false;
+
+    const left = Math.max(0, q.resetsIn);
+    const h = Math.floor(left / 3600000);
+    const m = Math.floor((left % 3600000) / 60000);
+    const done = q.list.filter((x) => x.done).length;
+    $('#quests-meta').textContent =
+      `${done}/${q.list.length} · ${PZ.fmt(q.earned)} sur ${PZ.fmt(q.total)} ¤ · renouvelés dans ${h} h ${String(m).padStart(2, '0')}`;
+
+    const list = $('#quest-list');
+    list.replaceChildren();
+    q.list.forEach((quest) => {
+      const node = el('div', `quest${quest.done ? ' done' : ''}`);
+
+      const mark = el('span', 'quest-mark');
+      mark.textContent = quest.done ? '✓' : '';
+      node.appendChild(mark);
+
+      const body = el('div', 'quest-body');
+      body.appendChild(el('b', null, quest.label));
+      body.appendChild(el('span', null, quest.hint));
+      const track = el('div', 'quest-track');
+      const fill = el('i');
+      fill.style.width = `${Math.round(quest.ratio * 100)}%`;
+      track.appendChild(fill);
+      body.appendChild(track);
+      node.appendChild(body);
+
+      const right = el('div', 'quest-side');
+      right.appendChild(el('b', null, `+${PZ.fmt(quest.coins)}`));
+      right.appendChild(el('span', null, quest.done ? 'récupéré' : `${PZ.fmt(quest.at)} / ${PZ.fmt(quest.goal)}`));
+      node.appendChild(right);
+
+      list.appendChild(node);
+    });
+  }
+
+  // Le compteur avance tout seul, sans rien redemander au serveur.
+  setInterval(() => {
+    if (!questState || PZ.view !== 'home') return;
+    questState.resetsIn = Math.max(0, questState.resetsIn - 30000);
+    renderQuests(questState);
+  }, 30000);
+
   /* ═══════════ Branchement ═══════════ */
 
   function bind() {
@@ -289,6 +348,11 @@
       form: $('#chat-form'),
       input: $('#chat-input'),
     });
+
+    // Les défis du jour arrivent avec le profil et se rafraîchissent dès
+    // qu'un d'eux tombe.
+    socket.on('quest:state', ({ quests }) => renderQuests(quests));
+    socket.on('quest:done', ({ quests }) => renderQuests(quests));
 
     socket.on('bj:lobby', ({ tables }) => {
       openTables = (tables || []).length;

@@ -47,6 +47,7 @@
     roll: 'Lance les dés',
     decide: 'Acheter ou laisser',
     debt: 'Dette à régler',
+    auction: 'Enchères',
     end: 'Fin de tour',
   };
 
@@ -192,6 +193,7 @@
 
     s.players.forEach((p) => {
       const row = el('div', `mono-seat${p.current ? ' turn' : ''}${p.out ? ' out' : ''}${p.you ? ' you' : ''}`);
+      row.dataset.who = p.id;
       if (!p.connected) row.classList.add('away');
       row.style.setProperty('--own', tokenColour(s, p.id));
 
@@ -364,9 +366,74 @@
       return;
     }
 
+    if (s.step === 'auction' && s.auction) {
+      box.appendChild(auctionCard(s));
+      return;
+    }
+
     if (s.step === 'end') {
       button(box, 'Terminer le tour', 'btn-primary', () => emit('mono:end'));
     }
+  }
+
+  /**
+   * L'enchère.
+   *
+   * Trois boutons de montée rapide plutôt qu'un champ de saisie : à une
+   * vraie table on lève la main, on ne remplit pas un formulaire. Le champ
+   * reste là pour qui veut un chiffre précis, mais il n'est pas ce qu'on
+   * voit en premier.
+   */
+  function auctionCard(s) {
+    const a = s.auction;
+    const box = el('div', 'mono-auction');
+
+    const head = el('div', 'mono-auction-head');
+    head.appendChild(el('b', null, a.name));
+    head.appendChild(el('span', null, `prix affiché ${fmt(a.price)} ¤`));
+    box.appendChild(head);
+
+    const now = el('p', 'mono-auction-now');
+    now.textContent = a.high
+      ? `${fmt(a.high)} ¤ — ${a.bidderName}`
+      : 'Aucune offre pour l’instant.';
+    box.appendChild(now);
+
+    if (!a.mine) {
+      box.appendChild(el('p', 'mono-hint',
+        a.whoName ? `Au tour de ${a.whoName} d’enchérir.` : 'Enchère en cours…'));
+      return box;
+    }
+
+    const steps = el('div', 'mono-auction-steps');
+    [10, 50, 100].forEach((step) => {
+      const next = a.high + step;
+      const b = el('button', 'btn btn-soft', `+${step}`);
+      b.disabled = next > s.you.money;
+      b.dataset.tip = `Enchérir à ${fmt(next)} ¤`;
+      b.addEventListener('click', () => PZ.socket.emit('mono:bid', { amount: next }));
+      steps.appendChild(b);
+    });
+    box.appendChild(steps);
+
+    const line = el('div', 'mono-auction-free');
+    const input = el('input', 'input');
+    input.type = 'number';
+    input.min = String(a.high + 1);
+    input.max = String(s.you.money);
+    input.value = String(Math.min(s.you.money, a.high + 10));
+    line.appendChild(input);
+    const go = el('button', 'btn btn-primary', 'Enchérir');
+    go.addEventListener('click', () => PZ.socket.emit('mono:bid', { amount: Number(input.value) }));
+    line.appendChild(go);
+    box.appendChild(line);
+
+    const out = el('button', 'btn btn-ghost btn-block', 'Passer');
+    out.dataset.tip = 'Définitif : on ne revient pas dans une enchère';
+    out.addEventListener('click', () => PZ.socket.emit('mono:bid-pass'));
+    box.appendChild(out);
+
+    return box;
   }
 
   /* ═══════════ Les titres de propriété ═══════════ */
@@ -595,8 +662,47 @@
 
   /* ═══════════ Le rendu complet ═══════════ */
 
+  /**
+   * Le son suit l'état, pas les clics.
+   *
+   * Écouter ses propres boutons ne ferait entendre que soi ; c'est en
+   * suivant ce qui CHANGE dans l'état qu'on entend aussi les dés du
+   * voisin, son loyer qui tombe et la grille de la prison qui se referme.
+   * On garde donc une trace du coup précédent pour ne sonner que sur une
+   * vraie nouveauté.
+   */
+  let heard = { dice: null, log: null, houses: 0, jailed: '' };
+
+  function sounds(s) {
+    if (!window.SFX || s.phase !== 'play') return;
+
+    const dice = s.dice ? s.dice.join('-') : null;
+    if (dice && dice !== heard.dice) SFX.dice();
+    heard.dice = dice;
+
+    // Le journal est la seule source qui dise ce qui vient de se passer,
+    // pour tout le monde à la fois.
+    const top = s.log && s.log[0] ? s.log[0].text : null;
+    if (top && top !== heard.log) {
+      if (/paie|touche|achète|\+200/.test(top)) SFX.cash();
+      heard.log = top;
+    }
+
+    const houses = s.cells.reduce((n, c) => n + (c.houses || 0), 0);
+    if (houses > heard.houses) SFX.build();
+    heard.houses = houses;
+
+    const jailed = s.players.filter((p) => p.jail).map((p) => p.id).sort().join(',');
+    if (jailed && jailed !== heard.jailed) SFX.jail();
+    heard.jailed = jailed;
+  }
+
   function render(s) {
     state = s;
+    // Spectateur : le bandeau le dit, et les commandes du salon
+    // disparaissent — on ne lance pas une partie qu'on regarde.
+    PZ.watchBanner(s);
+    $('#view-mono').classList.toggle('watching', Boolean(s.watching));
     $('#mono-code').textContent = s.code;
     $('#mono-phase').textContent = PHASE_TEXT[s.phase] || s.phase;
 
@@ -613,6 +719,7 @@
       ? `Au bout de ${s.lapsTarget} tours de table, le plus riche gagne.`
       : 'Partie illimitée : on joue jusqu’à ce qu’il n’en reste qu’un.';
     $('#mono-doublego').checked = Boolean(s.doubleGo);
+    $('#mono-auctions').checked = Boolean(s.auctions);
 
     renderBoard(s);
     renderSeats(s);
@@ -621,6 +728,7 @@
     renderDeeds(s);
     renderLog(s);
     renderBar(s);
+    sounds(s);
     PZ.roomChat($('#mono-chat'), s.chat);
 
     if (s.phase === 'over' && s.result) showResult(s);
@@ -673,6 +781,9 @@
   $('#mono-doublego').addEventListener('change', (e) => {
     PZ.socket.emit('mono:configure', { doubleGo: e.target.checked });
   });
+  $('#mono-auctions').addEventListener('change', (e) => {
+    PZ.socket.emit('mono:configure', { auctions: e.target.checked });
+  });
   $('#mono-chat-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = $('#mono-chat-input');
@@ -680,6 +791,12 @@
     PZ.socket.emit('party:say', { text: input.value });
     input.value = '';
   });
+
+
+  // La barre de réactions, sous le chat du salon, et le repère qui dit
+  // au-dessus de quel siège afficher la bulle.
+  PZ.seatFinder['mono'] = (id) => document.querySelector(`#mono-seats .mono-seat[data-who="${id}"]`);
+  $('#mono-chat-form').parentElement.appendChild(PZ.reactionBar());
 
   function bind() {
     const socket = PZ.socket;

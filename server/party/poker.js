@@ -572,6 +572,20 @@ class Poker extends Room {
     this.system(`${p.name} n’a pas répondu à temps : ${toCall > 0 ? 'couché' : 'parole'}.`, 'warn');
   }
 
+  /**
+   * Reprendre après un redémarrage du serveur.
+   *
+   * On ne sait pas rejouer le minuteur exact de la phase interrompue, mais
+   * on sait à qui c'est : on lui redonne un tour de parole complet. Une
+   * main relancée vaut mieux qu'une table figée.
+   */
+  resume() {
+    if (this.phase === 'over' || this.phase === 'lobby') return;
+    this.setDeadline(ACTION_MS, () => this.autoAct());
+    this.system('Le serveur a redémarré — la main reprend.', 'warn');
+    this.broadcast();
+  }
+
   setDeadline(ms, onTimeout) {
     clearTimeout(this.timer);
     this.deadline = Date.now() + ms;
@@ -653,6 +667,7 @@ class Poker extends Room {
       const state = this.stateFor(player.id);
       for (const socketId of player.sockets) this.io.to(socketId).emit('pk:state', state);
     }
+    this.broadcastWatchers('pk:state');
   }
 }
 

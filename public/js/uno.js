@@ -106,6 +106,7 @@
 
     (s.seats || []).forEach((seat) => {
       const row = el('div', `uno-seat${seat.current ? ' turn' : ''}${seat.you ? ' you' : ''}`);
+      row.dataset.who = seat.id;
       if (!seat.connected) row.classList.add('away');
 
       const img = new Image(28, 28);
@@ -413,6 +414,8 @@
 
   function render(s) {
     state = s;
+    PZ.watchBanner(s);
+    $('#view-uno').classList.toggle('watching', Boolean(s.watching));
     PZ.go('uno');
 
     $('#uno-code').textContent = s.code;
@@ -474,6 +477,12 @@
   });
 
   /* ─── Branchement ─── */
+
+
+  // La barre de réactions, sous le chat du salon, et le repère qui dit
+  // au-dessus de quel siège afficher la bulle.
+  PZ.seatFinder['uno'] = (id) => document.querySelector(`#uno-seats .uno-seat[data-who="${id}"]`);
+  $('#uno-chat-form').parentElement.appendChild(PZ.reactionBar());
 
   function bind() {
     const socket = PZ.socket;

@@ -268,6 +268,7 @@
           </div>
           <button class="me-item" data-go="mine"><svg viewBox="0 0 24 24"><use href="#i-pick"/></svg> La Mine</button>
           <button class="me-item" data-go="vault"><svg viewBox="0 0 24 24"><use href="#i-case"/></svg> Caisses</button>
+          <button class="me-item" data-go="me"><svg viewBox="0 0 24 24"><use href="#i-users"/></svg> Mon profil</button>
           <button class="me-item" data-go="medals"><svg viewBox="0 0 24 24"><use href="#i-medal"/></svg> Médailles &amp; parures</button>
           <div class="me-sep"></div>
           <button class="me-item" data-go="fair"><svg viewBox="0 0 24 24"><use href="#i-shield"/></svg> Équité &amp; graines</button>
@@ -321,6 +322,18 @@
           <p>Chaque jeu affiche sa redistribution réelle, calculée et non promise.</p>
         </div>
         <div class="games" id="games"></div>
+      </section>
+
+      <!-- ─ Les défis du jour ─
+           Trois objectifs, renouvelés à minuit, les mêmes pour tout le
+           monde : « t'as réussi celui des trois caisses ? » est une phrase
+           qu'on peut dire à ses potes. -->
+      <section class="section quests" id="quests-box" hidden>
+        <div class="section-head">
+          <h2>Défis du jour</h2>
+          <span class="section-meta" id="quests-meta">—</span>
+        </div>
+        <div class="quest-list" id="quest-list"></div>
       </section>
 
       <!-- ─ 3. Avec qui ─ -->
@@ -768,6 +781,20 @@
     </section>
 
     <!-- ══════ ÉQUITÉ ══════ -->
+    <!-- ══════ MON PROFIL ══════
+         Tout est déjà stocké — mises, manches, plus gros gain,
+         redistribution réelle — et rien ne l'affichait nulle part. Cette
+         page ne calcule presque rien : elle met en scène ce qui existait
+         déjà, plus le palmarès entre potes. -->
+    <section class="view" id="view-me">
+      <div class="view-head">
+        <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-users"/></svg>Mon profil</h1>
+        <p>Ce que le site sait de toi : ce que tu as misé, ce que tu as récupéré, et
+           qui gagne quoi chez tes potes.</p>
+      </div>
+      <div id="me-root"></div>
+    </section>
+
     <section class="view" id="view-fair">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-shield"/></svg>Équité vérifiable</h1>
@@ -1054,6 +1081,7 @@
             <label class="check"><input type="checkbox" id="bl-must"> Le donneur doit prendre au second tour</label>
           </div>
 
+          <div class="bl-announce" id="bl-announce" hidden></div>
           <div class="bl-log" id="bl-log"></div>
         </aside>
 
@@ -1128,6 +1156,7 @@
             </div>
             <p class="mono-hint" id="mono-laps-hint">Au bout de 30 tours de table, le plus riche gagne.</p>
             <label class="check"><input type="checkbox" id="mono-doublego"> Départ payé double si on tombe pile dessus</label>
+            <label class="check"><input type="checkbox" id="mono-auctions" checked> Une case refusée part aux enchères</label>
           </div>
 
           <div class="mono-bank" id="mono-bank"></div>
@@ -1327,6 +1356,27 @@
     <div class="rail-list" id="rail-list"></div>
   </aside>
   <div class="rail-veil" id="rail-veil" hidden></div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       L'INVITATION
+
+       « Léa vient d'ouvrir une table de belote. » Visible depuis
+       n'importe quelle page, avec un bouton pour y aller. Elle s'efface
+       toute seule au bout de vingt secondes : une invitation qu'on n'a
+       pas prise reste une invitation, pas un reproche.
+       ══════════════════════════════════════════════════════════════════ -->
+  <div class="invite" id="invite" hidden>
+    <img id="invite-face" alt="" width="34" height="34">
+    <div class="invite-text">
+      <b id="invite-who">—</b>
+      <span id="invite-what">—</span>
+    </div>
+    <button class="btn btn-primary" id="invite-go">Rejoindre</button>
+    <button class="invite-x" id="invite-no" aria-label="Ignorer">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <span class="invite-fuse" id="invite-fuse"></span>
+  </div>
 </div>
 
 <!-- Surcouches -->
@@ -1354,6 +1404,7 @@
 <script src="/js/uno.js"></script>
 <script src="/js/belote.js"></script>
 <script src="/js/monopoly.js"></script>
+<script src="/js/profile.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

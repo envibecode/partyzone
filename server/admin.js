@@ -20,6 +20,7 @@ const blackjack = require('./blackjack');
 const collection = require('./data/collection');
 const gifts = require('./gifts');
 const market = require('./market');
+const ledger = require('./ledger');
 const { CASES } = require('./data/cases');
 
 const MAX_LOG = 60;
@@ -132,6 +133,9 @@ async function snapshot(presence) {
     // Les offres du marché, les plus chères par rapport à leur valeur en
     // premier : c'est là que se cachent les transferts déguisés.
     market: market.all(await store.siteState()),
+    // Le registre d'économie : ce que le site fabrique et détruit chaque
+    // jour, et par quelle porte.
+    ledger: ledger.view(await store.siteState(), { days: 14 }),
   };
 }
 
@@ -220,6 +224,10 @@ async function act(actor, action, payload = {}, ctx = {}) {
       const amount = Math.round(Number(payload.amount) || 0);
       if (!amount) return { ok: false, message: 'Indique une quantité.' };
       target.vault.coins = Math.max(0, target.vault.coins + amount);
+      // Un cadeau d'administrateur fabrique de la monnaie comme la mine :
+      // il doit apparaître au registre, sinon la courbe d'inflation ment.
+      if (amount > 0) ledger.mint('cadeau admin', amount);
+      else ledger.burn('reprise admin', -amount);
       await store.saveProfile(target);
       record(actor, 'pièces', target.name, `${amount > 0 ? '+' : ''}${amount} pièces`);
       pushProfile(io, presence, target);

@@ -82,6 +82,7 @@ class Monopoly extends Room {
     /* Réglages de l'hôte. */
     this.lapsTarget = 30;      // 0 = illimité, sinon 30 ou 60 tours de table
     this.doubleGo = false;     // 400 au lieu de 200 en tombant pile sur Départ
+    this.auctions = true;      // la case refusée part au plus offrant
 
     /* État de la partie. */
     this.cells = B.BOARD.map(() => ({ ownerId: null, houses: 0, mortgaged: false }));
@@ -101,6 +102,7 @@ class Monopoly extends Room {
     this.debt = null;          // { playerId, amount, toId | null, reason }
     this.rentBoost = null;     // { kind: 'gare-double' | 'service-dix' } posé par une carte
     this.trade = null;         // l'offre en cours d'examen
+    this.auction = null;       // { cell, high, bidder, order, at, out:[] }
     this.houses = B.HOUSES;
     this.hotels = B.HOTELS;
     this.deadline = 0;
@@ -163,11 +165,12 @@ class Monopoly extends Room {
 
   /* ─── Réglages ─────────────────────────────────────────────────────── */
 
-  configure(userId, { laps, doubleGo } = {}) {
+  configure(userId, { laps, doubleGo, auctions } = {}) {
     if (userId !== this.hostId) return { ok: false, message: 'Seul l’hôte règle la partie.' };
     if (this.phase !== 'lobby') return { ok: false, message: 'La partie est en cours.' };
     if ([0, 30, 60].includes(Number(laps))) this.lapsTarget = Number(laps);
     if (typeof doubleGo === 'boolean') this.doubleGo = doubleGo;
+    if (typeof auctions === 'boolean') this.auctions = auctions;
     this.broadcast();
     return { ok: true };
   }
@@ -208,6 +211,7 @@ class Monopoly extends Room {
     this.card = null;
     this.debt = null;
     this.trade = null;
+    this.auction = null;
     this.result = null;
     this.log = [];
     this.nonce = 10;
@@ -268,7 +272,14 @@ class Monopoly extends Room {
       if (this.step === 'end') this.endTurn(id, { auto: true });
       return;
     }
-    if (this.step === 'decide') { this.pass(id, { auto: true }); this.endTurn(id, { auto: true }); return; }
+    if (this.step === 'decide') { this.pass(id, { auto: true }); return; }
+    // Une enchère qui traîne : celui qui ne répond pas passe, comme à une
+    // vraie table où le commissaire-priseur n'attend pas.
+    if (this.step === 'auction') {
+      const who = this.auctionWho();
+      if (who) this.passBid(who);
+      return;
+    }
     if (this.step === 'end') return this.endTurn(id, { auto: true });
   }
 
@@ -656,9 +667,122 @@ class Monopoly extends Room {
   pass(userId, { auto = false } = {}) {
     if (this.step !== 'decide' || !this.pendingBuy) return { ok: false, message: 'Rien à refuser.' };
     if (userId !== this.currentId()) return { ok: false, message: 'Ce n’est pas ton tour.' };
-    if (auto) this.note(`${this.nameOf(userId)} laisse passer ${B.BOARD[this.pendingBuy.cellIndex].name}.`);
+
+    const cell = this.pendingBuy.cellIndex;
     this.pendingBuy = null;
+    this.note(`${this.nameOf(userId)} laisse passer ${B.BOARD[cell].name}.`);
+    void auto;
+
+    // La règle officielle : la case part au plus offrant. C'est elle qui
+    // empêche les parties de s'enliser en « personne n'a rien » — sans
+    // enchère, un joueur peut refuser tout un groupe pour être sûr que
+    // personne ne l'ait, et la partie ne décolle jamais.
+    if (this.auctions && this.living().length > 1) return this.openAuction(cell);
+
     this.afterLanding(userId);
+    return { ok: true };
+  }
+
+  /* ─── Les enchères ─────────────────────────────────────────────────── */
+
+  /**
+   * La case refusée part au plus offrant.
+   *
+   * Départ à 10, chacun son tour, on monte ou on passe. Passer est
+   * définitif — sinon un tour d'enchère peut durer plus longtemps que la
+   * partie. Le dernier debout emporte la case à son prix ; si tout le
+   * monde passe sans miser, elle reste libre.
+   */
+  openAuction(cellIndex) {
+    const order = this.living();
+    this.auction = {
+      cell: cellIndex,
+      high: 0,
+      bidder: null,
+      order,
+      at: 0,          // index dans `order`
+      out: [],        // ceux qui ont passé
+    };
+    this.step = 'auction';
+    this.note(`${B.BOARD[cellIndex].name} part aux enchères.`);
+    this.armTimer();
+    this.broadcast();
+    return { ok: true };
+  }
+
+  /** Le prochain à parler, ou null si l'enchère est finie. */
+  auctionNext() {
+    const a = this.auction;
+    if (!a) return null;
+    const live = a.order.filter((id) => !a.out.includes(id) && this.living().includes(id));
+    if (live.length <= 1) return null;
+    for (let step = 1; step <= a.order.length; step++) {
+      const id = a.order[(a.at + step) % a.order.length];
+      if (!a.out.includes(id) && this.living().includes(id)) {
+        a.at = a.order.indexOf(id);
+        return id;
+      }
+    }
+    return null;
+  }
+
+  auctionWho() {
+    const a = this.auction;
+    if (!a) return null;
+    const id = a.order[a.at];
+    return (id && !a.out.includes(id)) ? id : null;
+  }
+
+  bid(userId, amount) {
+    const a = this.auction;
+    if (!a || this.step !== 'auction') return { ok: false, message: 'Aucune enchère en cours.' };
+    if (this.auctionWho() !== userId) return { ok: false, message: 'Ce n’est pas à toi d’enchérir.' };
+    if (a.out.includes(userId)) return { ok: false, message: 'Tu as passé.' };
+
+    const n = Math.floor(Number(amount) || 0);
+    if (n <= a.high) return { ok: false, message: `Il faut dépasser ${a.high}.` };
+    if (n > this.cash(userId)) return { ok: false, message: `Tu n’as que ${this.cash(userId)}.` };
+
+    a.high = n;
+    a.bidder = userId;
+    this.note(`${this.nameOf(userId)} enchérit à ${n}.`);
+
+    if (!this.auctionNext()) return this.closeAuction();
+    this.armTimer();
+    this.broadcast();
+    return { ok: true };
+  }
+
+  passBid(userId) {
+    const a = this.auction;
+    if (!a || this.step !== 'auction') return { ok: false, message: 'Aucune enchère en cours.' };
+    if (this.auctionWho() !== userId) return { ok: false, message: 'Ce n’est pas à toi d’enchérir.' };
+    a.out.push(userId);
+    this.note(`${this.nameOf(userId)} passe.`);
+
+    if (!this.auctionNext()) return this.closeAuction();
+    this.armTimer();
+    this.broadcast();
+    return { ok: true };
+  }
+
+  closeAuction() {
+    const a = this.auction;
+    if (!a) return { ok: true };
+    const cell = B.BOARD[a.cell];
+
+    if (a.bidder && a.high > 0 && this.cash(a.bidder) >= a.high) {
+      this.money.set(a.bidder, this.cash(a.bidder) - a.high);
+      this.cells[a.cell].ownerId = a.bidder;
+      this.note(`${this.nameOf(a.bidder)} emporte ${cell.name} aux enchères pour ${a.high}.`);
+    } else {
+      // Personne n'a misé : la case reste libre, et le prochain qui tombe
+      // dessus pourra l'acheter au prix affiché.
+      this.note(`Personne n’a misé : ${cell.name} reste libre.`);
+    }
+
+    this.auction = null;
+    this.afterLanding(this.currentId());
     return { ok: true };
   }
 
@@ -1122,6 +1246,19 @@ class Monopoly extends Room {
       deadline: this.deadline,
       serverNow: Date.now(),
       buy: this.step === 'decide' && yours ? this.pendingBuy : null,
+      auctions: this.auctions,
+      auction: this.auction ? {
+        cell: this.auction.cell,
+        name: B.BOARD[this.auction.cell].name,
+        price: B.BOARD[this.auction.cell].price,
+        high: this.auction.high,
+        bidder: this.auction.bidder,
+        bidderName: this.auction.bidder ? this.nameOf(this.auction.bidder) : null,
+        who: this.auctionWho(),
+        whoName: this.auctionWho() ? this.nameOf(this.auctionWho()) : null,
+        mine: this.auctionWho() === playerId,
+        out: this.auction.out,
+      } : null,
       debt: this.debt && this.debt.playerId === playerId
         ? { ...this.debt, toName: this.debt.toId ? this.nameOf(this.debt.toId) : 'la banque' }
         : (this.debt ? { playerId: this.debt.playerId, waiting: true, name: this.nameOf(this.debt.playerId) } : null),
@@ -1144,11 +1281,25 @@ class Monopoly extends Room {
     };
   }
 
+  /**
+   * Reprendre après un redémarrage du serveur.
+   *
+   * Le minuteur repart à zéro : personne ne doit être joué d'office parce
+   * qu'un déploiement a mangé son temps de réflexion.
+   */
+  resume() {
+    if (this.phase !== 'play') return;
+    this.armTimer();
+    this.note('Le serveur a redémarré — la partie reprend où elle en était.');
+    this.broadcast();
+  }
+
   broadcast() {
     for (const player of this.players) {
       const state = this.stateFor(player.id);
       for (const socketId of player.sockets) this.io.to(socketId).emit('mono:state', state);
     }
+    this.broadcastWatchers('mono:state');
   }
 
   destroy() {

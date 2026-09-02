@@ -20,6 +20,8 @@ const partyRank = require('./party/rank');
 const rakeback = require('./rakeback');
 const season = require('./season');
 const fairness = require('./fair');
+const ledger = require('./ledger');
+const quests = require('./quests');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'profiles.json');
@@ -91,6 +93,7 @@ function blankProfile(user, now = Date.now()) {
     giftDay: null,    // plafond quotidien de cadeaux
     party: partyRank.blank(), // rang de la section Party, séparé du casino
     rake: rakeback.blank(),   // rakeback accumulé sur les mises
+    quests: quests.blank(now), // les trois défis du jour
     marketSales: [],          // ventes récentes sur le marché
     admin: false,
     banned: false,
@@ -120,6 +123,7 @@ function migrate(profile, now = Date.now()) {
     giftDay: profile.giftDay || null,
     party: { ...fresh.party, ...(profile.party || {}) },
     rake: { ...fresh.rake, ...(profile.rake || {}) },
+    quests: profile.quests && profile.quests.day ? profile.quests : fresh.quests,
     marketSales: Array.isArray(profile.marketSales) ? profile.marketSales : [],
   };
   merged.vault.items = { ...(merged.vault.items || {}) };
@@ -335,6 +339,9 @@ function publicProfile(profile) {
     stats: profile.stats,
     coins: profile.vault.coins,
     collected: Object.values(profile.vault.items || {}).filter((n) => n > 0).length,
+    // Le nombre de caisses ouvertes : affiché sur la page « Mon profil »,
+    // et il n'y avait aucune raison de le garder pour soi.
+    opened: profile.vault.opened || 0,
     collectionTotal: require('./data/collection').TOTAL,
     cosmetics: medals.publicCosmetics(profile),
     medals: { tiers: profile.medals.tiers.length, firsts: profile.medals.firsts.length },
@@ -370,7 +377,34 @@ async function leaderboard(limit = 20, sort = 'coins') {
  * L'XP progresse avec le volume joué, pas avec la chance — c'est ce qui
  * rend le classement « niveau » lisible.
  */
-function recordPlay(profile, staked, returned) {
+/*
+ * LE POINT DE PASSAGE DES DÉFIS.
+ *
+ * Tous les jeux et tous les modules qui font avancer un défi appellent
+ * `store.quest(profile, événement, détails)`. Le serveur branche une seule
+ * fois `store.onQuestDone` pour prévenir le joueur ; les modules, eux,
+ * n'ont pas à connaître les sockets. Même idée que `blackjack.onLobbyChange`.
+ */
+let questListener = null;
+function onQuestDone(fn) { questListener = fn; }
+function questsDone(profile, done) {
+  if (done && done.length && questListener) questListener(profile, done);
+  return done;
+}
+/** À appeler depuis n'importe quel module : « ceci vient de se produire ». */
+function quest(profile, event, payload) {
+  if (!profile) return [];
+  return questsDone(profile, quests.record(profile, event, payload || {}));
+}
+
+function recordPlay(profile, staked, returned, game = 'jeu') {
+  // Le registre d'économie compte la manche ici, et nulle part ailleurs :
+  // c'est le seul endroit par lequel passent toutes les mises du site.
+  ledger.play(game, staked, returned);
+  // Les défis du jour aussi : un seul passage obligé, donc aucun jeu ne
+  // peut oublier de les prévenir.
+  questsDone(profile, quests.record(profile, 'play', { staked, returned, game }));
+
   const s = profile.stats;
   s.wagered += staked;
   s.returned += returned;
@@ -416,6 +450,11 @@ async function deleteProfile(id) {
 }
 
 async function close() {
+  // On écrit l'état AVANT de fermer la connexion. Sans ça, tout ce qui
+  // attendait le prochain battement — les offres du marché, le classement
+  // du mois, les salons Party, le registre d'économie — partait à la
+  // poubelle à chaque redéploiement.
+  await flushState().catch(() => {});
   await backend.close();
 }
 
@@ -462,6 +501,9 @@ module.exports = {
   leaderboard,
   grantXp,
   recordPlay,
+  quest,
+  onQuestDone,
+  questsView: quests.view,
   allProfiles,
   findProfile,
   deleteProfile,

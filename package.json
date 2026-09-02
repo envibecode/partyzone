@@ -15,7 +15,9 @@
     "test:ui-party": "node test/ui-party.js",
     "test:bj": "node test/blackjack.js",
     "test:uno": "node test/uno-sim.js",
-    "test:belote": "node test/belote-sim.js"
+    "test:belote": "node test/belote-sim.js",
+    "test:monopoly": "node test/monopoly-sim.js",
+    "test:persist": "node test/party-persist.js"
   },
   "engines": {
     "node": ">=18"

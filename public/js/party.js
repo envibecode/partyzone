@@ -169,13 +169,31 @@
       node.appendChild(info);
 
       node.appendChild(el('span', 'proom-code', r.code));
-      node.appendChild(el('span', 'proom-count', `${r.players}/${r.max}`));
 
-      const btn = el('button', `btn ${r.joinable ? 'btn-green' : 'btn-soft'}`,
-        r.joinable ? 'Rejoindre' : r.phase === 'lobby' ? 'Plein' : 'En cours');
-      btn.disabled = !r.joinable;
-      btn.addEventListener('click', () => PZ.socket.emit('party:join', { code: r.code }));
-      node.appendChild(btn);
+      const count = el('span', 'proom-count', `${r.players}/${r.max}`);
+      // Combien de gens regardent : ça dit d'un coup d'œil quelle partie
+      // vaut le coup d'œil, justement.
+      if (r.watchers) count.appendChild(el('i', 'proom-eyes', `👁 ${r.watchers}`));
+      node.appendChild(count);
+
+      // Une partie commencée ne se rejoint pas — mais elle se regarde.
+      // C'est là que ça compte le plus : un Monopoly dure trois quarts
+      // d'heure, et le copain qui arrive après le début n'avait jusqu'ici
+      // rien d'autre à faire qu'attendre.
+      if (r.joinable) {
+        const btn = el('button', 'btn btn-green', 'Rejoindre');
+        btn.addEventListener('click', () => PZ.socket.emit('party:join', { code: r.code }));
+        node.appendChild(btn);
+      } else if (r.watchable) {
+        const btn = el('button', 'btn btn-soft', 'Regarder');
+        btn.dataset.tip = 'Voir la partie sans y jouer';
+        btn.addEventListener('click', () => PZ.socket.emit('party:watch', { code: r.code }));
+        node.appendChild(btn);
+      } else {
+        const btn = el('button', 'btn btn-soft', r.phase === 'lobby' ? 'Plein' : 'Terminée');
+        btn.disabled = true;
+        node.appendChild(btn);
+      }
 
       box.appendChild(node);
     });
@@ -288,6 +306,80 @@
     if (atBottom) box.scrollTop = box.scrollHeight;
   };
 
+  /* ═══════════ LES RÉACTIONS RAPIDES ═══════════
+   *
+   * Six emojis, un clic, et ça apparaît deux secondes au-dessus du siège de
+   * celui qui a cliqué. Écrit une fois ici pour les cinq jeux : chacun dit
+   * seulement où trouver le siège d'un joueur (`PZ.seatFinder`), et le
+   * reste — la barre, l'envoi, l'animation — est commun.
+   *
+   * Pourquoi pas dans le chat : parce que pendant une partie on a les deux
+   * mains sur ses cartes, et que personne ne tape « ahah » au moment où il
+   * se prend un +4. C'est le regard qu'on lance à la table, pas une
+   * conversation.
+   */
+  const REACTIONS = ['👍', '😂', '😱', '🤡', '🎉', '💀'];
+
+  /** Chaque jeu déclare comment retrouver le siège d'un joueur. */
+  PZ.seatFinder = {};
+
+  /** La barre de réactions, à poser dans n'importe quel salon. */
+  PZ.reactionBar = () => {
+    const bar = el('div', 'react-bar');
+    REACTIONS.forEach((emoji) => {
+      const b = el('button', 'react-btn', emoji);
+      b.type = 'button';
+      b.addEventListener('click', () => PZ.socket.emit('party:react', { emoji }));
+      bar.appendChild(b);
+    });
+    return bar;
+  };
+
+  /**
+   * Fait apparaître la bulle au-dessus du siège.
+   *
+   * Si on ne trouve pas le siège — un spectateur, un jeu qui n'a pas
+   * déclaré son repère — la bulle monte au centre de la scène plutôt que
+   * de disparaître : une réaction perdue vaut moins qu'une réaction mal
+   * placée.
+   */
+  function popReaction({ id, emoji }) {
+    const finder = PZ.seatFinder[PZ.view];
+    const anchor = (finder && finder(id))
+      || document.querySelector(`#view-${PZ.view} .stage`)
+      || document.querySelector(`#view-${PZ.view}`);
+    if (!anchor) return;
+
+    const r = anchor.getBoundingClientRect();
+    const bubble = el('div', 'react-pop', emoji);
+    bubble.style.left = `${r.left + r.width / 2}px`;
+    bubble.style.top = `${r.top + 6}px`;
+    document.body.appendChild(bubble);
+    setTimeout(() => bubble.remove(), 2000);
+  }
+
+  /**
+   * Le bandeau du spectateur.
+   *
+   * Une seule barre, posée en haut de la vue du jeu en cours. Elle dit
+   * franchement qu'on regarde — sans ça on cherche pendant trente secondes
+   * pourquoi aucun bouton ne répond.
+   */
+  PZ.watchBanner = (s) => {
+    const view = document.querySelector(`#view-${PZ.view}`);
+    if (!view) return;
+    let bar = view.querySelector('.watch-bar');
+    if (!s || !s.watching) { if (bar) bar.remove(); return; }
+    if (!bar) {
+      bar = el('div', 'watch-bar');
+      bar.appendChild(el('span', null, 'Tu regardes cette partie sans y jouer.'));
+      const out = el('button', 'btn btn-soft', 'Arrêter de regarder');
+      out.addEventListener('click', () => { PZ.socket.emit('party:unwatch'); PZ.go('party'); });
+      bar.appendChild(out);
+      view.insertBefore(bar, view.firstChild);
+    }
+  };
+
   /** Branche le formulaire de chat d'un salon. */
   function bindChat(prefix) {
     $(`#${prefix}-chat-form`).addEventListener('submit', (e) => {
@@ -322,6 +414,7 @@
     });
 
     socket.on('party:rank', renderRank);
+    socket.on('party:reaction', popReaction);
 
     // Le serveur nous place dans un salon : on ouvre l'écran du jeu.
     socket.on('party:joined', ({ game }) => {

@@ -1,4 +1,5 @@
 'use strict';
+const ledger = require('./ledger');
 /**
  * LA MINE — le robinet de secours.
  *
@@ -190,6 +191,8 @@ function click(profile, count = 1, now = Date.now()) {
 
   coins = Math.floor(coins);
   profile.vault.coins += coins;
+  ledger.mint('mine', coins);
+  require('./store').quest(profile, 'mine', { coins });
   mine.clicks += allowed;
   mine.earned += coins;
 

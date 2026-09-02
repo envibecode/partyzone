@@ -277,6 +277,8 @@
 
   function render(s) {
     state = s;
+    PZ.watchBanner(s);
+    $('#view-uc').classList.toggle('watching', Boolean(s.watching));
     PZ.roomChrome('uc', s, {
       canStart: s.players.filter((p) => p.connected).length >= s.min,
     });

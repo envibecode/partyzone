@@ -137,6 +137,41 @@ const SFX = (() => {
     },
 
     /* ── Fanfare ── */
+    /*
+     * LES DÉS.
+     *
+     * Trois petits chocs rapprochés et irréguliers, puis un dernier plus
+     * sourd : c'est le son d'un dé qui rebondit et s'arrête. Régulier, on
+     * entendrait une machine ; c'est l'irrégularité qui fait le bois sur
+     * la table.
+     */
+    dice() {
+      for (let i = 0; i < 4; i++) {
+        const at = i * 0.055 + Math.random() * 0.02;
+        noise({ at, dur: 0.03, gain: 0.13 - i * 0.02, freq: 1500 + Math.random() * 900, q: 1.2 });
+      }
+      noise({ at: 0.24, dur: 0.06, gain: 0.08, freq: 700, q: 0.7 });
+    },
+
+    /** Le tiroir-caisse : un loyer qui tombe. */
+    cash() {
+      tone(1180, { dur: 0.05, type: 'triangle', gain: 0.1 });
+      tone(1570, { at: 0.045, dur: 0.06, type: 'triangle', gain: 0.09 });
+      noise({ at: 0.09, dur: 0.09, gain: 0.06, freq: 3400, q: 2 });
+    },
+
+    /** Une maison qu'on pose : un petit coup sec, satisfait. */
+    build() {
+      tone(300, { dur: 0.05, type: 'square', gain: 0.07 });
+      tone(600, { at: 0.05, dur: 0.09, type: 'triangle', gain: 0.08 });
+    },
+
+    /** La grille de la prison. */
+    jail() {
+      noise({ dur: 0.12, gain: 0.11, freq: 900, q: 1.4 });
+      tone(180, { at: 0.05, dur: 0.28, type: 'sawtooth', gain: 0.06 });
+    },
+
     fanfare() {
       const notes = [
         [523, 0], [659, 0.11], [784, 0.22], [1046, 0.33],

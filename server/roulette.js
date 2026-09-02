@@ -140,13 +140,20 @@ class Roulette {
       entry.payout = payout;
       entry.detail = detail;
 
+      // La manche est enregistrée même quand elle est perdue.
+      //
+      // Elle ne l'était pas du tout : la roulette ne passait jamais par
+      // `recordPlay`, donc elle ne comptait ni dans les statistiques, ni
+      // dans le rakeback, ni dans le classement du mois. On pouvait y
+      // passer la soirée sans que le site le sache.
+      const profile = await this.store.findProfile(userId).catch(() => null);
+      if (profile) {
+        if (payout > 0) profile.vault.coins += payout;
+        this.store.recordPlay(profile, entry.staked, payout, 'roulette');
+        await this.store.saveProfile(profile).catch(() => {});
+        this.pushProfile(profile);
+      }
       if (payout > 0) {
-        const profile = await this.store.findProfile(userId).catch(() => null);
-        if (profile) {
-          profile.vault.coins += payout;
-          await this.store.saveProfile(profile).catch(() => {});
-          this.pushProfile(profile);
-        }
         winners.push({ name: entry.name, avatar: entry.avatar, payout, staked: entry.staked });
       }
     }

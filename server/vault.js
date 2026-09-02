@@ -14,6 +14,7 @@
  */
 const collection = require('./data/collection');
 const { CASES, CASE_BY_ID, odds } = require('./data/cases');
+const ledger = require('./ledger');
 
 const { ITEMS, BY_ID, RARITIES, RARITY_ORDER, CATEGORIES, COUNTS, BY_CATEGORY } = collection;
 
@@ -155,6 +156,7 @@ function open(profile, caseId, count = 1, now = Date.now(), { free = false } = {
   }
 
   vault.coins -= cost;
+  ledger.burn('caisses', cost);
   // Un cadeau ne consomme ni la caisse offerte du minuteur ni le filet de
   // secours : ce serait le punir d'avoir reçu quelque chose.
   if (!free && timerFree) vault.freeAt = now + FREE_CASE_MS;
@@ -200,6 +202,9 @@ function open(profile, caseId, count = 1, now = Date.now(), { free = false } = {
   }
 
   vault.coins += dust;
+  ledger.mint('revente auto', dust);
+  // `n` caisses ouvertes d'un coup comptent pour `n` dans les défis.
+  for (let k = 0; k < n; k++) require('./store').quest(profile, 'case', { caseId: box.id });
   vault.dustEarned += dust;
   vault.opened += n;
   vault.combo = combo;
@@ -233,6 +238,8 @@ function sellDuplicates(profile) {
   }
   if (!count) return { ok: false, message: 'Aucun doublon à revendre.' };
   vault.coins += coins;
+  ledger.mint('revente auto', coins);
+  require('./store').quest(profile, 'sell', { coins, count });
   vault.dustEarned += coins;
   return { ok: true, message: `${count} doublon(s) revendu(s) : +${coins} pièces.`, coins, count };
 }

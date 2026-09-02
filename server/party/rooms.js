@@ -50,6 +50,10 @@ class Room {
 
     this.code = makeCode();
     this.players = [];      // { id, name, avatar, cosmetics, connected, sockets:Set, ... }
+    // Ceux qui regardent sans jouer. Ils reçoivent le même état que les
+    // autres, mais construit pour un identifiant qui n'est à aucune place :
+    // les mains, les mots et les rôles ne les atteignent donc jamais.
+    this.watchers = new Map();  // id → { id, name, avatar, sockets:Set }
     this.hostId = null;
     this.phase = 'lobby';
     this.chat = [];
@@ -166,6 +170,51 @@ class Room {
     return { gone: true, removed: false };
   }
 
+  /* ─── Les spectateurs ───────────────────────────────────
+   *
+   * On peut déjà regarder une table de blackjack sans jouer ; il n'y avait
+   * aucune raison que les jeux Party fassent exception. C'est même là que
+   * ça compte le plus : une partie de Monopoly dure trois quarts d'heure,
+   * et le copain qui arrive en cours de route n'a rien à faire d'autre que
+   * d'attendre.
+   *
+   * Un spectateur ne prend pas de place, ne bloque pas le lancement, et
+   * n'empêche pas un salon de se fermer quand tout le monde est parti.
+   */
+
+  watch(user, socketId) {
+    if (this.playerOf(user.id)) return { ok: false, message: 'Tu es déjà à cette table.' };
+    let w = this.watchers.get(user.id);
+    if (!w) {
+      w = { id: user.id, name: user.name, avatar: user.avatar || null, sockets: new Set() };
+      this.watchers.set(user.id, w);
+    }
+    w.sockets.add(socketId);
+    clearTimeout(this.closeTimer);
+    this.closeTimer = null;
+    return { ok: true, watcher: w };
+  }
+
+  unwatch(userId, socketId = null) {
+    const w = this.watchers.get(userId);
+    if (!w) return false;
+    if (socketId) w.sockets.delete(socketId);
+    else w.sockets.clear();
+    if (!w.sockets.size) this.watchers.delete(userId);
+    this.scheduleClose();
+    return true;
+  }
+
+  /** Envoie l'état à tous ceux qui regardent, sous un événement donné. */
+  broadcastWatchers(event) {
+    for (const w of this.watchers.values()) {
+      if (!w.sockets.size) continue;
+      const state = this.stateFor(w.id);
+      state.watching = true;
+      for (const socketId of w.sockets) this.io.to(socketId).emit(event, state);
+    }
+  }
+
   /** Sortie volontaire : là, le joueur quitte pour de bon. */
   leave(userId) {
     const player = this.playerOf(userId);
@@ -188,6 +237,8 @@ class Room {
   scheduleClose() {
     clearTimeout(this.closeTimer);
     if (this.connected.length > 0) return;
+    // Un salon que quelqu'un regarde encore n'est pas un salon vide.
+    if ([...this.watchers.values()].some((w) => w.sockets.size)) return;
     this.closeTimer = setTimeout(() => {
       if (this.connected.length === 0) this.destroy();
     }, EMPTY_ROOM_MS);
@@ -252,6 +303,9 @@ class Room {
       min: this.min,
       max: this.max,
       chat: this.chat,
+      watchers: [...this.watchers.values()]
+        .filter((w) => w.sockets.size)
+        .map((w) => ({ id: w.id, name: w.name, avatar: w.avatar })),
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -278,9 +332,120 @@ class Room {
       min: this.min,
       phase: this.phase,
       joinable: this.phase === 'lobby' && this.players.length < this.max && !this.private,
+      // On peut regarder une partie commencée, même quand on ne peut plus
+      // y entrer. C'est tout l'intérêt.
+      watchable: this.phase !== 'lobby' && this.phase !== 'over' && !this.private,
+      watchers: [...this.watchers.values()].filter((w) => w.sockets.size).length,
       private: this.private,
     };
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LA SAUVEGARDE DES SALONS
+
+   Les salons vivaient uniquement en mémoire : chaque redéploiement tuait
+   toutes les parties en cours. Un Uno de quinze minutes, ça passe. Un
+   Monopoly de quarante-cinq, non — et sur Render on redéploie à chaque
+   `git push`.
+
+   On écrit donc l'état de chaque salon dans l'état du site, toutes les
+   quinze secondes et à l'arrêt, et on le relit au démarrage.
+
+   COMMENT C'EST GÉNÉRIQUE
+   ───────────────────────
+   On ne recopie pas champ par champ le contenu de cinq jeux : on sérialise
+   TOUTES les propriétés du salon, en convertissant les `Map` en tableaux,
+   et en sautant celles qui n'ont aucun sens une fois écrites — la socket
+   du serveur, les minuteurs, les fonctions de rappel. Chaque jeu déclare
+   simplement quelles de ses propriétés sont des `Map` (`static MAPS`), et
+   ce qu'il faut faire pour reprendre la partie (`resume()`).
+
+   Un jeu qui n'a rien déclaré est quand même sauvegardé : il repartira au
+   pire à son salon d'attente, ce qui vaut toujours mieux que rien.
+
+   CE QUI NE SURVIT PAS, ET C'EST VOULU
+   ────────────────────────────────────
+   Les connexions. Après un redémarrage, tout le monde est marqué absent
+   avec sa place gardée ; chacun se rebranche en revenant sur la page, et
+   retrouve exactement ses cartes. C'est déjà ce qui se passe quand
+   quelqu'un perd le Wi-Fi — on réutilise le même chemin plutôt que d'en
+   inventer un second.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Ce qui n'a aucun sens une fois écrit sur disque. */
+// `credited` EST sauvegardé exprès : c'est le drapeau qui empêche de payer
+// deux fois la même partie, et il doit survivre au redémarrage.
+const NOT_SAVED = new Set(['io', 'timer', 'closeTimer', 'onEnd', 'onProfile']);
+
+function serialize(room) {
+  const out = { __maps: [] };
+  for (const [key, value] of Object.entries(room)) {
+    if (NOT_SAVED.has(key) || typeof value === 'function') continue;
+    if (value instanceof Map) { out[key] = [...value.entries()]; out.__maps.push(key); continue; }
+    if (value instanceof Set) { out[key] = [...value]; continue; }
+    out[key] = value;
+  }
+  // Les sockets d'un joueur ne se sauvegardent pas : personne n'est
+  // connecté de l'autre côté d'un redémarrage.
+  out.players = room.players.map((p) => ({ ...p, sockets: [], connected: false }));
+  // Personne ne regarde de l'autre côté d'un redémarrage.
+  out.watchers = [];
+  return out;
+}
+
+function hydrate(room, data) {
+  // Le constructeur a déjà réservé un code au hasard : on le rend avant de
+  // reprendre le vrai.
+  rooms.delete(room.code);
+  const maps = new Set(data.__maps || []);
+  for (const [key, value] of Object.entries(data)) {
+    if (key === '__maps' || key === 'players') continue;
+    room[key] = maps.has(key) ? new Map(value) : value;
+  }
+  room.players = (data.players || []).map((p) => ({ ...p, sockets: new Set(), connected: false }));
+  room.watchers = new Map();
+  room.timer = null;
+  room.closeTimer = null;
+  rooms.set(room.code, room);
+  return room;
+}
+
+/** Tous les salons, prêts à être écrits dans l'état du site. */
+function saveAll() {
+  return [...rooms.values()]
+    // Un salon d'attente vide ne mérite pas de survivre à un redémarrage.
+    .filter((r) => r.phase !== 'lobby' || r.players.length > 0)
+    .map((r) => ({ game: r.game, data: serialize(r) }));
+}
+
+/**
+ * Reconstruit les salons sauvegardés. `builders` associe l'identifiant
+ * d'un jeu à une fabrique — la même table que celle du serveur, pour
+ * qu'un jeu supprimé du code ne fasse pas planter le démarrage.
+ */
+function restoreAll(saved, builders) {
+  let restored = 0;
+  for (const entry of saved || []) {
+    const build = builders[entry.game];
+    if (!build || !entry.data) continue;
+    try {
+      const room = build();
+      hydrate(room, entry.data);
+      // Le salon reprend là où il en était : minuteur réarmé à neuf, parce
+      // qu'être éliminé par un déploiement serait la pire des injustices.
+      if (typeof room.resume === 'function') room.resume();
+      // Personne n'est connecté au sortir d'un redémarrage : on arme le
+      // minuteur de fermeture comme pour n'importe quel salon vide. Sans
+      // ça, une partie abandonnée avant le déploiement resterait
+      // éternellement dans la liste.
+      room.scheduleClose();
+      restored += 1;
+    } catch (err) {
+      console.error('[party] salon non restauré :', err.message);
+    }
+  }
+  return restored;
 }
 
 /* ─── Le registre ───────────────────────────────────────── */
@@ -305,4 +470,4 @@ function roomOf(userId) {
   return null;
 }
 
-module.exports = { Room, rooms, get, list, roomOf, makeCode, CHAT_HISTORY };
+module.exports = { Room, rooms, get, list, roomOf, makeCode, CHAT_HISTORY, saveAll, restoreAll };

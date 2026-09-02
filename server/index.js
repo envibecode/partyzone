@@ -33,6 +33,7 @@ const { Belote } = require('./party/belote');
 const { Monopoly } = require('./party/monopoly');
 const gate = require('./gate');
 const assets = require('./assets');
+const ledger = require('./ledger');
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,110 @@ app.get('/api/leaderboard', async (req, res) => {
   } catch (err) {
     console.error('[leaderboard]', err.message);
     res.status(500).json({ leaderboard: [] });
+  }
+});
+
+/*
+ * L'EXPORT DE LA BASE.
+ *
+ * Un fichier JSON avec tous les profils et l'état du site. Neon fait ses
+ * propres sauvegardes, mais avoir le fichier chez soi coûte dix secondes et
+ * évite une très mauvaise soirée — et c'est le seul moyen de repartir
+ * ailleurs si un jour l'hébergeur ferme.
+ *
+ * L'authentification passe par le cookie de session, comme le reste du
+ * site : ce n'est pas une API publique, c'est un bouton du panel admin.
+ */
+app.get('/api/admin/export', async (req, res) => {
+  try {
+    const user = auth.userFromCookieHeader(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: 'Session absente.' });
+    const profile = await store.findProfile(user.id);
+    if (!profile || !admin.isAdmin(profile)) {
+      return res.status(403).json({ error: 'Réservé aux administrateurs.' });
+    }
+
+    // On force l'écriture des tampons en attente : sinon l'export sort
+    // avec un registre en retard de dix secondes et des profils non écrits.
+    await store.flushState().catch(() => {});
+    await ledger.flush().catch(() => {});
+
+    const [profiles, state] = await Promise.all([store.allProfiles(), store.siteState()]);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="partyzone-${stamp}.json"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(JSON.stringify({
+      exportedAt: Date.now(),
+      exportedBy: profile.name,
+      version: 1,
+      storage: process.env.DATABASE_URL ? 'postgres' : 'fichier',
+      counts: { profiles: profiles.length },
+      state,
+      profiles,
+    }, null, 2));
+    admin.record(profile, 'export', 'base complète', `${profiles.length} profils`);
+  } catch (err) {
+    console.error('[export]', err.message);
+    res.status(500).json({ error: 'Export impossible.' });
+  }
+});
+
+/**
+ * LE PALMARÈS ENTRE POTES.
+ *
+ * Le rang Party compte les XP, ce qui dit combien on a joué mais pas
+ * comment. Ici : par jeu, qui a gagné combien de fois, et sur quel taux.
+ * C'est la seule page qui permette de dire « toi, à la belote, jamais ».
+ *
+ * On ne classe que ceux qui ont au moins trois parties : sur une seule
+ * partie gagnée, un taux de 100 % ne veut rien dire et écrase tout le
+ * monde en tête du tableau.
+ */
+const PALMARES_MIN = 3;
+
+app.get('/api/palmares', async (req, res) => {
+  try {
+    const profiles = await store.allProfiles();
+    const games = {};
+    let total = 0;
+
+    for (const p of profiles) {
+      const party = (p.party && p.party.games) || {};
+      for (const [game, g] of Object.entries(party)) {
+        if (!g || !g.played) continue;
+        total += g.played;
+        const list = games[game] || (games[game] = []);
+        list.push({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar || null,
+          played: g.played,
+          won: g.won || 0,
+          rate: g.played ? Math.round(((g.won || 0) / g.played) * 100) : 0,
+        });
+      }
+    }
+
+    const table = Object.entries(games).map(([game, list]) => {
+      const ranked = list
+        .filter((x) => x.played >= PALMARES_MIN)
+        .sort((a, b) => b.won - a.won || b.rate - a.rate || a.name.localeCompare(b.name));
+      return {
+        game,
+        parties: list.reduce((n, x) => n + x.played, 0),
+        joueurs: list.length,
+        // Le classement, et à part le « jamais gagné » — c'est la ligne
+        // dont on se moque le plus volontiers.
+        top: ranked.slice(0, 8),
+        jamais: list.filter((x) => x.played >= PALMARES_MIN && x.won === 0).map((x) => x.name),
+      };
+    }).sort((a, b) => b.parties - a.parties);
+
+    res.json({ table, total, min: PALMARES_MIN });
+  } catch (err) {
+    console.error('[palmarès]', err.message);
+    res.status(500).json({ table: [] });
   }
 });
 
@@ -196,6 +301,107 @@ async function checkSeason() {
 // ne se connecte au bon moment.
 setInterval(() => checkSeason().catch(() => {}), 3600 * 1000).unref();
 
+/**
+ * Le crédit de fin de partie Party.
+ *
+ * Une partie ne paie qu'une fois : le drapeau `credited` est posé avant le
+ * moindre `await`, sinon deux chemins de fin arrivés en même temps
+ * paieraient deux fois. Il est sauvegardé avec le salon, donc un
+ * redémarrage ne le remet pas à zéro.
+ */
+async function creditPartyRoom(room) {
+  if (!room.result || room.credited) return;
+  room.credited = true;
+  const winners = new Set(room.winners());
+  const players = room.players;
+
+  for (const p of players) {
+    const target = await store.findProfile(p.id);
+    if (!target) continue;
+    const gain = partyRank.record(target, room.game, {
+      won: winners.has(p.id),
+      players: players.length,
+      rounds: room.round || room.hand || room.laps || 1,
+    });
+    store.quest(target, 'party', { game: room.game, won: winners.has(p.id) });
+    await store.saveProfile(target);
+
+    const entry = presence.users.get(p.id);
+    if (entry) {
+      // Le profil en cache de la présence doit suivre : sinon la personne
+      // garde son ancien rang tant qu'elle ne recharge pas la page.
+      entry.profile = target;
+      for (const socketId of entry.sockets) {
+        io.to(socketId).emit('party:rank', partyRank.view(target));
+        io.to(socketId).emit('profile:update', store.publicProfile(target));
+        io.to(socketId).emit('toast', {
+          message: `+${gain.gained} XP Party — ${gain.title} (niveau ${gain.level})`,
+          kind: winners.has(p.id) ? 'success' : 'info',
+        });
+      }
+    }
+  }
+}
+
+/* ═══════════ LES JEUX PARTY, ET LEUR SURVIE ═══════════ */
+
+/**
+ * La table des jeux, à un seul endroit.
+ *
+ * Elle sert à deux choses : ouvrir un salon quand quelqu'un le demande, et
+ * reconstruire les salons sauvegardés au démarrage. Un jeu ajouté ici est
+ * ajouté partout.
+ */
+const PARTY_GAMES = {
+  undercover: { build: () => new Undercover(io) },
+  poker: { build: () => new Poker(io) },
+  uno: { build: () => new Uno(io) },
+  belote: { build: () => new Belote(io) },
+  monopoly: { build: () => new Monopoly(io) },
+};
+const PARTY_BUILDERS = Object.fromEntries(
+  Object.entries(PARTY_GAMES).map(([id, g]) => [id, g.build])
+);
+
+/**
+ * Écrit les salons en cours dans l'état du site.
+ *
+ * Toutes les quinze secondes, et à l'arrêt. Sans ça, chaque `git push`
+ * tuait toutes les parties — un Monopoly de quarante-cinq minutes perdu
+ * parce qu'on a corrigé une faute de frappe dans un texte.
+ */
+async function savePartyRooms() {
+  try {
+    const state = await store.siteState();
+    state.partyRooms = partyRooms.saveAll();
+    store.touchState();
+  } catch (err) {
+    console.error('[party] sauvegarde impossible :', err.message);
+  }
+}
+setInterval(() => { savePartyRooms(); }, 15000).unref();
+
+/** Au démarrage : on remet les salons là où ils étaient. */
+async function restorePartyRooms() {
+  try {
+    const state = await store.siteState();
+    const n = partyRooms.restoreAll(state.partyRooms, PARTY_BUILDERS);
+    if (n) console.log(`  Salons Party  : ${n} partie(s) reprise(s) après redémarrage`);
+    // Les salons rechargés doivent recevoir le crédit de fin de partie
+    // comme les autres : on rebranche le rappel, perdu à la sérialisation.
+    for (const room of partyRooms.rooms.values()) {
+      if (!room.onEnd) {
+        room.onEnd = (finished) => {
+          creditPartyRoom(finished).catch((e) => console.error('[party]', e.message));
+          io.emit('party:list', { rooms: partyRooms.list() });
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[party] restauration impossible :', err.message);
+  }
+}
+
 /* ─── Socket.IO ────────────────────────────────────────── */
 
 io.use(async (socket, next) => {
@@ -243,6 +449,7 @@ io.on('connection', async (socket) => {
   socket.emit('online:list', { online: presence.list() });
   socket.emit('chat:history', { messages: chat.history(), maxLength: 240 });
   socket.emit('bj:lobby', { tables: lobbyTables() });
+  socket.emit('quest:state', { quests: store.questsView(profile) });
 
   /** Écriture différée : utile pour les rafales de clics. */
   let saveTimer = null;
@@ -286,7 +493,7 @@ io.on('connection', async (socket) => {
     const result = plinko.play(profile, payload);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
 
-    store.recordPlay(profile, result.staked, result.payout);
+    store.recordPlay(profile, result.staked, result.payout, 'plinko');
     await save();
 
     socket.emit('plinko:result', { ...result, me: store.publicProfile(profile) });
@@ -316,7 +523,7 @@ io.on('connection', async (socket) => {
     const result = slots.play(profile, payload);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
 
-    store.recordPlay(profile, result.staked, result.payout);
+    store.recordPlay(profile, result.staked, result.payout, 'machine à sous');
     await save();
 
     socket.emit('slots:result', { ...result, me: store.publicProfile(profile) });
@@ -481,7 +688,7 @@ io.on('connection', async (socket) => {
         if (seat.isBot || !seat.lastResult) continue;
         const p = t.profiles.get(seat.id);
         if (!p) continue;
-        store.recordPlay(p, seat.lastResult.staked, seat.lastResult.payout);
+        store.recordPlay(p, seat.lastResult.staked, seat.lastResult.payout, 'blackjack');
         await store.saveProfile(p).catch(() => {});
         pushProfile(p);
       }
@@ -925,7 +1132,10 @@ io.on('connection', async (socket) => {
 
   /* ══════════ DIVERS ══════════ */
 
-  socket.on('me:refresh', () => sendMe());
+  socket.on('me:refresh', () => {
+    sendMe();
+    socket.emit('quest:state', { quests: store.questsView(profile) });
+  });
 
   socket.on('presence:status', ({ status } = {}) => {
     // La liste des états connus vit dans `presence.js` : la recopier ici
@@ -944,13 +1154,7 @@ io.on('connection', async (socket) => {
    * fait de venir jouer avec les autres plutôt que la chance.
    */
 
-  const GAMES = {
-    undercover: { build: () => new Undercover(io) },
-    poker: { build: () => new Poker(io) },
-    uno: { build: () => new Uno(io) },
-    belote: { build: () => new Belote(io) },
-    monopoly: { build: () => new Monopoly(io) },
-  };
+  const GAMES = PARTY_GAMES;
 
   const partyRoom = () => partyRooms.roomOf(user.id);
 
@@ -966,6 +1170,22 @@ io.on('connection', async (socket) => {
     socket.leave(room.channel);
     room.broadcast();
     broadcastPartyList();
+  }
+
+  /** Le code du salon qu'on regarde sans y jouer, s'il y en a un. */
+  let watching = null;
+
+  function stopWatching() {
+    if (!watching) return;
+    const room = partyRooms.get(watching);
+    if (room) {
+      room.unwatch(user.id, socket.id);
+      socket.leave(room.channel);
+      room.broadcast();
+      broadcastPartyList();
+    }
+    watching = null;
+    socket.emit('party:left', {});
   }
 
   /** Sortie volontaire, définitive. */
@@ -1024,6 +1244,28 @@ io.on('connection', async (socket) => {
     const result = enterRoom(room);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     socket.emit('party:joined', { code: room.code, game: room.game });
+
+    /*
+     * « Léa vient d'ouvrir une table de belote. »
+     *
+     * Avant, seuls ceux déjà dans le hall Party voyaient un salon s'ouvrir.
+     * Si tu étais aux caisses, rien ne te le disait, et deux personnes
+     * pouvaient s'attendre chacune de son côté sans le savoir. À trois ou
+     * quatre connectés, c'est ce détail qui fait la soirée.
+     *
+     * On prévient tout le monde SAUF celui qui vient d'ouvrir : il est déjà
+     * au courant, et une notification de sa propre action fait bête.
+     */
+    socket.broadcast.emit('party:invite', {
+      code: room.code,
+      game: room.game,
+      gameName: room.gameName,
+      host: user.name,
+      hostAvatar: user.avatar || null,
+      max: room.max,
+      at: Date.now(),
+    });
+
     // Et l'état APRÈS avoir dit où aller. `enterRoom` a déjà diffusé une
     // fois, mais le client n'écoutait pas encore : sa page du jeu n'est
     // branchée qu'au moment où il y arrive, c'est-à-dire sur ce
@@ -1045,9 +1287,67 @@ io.on('connection', async (socket) => {
     room.broadcast();   // même raison que ci-dessus
   });
 
-  socket.on('party:leave', () => leaveParty());
+  /*
+   * REGARDER UNE PARTIE.
+   *
+   * On peut déjà regarder une table de blackjack ; ici c'est encore plus
+   * utile, parce qu'une partie de Monopoly dure trois quarts d'heure et
+   * qu'on ne peut pas y entrer une fois lancée. Le spectateur reçoit le
+   * même état que les joueurs, construit pour un identifiant qui n'est à
+   * aucune place : les mains, les mots et les rôles ne l'atteignent donc
+   * jamais — c'est le serveur qui garantit ça, pas l'affichage.
+   */
+  socket.on('party:watch', ({ code } = {}) => {
+    const room = partyRooms.get(code);
+    if (!room) return socket.emit('toast', { message: 'Aucun salon avec ce code.', kind: 'error' });
+
+    const already = partyRoom();
+    if (already && already !== room) leaveParty();
+
+    const result = room.watch(user, socket.id);
+    if (!result.ok) {
+      // Déjà à la table : autant l'y renvoyer plutôt que de refuser sèchement.
+      socket.emit('party:joined', { code: room.code, game: room.game });
+      room.broadcast();
+      return;
+    }
+    socket.join(room.channel);
+    watching = room.code;
+    presence.setStatus(user.id, room.game);
+    socket.emit('party:joined', { code: room.code, game: room.game, watching: true });
+    room.broadcast();
+    broadcastPartyList();
+  });
+
+  socket.on('party:unwatch', () => stopWatching());
+
+  socket.on('party:leave', () => { stopWatching(); leaveParty(); });
 
   socket.on('party:list', () => socket.emit('party:list', { rooms: partyRooms.list() }));
+
+  /*
+   * LES RÉACTIONS RAPIDES.
+   *
+   * Personne n'écrit dans le chat pendant qu'il joue : on a les deux mains
+   * sur ses cartes. Six emojis, un clic, et ça s'affiche deux secondes
+   * au-dessus de son siège. C'est la version numérique du regard qu'on
+   * lance à la table quand quelqu'un pose un +4.
+   *
+   * On limite la cadence ici, pas côté navigateur : un client bricolé ne
+   * doit pas pouvoir noyer la table sous les emojis.
+   */
+  const REACTIONS = ['👍', '😂', '😱', '🤡', '🎉', '💀'];
+  let lastReactAt = 0;
+
+  socket.on('party:react', ({ emoji } = {}) => {
+    const room = partyRoom();
+    if (!room || !REACTIONS.includes(emoji)) return;
+    if (!room.playerOf(user.id)) return;
+    const now = Date.now();
+    if (now - lastReactAt < 900) return;   // en silence : ce n'est pas une faute
+    lastReactAt = now;
+    room.emit('party:reaction', { id: user.id, name: user.name, emoji, at: now });
+  });
 
   socket.on('party:say', ({ text } = {}) => {
     const room = partyRoom();
@@ -1070,35 +1370,7 @@ io.on('connection', async (socket) => {
    * perdants aussi, un peu moins. Le rang Party récompense la présence, pas
    * la performance.
    */
-  async function creditParty(room) {
-    if (!room.result || room.credited) return;
-    // Une partie ne crédite qu'une fois, même si deux chemins mènent à la fin.
-    room.credited = true;
-    const winners = new Set(room.winners());
-    const players = room.players;
-
-    for (const p of players) {
-      const target = p.id === user.id ? profile : await store.findProfile(p.id);
-      if (!target) continue;
-      const gain = partyRank.record(target, room.game, {
-        won: winners.has(p.id),
-        players: players.length,
-        rounds: room.round || room.hand || 1,
-      });
-      await store.saveProfile(target);
-
-      const entry = presence.users.get(p.id);
-      if (entry) {
-        for (const socketId of entry.sockets) {
-          io.to(socketId).emit('party:rank', partyRank.view(target));
-          io.to(socketId).emit('toast', {
-            message: `+${gain.gained} XP Party — ${gain.title} (niveau ${gain.level})`,
-            kind: winners.has(p.id) ? 'success' : 'info',
-          });
-        }
-      }
-    }
-  }
+  const creditParty = creditPartyRoom;
 
   /* ─── Monopoly ─── */
 
@@ -1123,6 +1395,8 @@ io.on('connection', async (socket) => {
   socket.on('mono:roll', () => monoDo((r) => r.roll(user.id)));
   socket.on('mono:buy', () => monoDo((r) => r.buy(user.id)));
   socket.on('mono:pass', () => monoDo((r) => r.pass(user.id)));
+  socket.on('mono:bid', ({ amount } = {}) => monoDo((r) => r.bid(user.id, amount)));
+  socket.on('mono:bid-pass', () => monoDo((r) => r.passBid(user.id)));
   socket.on('mono:end', () => monoDo((r) => r.endTurn(user.id)));
   socket.on('mono:build', ({ cell } = {}) => monoDo((r) => r.build(user.id, Number(cell))));
   socket.on('mono:sell', ({ cell } = {}) => monoDo((r) => r.sell(user.id, Number(cell))));
@@ -1231,6 +1505,7 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => {
     clearTimeout(saveTimer);
     leaveTable();
+    stopWatching();
     leavePartySocket();
     presence.leave(socket, user.id);
     refreshAdmins();
@@ -1240,6 +1515,27 @@ io.on('connection', async (socket) => {
 });
 
 blackjack.startJanitor();
+// Le registre d'économie verse son tampon dans l'état du site.
+ledger.start();
+restorePartyRooms();
+
+/*
+ * UN DÉFI QUI TOMBE.
+ *
+ * Les pièces sont déjà créditées par `quests.record` ; ici on ne fait que
+ * le dire — une fenêtre, un son, et le profil rafraîchi. Pas de bouton
+ * « récupérer » : une récompense qu'on oublie de prendre et qui disparaît
+ * à minuit est une punition déguisée en fonctionnalité.
+ */
+store.onQuestDone((profile, done) => {
+  const entry = presence.users.get(profile.id);
+  if (!entry) return;
+  entry.profile = profile;
+  for (const socketId of entry.sockets) {
+    io.to(socketId).emit('profile:update', store.publicProfile(profile));
+    io.to(socketId).emit('quest:done', { done, quests: store.questsView(profile) });
+  }
+});
 // Une place libérée toute seule (siège quitté en pleine main, récupéré en
 // fin de main) doit rafraîchir le hall sans que personne n'ait cliqué.
 blackjack.onLobbyChange(broadcastLobby);
@@ -1257,6 +1553,10 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     console.log('\n[serveur] arrêt en cours…');
     try {
       roulette.stop();
+      // Les parties en cours partent dans la base AVANT de fermer : c'est
+      // tout l'intérêt de l'exercice.
+      await savePartyRooms();
+      await ledger.flush();
       await store.close();
     } catch {}
     process.exit(0);

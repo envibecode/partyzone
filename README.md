@@ -29,8 +29,12 @@ virtuelles uniquement**.
 | 🏆 **Classements** | Général par pièces, par niveau ou par rang Party, plus un **classement du mois** sur le bénéfice net. |
 | 🗺️ **À venir** | Une page qui dit franchement ce qui est en chantier, ce qui reste à décider (publicité, abonnements) et ce qui est déjà en ligne. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
-| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Quatre jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8), **Uno** (2 à 10) et **Belote** (4). Loup-garou et Monopoly sont annoncés dans le hall mais pas encore jouables. |
+| 🎯 **Défis du jour** | Trois objectifs tirés au sort chaque jour à minuit, **les mêmes pour tout le monde** — « t'as réussi celui des trois caisses ? » est une phrase qu'on peut dire à ses potes. Payés en pièces, automatiquement : pas de bouton « récupérer », qui n'est qu'une récompense qu'on oublie de prendre. Moins de mille pièces par jour au total : un rendez-vous, pas un robinet. |
+| 👁 **Regarder** | Toutes les parties Party se regardent sans y jouer, comme une table de blackjack. C'est là que ça compte : un Monopoly dure trois quarts d'heure et ne se rejoint pas en cours de route. Le spectateur reçoit l'état construit pour un identifiant qui n'est à aucune place — les mains, les mots et les rôles ne l'atteignent jamais, et c'est le serveur qui le garantit. |
+| 💾 **Rien ne se perd** | Les salons Party sont écrits dans la base toutes les quinze secondes et à l'arrêt, puis relus au démarrage. Un `git push` ne tue plus la partie de tout le monde. |
+| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Cinq jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8), **Uno** (2 à 10), **Belote** (4) et **Monopoly** (2 à 6). Loup-garou est annoncé dans le hall mais pas encore jouable. |
 | 🂡 **Belote** | À quatre, en deux équipes face à face. L'**ordre des cartes change à l'atout** (Valet, 9, As, 10, Roi, Dame, 8, 7 — contre As, 10, Roi, Dame, Valet ailleurs), les deux tours d'enchère avec la retourne, et toutes les obligations : **fournir**, **couper**, **surcouper**, **monter à l'atout** — avec la seule exception qui compte, on ne coupe pas le pli de son partenaire. **Belote-rebelote** annoncée automatiquement par le serveur (l'oublier coûte 20 points et personne n'a envie de perdre là-dessus), **dix de der**, **capot** à 252, et le contrat : le preneur doit faire **82 sur 162**, sinon il est dedans et l'adversaire ramasse tout. Le serveur calcule les coups légaux et **explique** chaque refus — « il faut fournir à cœur », « à l'atout il faut monter ». |
+| 🎲 **Monopoly** | Le plateau français : boulevard de Belleville d'un bout, rue de la Paix de l'autre. **Toutes** les règles — loyer doublé sur un groupe complet, maisons et hôtels bâtis **uniformément**, stock fini de la banque (32 maisons, 12 hôtels), gares à 25/50/100/200, services à 4× ou 10× les dés, prison avec ses trois sorties, Chance et Caisse commune, hypothèques à 50 % et rachat à 110 %, **échanges entre joueurs**, faillites au profit du créancier. Une **partie courte** réglable en 30 ou 60 tours de table : au bout du compte, le plus riche gagne — sinon un Monopoly dure trois heures et finit par des abandons. Chaque refus est **expliqué** : « il te manque une case du groupe », « la banque n'a plus d'hôtel ». |
 | 🎴 **Uno** | Les 108 cartes, avec les règles qu'on oublie toujours : **un seul 0 par couleur** (donc deux fois plus rare qu'un 7), les **+2 qui se cumulent** (réglable par l'hôte), le **+4 contestable** — le serveur sait si tu bluffais, et c'est le menteur qui ramasse — et les **2 cartes de pénalité** pour qui oublie d'annoncer, à condition qu'un adversaire le remarque dans les quatre secondes. Un tour trop long ou un joueur déconnecté ne bloque jamais la table : le serveur pioche et passe. |
 | 🚧 **Porte d'ouverture** | Tant que le site n'a pas ouvert, **toute** adresse renvoie un compte à rebours — pas de page qui fuit parce qu'on connaît son URL, et les websockets sont fermés aussi. L'ouverture se fait **toute seule à la date prévue** (2 septembre 2026, midi, heure de Paris) ; le panel admin permet d'ouvrir plus tôt, de refermer, ou de changer la date. Un « accès équipe » discret sur la page d'attente et sur l'écran de connexion accepte la clé `ADMIN_KEY` et donne un laissez-passer de douze heures. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
@@ -254,6 +258,8 @@ npm run test:poker     # 60 tournois simulés : aucun jeton créé ni perdu
 npm run test:bj        # les cinq places, les spectateurs, l'exclusion, le départ immédiat
 npm run test:uno       # 60 parties d'Uno simulées : aucune carte créée ni perdue
 npm run test:belote    # 40 parties de belote : 32 cartes et 162 points, à chaque donne
+npm run test:monopoly  # 40 parties de Monopoly : le stock de la banque, les constructions
+npm run test:persist   # tue le serveur en pleine partie et vérifie qu'elle repart
 npm run test:ui        # parcours navigateur du casino + captures d'écran
 npm run test:ui-party  # parcours navigateur de la section Party
 ```
@@ -292,6 +298,30 @@ d'accord sur cent trente donnes, le comptage est juste. Il tente aussi
 volontairement des coups interdits — plus de cinq cents par exécution — et
 exige qu'ils soient refusés **avec une explication**, parce qu'un moteur de
 belote qui accepte tout est un jeu de bataille.
+
+`npm run test:monopoly` joue quarante parties entières au hasard — plus de
+vingt mille actions — et vérifie **après chacune** quatre choses. Que le stock
+de la banque est intact : 32 maisons et 12 hôtels, posés plus en réserve,
+toujours (un hôtel qui « oublie » de rendre ses quatre maisons casse la
+pénurie, qui est une des mécaniques les plus fines du jeu). Qu'aucun compte
+n'est négatif — c'est la traduction de « on ne peut pas devoir de l'argent et
+continuer à jouer ». Qu'aucune case n'appartient à un joueur en faillite.
+Et que rien n'est bâti illégalement : hors d'un monopole, sur un groupe
+hypothéqué, ou avec plus d'une maison d'écart dans un groupe. Il vérifie en
+plus, à part, que les **barèmes recopiés à la main** sont cohérents :
+l'hypothèque vaut la moitié du prix sur les 28 cases, et les 22 barèmes de
+loyer montent bien à chaque construction. Une faute de frappe là-dedans ne se
+verrait jamais en jouant.
+
+`npm run test:persist` est le seul test du dépôt qui **redémarre un serveur
+en cours de route**. Il ouvre une partie de Monopoly à trois, joue une
+dizaine de tours, envoie un `SIGTERM` au serveur — exactement ce que fait
+l'hébergeur à chaque déploiement —, le relance, et vérifie que le code du
+salon, les positions des pions, l'argent, les propriétés et le tour en cours
+sont intacts, puis que la partie repart. Il vérifie aussi que le serveur
+**meurt vraiment** : sans ça le test croirait avoir redémarré alors que la
+partie n'a jamais quitté la mémoire, ce qui serait le plus trompeur des
+tests verts.
 
 `npm run test:poker` ne demande pas de serveur : il joue soixante tournois
 entiers au hasard, avec beaucoup de tapis pour fabriquer des pots secondaires,

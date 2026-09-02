@@ -28,6 +28,7 @@
  */
 
 const collection = require('./data/collection');
+const ledger = require('./ledger');
 const { ITEMS, BY_ID, RARITIES } = collection;
 
 const FEE = 0.08;              // commission, détruite
@@ -231,6 +232,8 @@ function buy(buyer, state, listingId, sellerProfile) {
   market.listings.splice(index, 1);
   market.sales += 1;
   market.burned += fee;
+  ledger.burn('marché', fee);
+  if (sellerProfile) require('./store').quest(sellerProfile, 'sell', { coins: net, count: listing.count });
 
   return {
     ok: true,

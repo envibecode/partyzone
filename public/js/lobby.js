@@ -39,10 +39,11 @@
       rtp: '96,9 %', min: 10,
     },
     {
-      id: 'slots', name: 'Les Copains', icon: 'i-slots',
+      id: 'slots', name: 'Horse House', icon: 'i-slots',
       tag: 'Machine à sous',
-      line: 'Cinq rouleaux, dix lignes. Trois pings ouvrent huit tours offerts.',
-      rtp: '95,4 %', min: 100,
+      line: 'Vingt lignes, des portes d’écurie à multiplicateur, et un bonus '
+        + 'où elles restent collées jusqu’au dernier tour.',
+      rtp: '94,6 %', min: 200,
     },
     {
       id: 'vault', name: 'Caisses', icon: 'i-case',
@@ -139,8 +140,12 @@
     if (!p) return;
 
     $('#tk-coins').textContent = fmt(p.coins);
+    // On rappelle l'XP du mois ici : c'est le chiffre qui décide du lot,
+    // et il n'était visible que sur la page des médailles.
+    const monthXp = (p.season && p.season.xp) || 0;
     $('#hero-sub').textContent =
-      `Niveau ${p.level} · ${p.title} — ${fmt(p.collected || 0)} objets sur ${fmt(p.collectionTotal || 518)}`;
+      `Niveau ${p.level} · ${p.title} — ${fmt(p.collected || 0)} objets sur ${fmt(p.collectionTotal || 518)}`
+      + ` · ${fmt(monthXp)} XP ce mois-ci`;
 
     const box = $('#hero-cards');
     box.replaceChildren();

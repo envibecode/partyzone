@@ -17,7 +17,14 @@
     "test:uno": "node test/uno-sim.js",
     "test:belote": "node test/belote-sim.js",
     "test:monopoly": "node test/monopoly-sim.js",
-    "test:persist": "node test/party-persist.js"
+    "test:persist": "node test/party-persist.js",
+    "test:loup": "node test/loup-sim.js",
+    "test:blindtest": "node test/blindtest-sim.js",
+    "test:soiree": "node test/soiree-sim.js",
+    "test:soiree-live": "node test/soiree-live.js",
+    "test:objectif": "node test/objectif-sim.js",
+    "test:ui-chat": "node test/ui-chat.js",
+    "test:slots": "node test/slots-sim.js"
   },
   "engines": {
     "node": ">=18"

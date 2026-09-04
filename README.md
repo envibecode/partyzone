@@ -12,6 +12,39 @@ virtuelles uniquement**.
 
 ---
 
+## Le but du site
+
+Une seule chose compte : **finir le mois avec le plus d'XP.** Le reste n'est
+que le chemin pour y arriver.
+
+```
+   Le casino          →   Les caisses        →   Le classement
+   (blackjack,            (les pièces se         (le premier en XP
+    roulette, Plinko,      dépensent ici,         au dernier jour
+    machine à sous)        et ça donne l'XP)      remporte le lot)
+        ↑
+   La Mine, quand on n'a plus rien
+   (une barre d'endurance ≈ 60 pièces)
+```
+
+Ce que ça change, et c'est volontaire : **amasser des pièces ne fait pas
+gagner.** Le joueur prudent qui garde son magot sans jamais ouvrir une
+caisse finit dernier — il n'est même pas classé. Il faut dépenser pour
+marquer. Le classement a longtemps compté le bénéfice net ; il récompensait
+exactement le contraire de ce qu'on veut voir se passer un vendredi soir.
+
+**La section Party est complètement à part.** Son rang compte les soirées
+passées à jouer ensemble, il ne se mélange à rien : gagner au Monopoly ne
+rapporte **aucune** XP au classement du mois. C'est le classement entre
+potes, et rien d'autre.
+
+Et le lot : c'est un **concours gratuit**, pas une loterie. Personne ne peut
+acheter de pièces, donc personne ne paie pour participer. Le site désigne le
+vainqueur et le dit ; **la remise se fait à la main**, en dehors du site.
+Rien n'est distribué automatiquement.
+
+---
+
 ## Ce qu'il y a dedans
 
 | | |
@@ -22,20 +55,29 @@ virtuelles uniquement**.
 | 🃏 **Blackjack** | Vrai tapis vert à **cinq places, pas une de plus**, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot**. On peut **regarder une partie sans jouer** (et s'asseoir quand une place se libère), la donne **part dès que tout le monde a misé** au lieu d'attendre les 22 secondes, et l'hôte peut **retirer quelqu'un qui squatte un siège** — jamais quelqu'un qui a une mise en jeu. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
 | 🎡 **Roulette** | Roue européenne à 37 cases, **partagée par tout le site**. On voit les mises des autres case par case, les pseudos des gagnants du dernier tour défilent, et le solde est gelé pendant la rotation pour ne pas dévoiler le résultat. Remise, mises automatiques, configurations enregistrées. |
 | 🔻 **Plinko** | 8, 12 ou 16 rangées, trois niveaux de risque. Multiplicateurs calculés à partir des vraies probabilités binomiales. Historique bille par bille sur le côté. |
-| 🎰 **Les Copains** | Machine à sous 5 rouleaux × 3 rangées, 10 lignes, thème serveur Discord. Joker, symbole bonus, 8 tours offerts à ×3. Redistribution **mesurée** sur 400 000 tours simulés : 95,39 %. |
+| 🎰 **Horse House** | Machine à sous 5 rouleaux × 3 rangées, **20 lignes fixes**, dans un ranch. La **porte d'écurie** (rouleaux 2, 3, 4) remplace tout et arrive avec un ×2 ou un ×3 — plusieurs portes sur la même ligne **additionnent** leurs multiplicateurs. Trois **fers à cheval** (rouleaux 1, 3, 5) ouvrent 10 tours offerts pendant lesquels **les portes restent collées** jusqu'à la fin, multiplicateur compris ; trois fers de plus rajoutent 10 tours. Redistribution **mesurée**, pas promise : 94,6 %, plafond de gain à 2 500× la mise. |
 | 📦 **Caisses** | **518 objets de culture internet** à collectionner, six raretés, huit catégories. 5 caisses générales + 8 caisses à thème. Rouleau horizontal façon CS:GO qui montre ce que tu aurais pu avoir. Les doublons se revendent. |
-| 🏅 **Médailles & parures** | Un palier tous les 50 objets. Le **premier joueur du site** à l'atteindre garde la version dorée, pour toujours. On y débloque des contours d'avatar, des pseudos en flammes et des icônes animées, visibles partout sur le site. |
+| 🏅 **Médailles & parures** | Un palier tous les 50 objets. **Tout le monde peut décrocher les mêmes** : un palier se mérite, il ne se réserve pas. On y débloque des contours d'avatar, des pseudos en flammes et des icônes animées, visibles partout sur le site. |
 | 🎁 **Cadeaux** | Offrir une caisse à un copain (le donneur paie, plafond quotidien) ou en distribuer depuis le panel admin. |
-| 🏆 **Classements** | Général par pièces, par niveau ou par rang Party, plus un **classement du mois** sur le bénéfice net. |
+| 🏆 **Classements** | Général par XP, par pièces ou par rang Party, plus le **classement du mois — en XP**, celui qui décide du lot. |
 | 🗺️ **À venir** | Une page qui dit franchement ce qui est en chantier, ce qui reste à décider (publicité, abonnements) et ce qui est déjà en ligne. |
 | 💬 **Chat** | Une salle pour tout le site, présente aussi dans la roulette et au blackjack. |
 | 🎯 **Défis du jour** | Trois objectifs tirés au sort chaque jour à minuit, **les mêmes pour tout le monde** — « t'as réussi celui des trois caisses ? » est une phrase qu'on peut dire à ses potes. Payés en pièces, automatiquement : pas de bouton « récupérer », qui n'est qu'une récompense qu'on oublie de prendre. Moins de mille pièces par jour au total : un rendez-vous, pas un robinet. |
 | 👁 **Regarder** | Toutes les parties Party se regardent sans y jouer, comme une table de blackjack. C'est là que ça compte : un Monopoly dure trois quarts d'heure et ne se rejoint pas en cours de route. Le spectateur reçoit l'état construit pour un identifiant qui n'est à aucune place — les mains, les mots et les rôles ne l'atteignent jamais, et c'est le serveur qui le garantit. |
 | 💾 **Rien ne se perd** | Les salons Party sont écrits dans la base toutes les quinze secondes et à l'arrêt, puis relus au démarrage. Un `git push` ne tue plus la partie de tout le monde. |
-| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Cinq jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8), **Uno** (2 à 10), **Belote** (4) et **Monopoly** (2 à 6). Loup-garou est annoncé dans le hall mais pas encore jouable. |
+| 🎈 **Party** | Une section à part, **sans aucune pièce** : salons à code, chat, et un **rang Party** séparé qui compte les soirées jouées plutôt que la chance. Sept jeux dedans — **Undercover** (3 à 12, avec Monsieur Blanc), **Poker** Texas Hold'em en tournoi (2 à 8), **Uno** (2 à 10), **Belote** (4), **Monopoly** (2 à 6), **Loup-garou** (4 à 16) et **Blindtest** (1 à 12). |
 | 🂡 **Belote** | À quatre, en deux équipes face à face. L'**ordre des cartes change à l'atout** (Valet, 9, As, 10, Roi, Dame, 8, 7 — contre As, 10, Roi, Dame, Valet ailleurs), les deux tours d'enchère avec la retourne, et toutes les obligations : **fournir**, **couper**, **surcouper**, **monter à l'atout** — avec la seule exception qui compte, on ne coupe pas le pli de son partenaire. **Belote-rebelote** annoncée automatiquement par le serveur (l'oublier coûte 20 points et personne n'a envie de perdre là-dessus), **dix de der**, **capot** à 252, et le contrat : le preneur doit faire **82 sur 162**, sinon il est dedans et l'adversaire ramasse tout. Le serveur calcule les coups légaux et **explique** chaque refus — « il faut fournir à cœur », « à l'atout il faut monter ». |
 | 🎲 **Monopoly** | Le plateau français : boulevard de Belleville d'un bout, rue de la Paix de l'autre. **Toutes** les règles — loyer doublé sur un groupe complet, maisons et hôtels bâtis **uniformément**, stock fini de la banque (32 maisons, 12 hôtels), gares à 25/50/100/200, services à 4× ou 10× les dés, prison avec ses trois sorties, Chance et Caisse commune, hypothèques à 50 % et rachat à 110 %, **échanges entre joueurs**, faillites au profit du créancier. Une **partie courte** réglable en 30 ou 60 tours de table : au bout du compte, le plus riche gagne — sinon un Monopoly dure trois heures et finit par des abandons. Chaque refus est **expliqué** : « il te manque une case du groupe », « la banque n'a plus d'hôtel ». |
 | 🎴 **Uno** | Les 108 cartes, avec les règles qu'on oublie toujours : **un seul 0 par couleur** (donc deux fois plus rare qu'un 7), les **+2 qui se cumulent** (réglable par l'hôte), le **+4 contestable** — le serveur sait si tu bluffais, et c'est le menteur qui ramasse — et les **2 cartes de pénalité** pour qui oublie d'annoncer, à condition qu'un adversaire le remarque dans les quatre secondes. Un tour trop long ou un joueur déconnecté ne bloque jamais la table : le serveur pioche et passe. |
+| 🐺 **Loup-garou** | Les rôles, les nuits, les votes : loup, villageois, **voyante**, **sorcière** (une potion de vie, une de mort, une seule fois chacune) et **chasseur**, qui emporte quelqu'un avec lui en mourant. La composition s'adapte au nombre de joueurs — environ un loup pour quatre, jamais plus d'un tiers, et toujours deux villageois simples. Le débat se fait de vive voix sur Discord : le site ne fait que compter, garder les rôles secrets et rythmer les phases. |
+| 🎵 **Blindtest** | L'idée d'origine du site. Tu colles l'adresse d'une **playlist YouTube à toi**, le site en lit les morceaux — sans clé d'API — et lance des extraits. **Quatre propositions** (six en difficile), toutes tirées de ta propre playlist, ce qui interdit de deviner sans écouter. Trois niveaux : facile (30 s, l'artiste soufflé au bout de dix secondes), moyen (20 s), difficile (12 s, six choix et **des leurres du même artiste**). **La musique ne s'arrête pas** quand quelqu'un trouve : les autres cherchent encore. Plus tu réponds vite, plus tu marques ; le premier touche un bonus. Podium avec les têtes Discord à la fin. |
+| 🌙 **Soirée** | Deux à six jeux **à la suite**, avec un seul classement. À la fin de chaque partie, tout le monde bascule automatiquement dans le salon du jeu suivant — personne ne cherche un code. Barème resserré (10 / 6 / 4 / 3 / 2, et **un point pour tous les autres**) : gagner une manche aide, être dernier partout ne met pas hors course, et on reste jusqu'au bout. Chaque jeu ne fournit qu'une chose à la soirée — l'ordre d'arrivée —, donc un nouveau jeu s'y branche sans rien changer. |
+| 🏅 **Palmarès** | Le tableau d'honneur entre potes : qui gagne le plus souvent, à quoi, et depuis quand. À partir de trois parties jouées, pour qu'une victoire unique ne fasse pas un champion. |
+| 👤 **Mon profil** | Une page par joueur : niveau, rang Party, collection, médailles, parures, et l'historique de ce qui a été joué. |
+| 😂 **Réactions** | Six emojis, un clic, et ça s'affiche deux secondes au-dessus de ton siège. Parce que personne ne tape « ahah » au moment où il se prend un +4. Cadence limitée côté serveur. |
+| 📣 **Bandeau d'invitation** | « Léa vient d'ouvrir une table de belote » s'affiche partout sur le site, pas seulement dans le hall Party. À quatre connectés, c'est ce détail qui fait la soirée. |
+| 📊 **Économie** | Un tableau dans le panel admin : ce qui est créé, ce qui est détruit, par source et par jour, sur trente jours glissants. On voit d'un coup d'œil si le site inflate. |
+| 📤 **Export** | Un bouton qui télécharge **toute la base en JSON** — profils, marché, saison, journal. Réservé aux administrateurs, avec l'état vidé sur disque avant l'export. |
 | 🚧 **Porte d'ouverture** | Tant que le site n'a pas ouvert, **toute** adresse renvoie un compte à rebours — pas de page qui fuit parce qu'on connaît son URL, et les websockets sont fermés aussi. L'ouverture se fait **toute seule à la date prévue** (2 septembre 2026, midi, heure de Paris) ; le panel admin permet d'ouvrir plus tôt, de refermer, ou de changer la date. Un « accès équipe » discret sur la page d'attente et sur l'écran de connexion accepte la clé `ADMIN_KEY` et donne un laissez-passer de douze heures. |
 | 🛡️ **Équité vérifiable** | Chaque tirage vient d'une graine dont l'empreinte est publiée **avant** que tu mises. |
 | 🛠️ **Panel admin** | Joueurs, pièces, XP, caisses offertes, bannissements, tables ouvertes, annonces animées, journal des actions. La page se rafraîchit toute seule. |
@@ -260,6 +302,13 @@ npm run test:uno       # 60 parties d'Uno simulées : aucune carte créée ni pe
 npm run test:belote    # 40 parties de belote : 32 cartes et 162 points, à chaque donne
 npm run test:monopoly  # 40 parties de Monopoly : le stock de la banque, les constructions
 npm run test:persist   # tue le serveur en pleine partie et vérifie qu'elle repart
+npm run test:loup      # 60 parties de Loup-garou : aucun rôle ne fuite jamais
+npm run test:blindtest # 30 blindtests : la réponse ne quitte jamais le serveur
+npm run test:soiree    # le barème, le cumul, et la survie au redéploiement
+npm run test:soiree-live # trois clients enchaînent trois jeux pour de vrai
+npm run test:slots     # les règles de la machine à sous, puis sa redistribution
+npm run test:objectif  # le classement du mois compte bien l'XP, et rien d'autre
+npm run test:ui-chat   # le chat colle en bas, et les paliers n'ont plus de nom
 npm run test:ui        # parcours navigateur du casino + captures d'écran
 npm run test:ui-party  # parcours navigateur de la section Party
 ```
@@ -323,6 +372,65 @@ sont intacts, puis que la partie repart. Il vérifie aussi que le serveur
 partie n'a jamais quitté la mémoire, ce qui serait le plus trompeur des
 tests verts.
 
+`npm run test:loup` et `npm run test:blindtest` vérifient tous les deux la
+même chose, la seule qui compte dans ces deux jeux : **le secret**. Un
+Loup-garou où l'on peut lire le rôle de son voisin en ouvrant la console du
+navigateur n'est pas un Loup-garou, et un blindtest où la réponse arrive avec
+la question n'est pas un blindtest. Les deux bancs d'essai construisent donc
+l'état de **chaque** joueur à **chaque** action et relisent tout ce qui part —
+sauf, évidemment, les endroits où l'information a le droit d'être : les
+propositions du blindtest contiennent forcément le bon titre, un loup connaît
+forcément les autres loups. Le blindtest y ajoute une vérification bête et
+utile : la bonne réponse est **toujours** dans les propositions.
+
+`npm run test:soiree` ne joue à rien — la soirée ne joue à rien, elle compte.
+Il vérifie le barème (les ex æquo, la queue de classement, personne
+d'oublié), le cumul manche après manche, le fait qu'une manche ne puisse
+**jamais** être comptée deux fois même après un redémarrage, et la traduction
+de chaque jeu vers un classement : les points à l'Uno, les jetons au poker, la
+fortune au Monopoly, les deux coéquipiers au même rang à la belote, le camp
+gagnant au Loup-garou. `npm run test:soiree-live` fait le reste, avec trois
+vrais navigateurs branchés sur le vrai serveur : est-ce que tout le monde
+bascule bien d'un jeu à l'autre tout seul ? C'est le cœur de la soirée — si
+l'enchaînement rate, trois personnes restent plantées sur un écran de fin
+pendant que la quatrième cherche le code du salon suivant.
+
+`npm run test:slots` vérifie d'abord les RÈGLES de la machine — là où une
+erreur se voit à l'écran : la porte d'écurie ne tombe que sur les rouleaux 2,
+3 et 4, le fer à cheval que sur les 1, 3 et 5, deux multiplicateurs sur la
+même ligne s'**additionnent** (×2 et ×3 font ×5, pas ×6), une porte hors de
+la combinaison ne multiplie rien, trois fers empilés sur deux rouleaux ne
+déclenchent **pas** le bonus, et une porte collée ne bouge plus d'un tour à
+l'autre.
+
+Puis les CHIFFRES, et c'est là que la méthode compte. Cette machine tire
+78 % de sa redistribution du bonus, qui tombe une fois sur quatre-vingt-douze.
+Mesurée « en jouant », sur deux cent mille tours ordinaires, elle a donné
+88 %, 95 % et 103 % selon la graine — trois chiffres également faux. On mesure
+donc les deux moitiés séparément : le jeu de base sur beaucoup de tours
+ordinaires (où la moyenne converge vite), et le bonus **en jouant des bonus**,
+des dizaines de milliers, plutôt qu'en attendant qu'ils tombent. La
+redistribution est la somme des deux, et c'est cette méthode-là que le
+serveur utilise pour afficher son chiffre au démarrage.
+
+`npm run test:objectif` garde le but du site. Le classement du mois décide
+d'un vrai lot, donc il vaut mieux qu'il compte ce qu'on croit qu'il compte —
+et rien d'autre. Il vérifie les quatre façons de gagner sans jouer le jeu :
+que l'XP classe et pas les pièces (le test met face à face un joueur qui a
+900 000 pièces et zéro caisse ouverte, et un joueur en perte qui a tout remis
+dans les caisses — c'est le second qui gagne, le premier n'est même pas
+classé), que vingt parties Party gagnées ne déplacent pas d'un point le
+compteur du mois, qu'une correction d'administrateur ne fait pas gagner, et
+qu'au changement de mois le vainqueur désigné est bien celui qui avait le
+plus d'XP.
+
+`npm run test:ui-chat` s'occupe d'une chose qu'aucun test serveur ne peut
+voir : est-ce que le chat s'ouvre sur le dernier message ? Il en envoie une
+vingtaine, change de page, revient, et mesure à chaque étape la distance
+entre le bas de la liste et le bas de la boîte. Il vérifie aussi l'inverse,
+qui compte tout autant : quand on est en train de relire l'historique, un
+message qui arrive ne doit **pas** nous renvoyer en bas de force.
+
 `npm run test:poker` ne demande pas de serveur : il joue soixante tournois
 entiers au hasard, avec beaucoup de tapis pour fabriquer des pots secondaires,
 et vérifie **après chaque action** que la somme des jetons de la table n'a pas
@@ -343,7 +451,7 @@ server/
   roulette.js    la roue partagée
   blackjack.js   tables, sabot, manches
   sidebets.js    paris annexes et leurs taux exacts
-  slots.js       la machine à sous et sa redistribution mesurée
+  slots.js       Horse House : portes à multiplicateur, tours offerts collants
   vault.js       caisses, rouleau, collection
   medals.js      paliers, premiers du site, parures
   season.js      classement du mois et palmarès
@@ -363,11 +471,21 @@ server/
   party/words.js      les paires de mots, par difficulté
   party/poker.js      la table de Hold'em : blindes, tapis, pots secondaires
   party/holdem.js     l'évaluation d'une main de sept cartes
+  party/uno.js        les 108 cartes, les +2 cumulés, le +4 contestable
+  party/belote.js     l'atout, les obligations, les annonces, le décompte
+  party/monopoly.js   le plateau, les loyers, les enchères, les faillites
+  party/board.js      les 40 cases françaises et les cartes Chance
+  party/loup.js       les rôles, les nuits, les votes
+  party/blindtest.js  la playlist, les extraits, les propositions
+  party/soiree.js     plusieurs jeux à la suite, un seul classement
+  ledger.js      le grand livre de l'économie (créé, détruit, par jour)
+  quests.js      les trois défis du jour, tirés de la date
 public/
   index.html     la coquille
   css/style.css  toute la direction artistique
   js/            app, lobby, chat, mine, plinko, roulette, blackjack,
                  slots, medals, vault, market, party, undercover, poker,
+                 uno, belote, monopoly, loup, blindtest, profile,
                  admin, sfx
 test/
   harness.js     banc d'essai Socket.IO du casino
@@ -376,6 +494,15 @@ test/
   ui.js          parcours navigateur du casino
   ui-party.js    parcours navigateur de la Party
   economy.js     marché, rakeback, récompenses, gros cadeaux
+  uno-sim.js     60 parties : les 108 cartes, toujours
+  belote-sim.js  40 parties : 32 cartes et 162 points par donne
+  monopoly-sim.js 40 parties : le stock de la banque, les constructions
+  loup-sim.js    60 parties : aucun rôle ne fuite, et la reprise après arrêt
+  blindtest-sim.js 30 parties : la réponse ne quitte jamais le serveur
+  soiree-sim.js  le barème, le cumul, la survie au redéploiement
+  soiree-live.js trois clients enchaînent trois jeux pour de vrai
+  party-persist.js tue le serveur en pleine partie et vérifie qu'elle repart
+  shots-soiree.js  les captures de la soirée
 ```
 
 Aucune étape de compilation : ce que tu lis dans `public/` est exactement

@@ -138,7 +138,7 @@ const STATUS = {
   mine: 'mine', plinko: 'plinko', roulette: 'roulette',
   blackjack: 'blackjack', vault: 'vault', slots: 'slots',
   medals: 'medals', admin: 'admin',
-  party: 'party', uc: 'undercover', pk: 'poker', uno: 'uno', bl: 'belote', mono: 'monopoly',
+  party: 'party', uc: 'undercover', pk: 'poker', uno: 'uno', bl: 'belote', mono: 'monopoly', lg: 'loup', bt: 'blindtest',
   market: 'market', soon: 'home',
 };
 
@@ -154,6 +154,10 @@ function go(name) {
   $$('.topnav-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === name));
   scrollTo({ top: 0 });
   history.replaceState(null, '', `#${name}`);
+
+  // Entrer dans une partie fait disparaître l'invitation restée à l'écran :
+  // une fois assis à une table, une invitation à une autre est du bruit.
+  if (BUSY_VIEWS.has(name)) hideInvite();
 
   const entering = PZ.views[name];
   if (entering && entering.enter) entering.enter();
@@ -364,7 +368,7 @@ function ccStep() {
 
 /* ─── Classement ───────────────────────────────────────── */
 
-let lbSort = 'coins';
+let lbSort = 'xp';   // l'XP décide du mois : c'est elle qu'on montre d'abord
 let lbTimer = null;
 
 const LB_EMPTY = {
@@ -456,13 +460,16 @@ PZ.views.leaderboard = {
  * elle se rafraîchit tant qu'elle est ouverte.
  */
 const LB_TABS = [
+  // L'XP d'abord : c'est le classement qui décide du lot du mois. Les
+  // pièces ne sont qu'un moyen d'en gagner, et le rang Party ne compte pas
+  // pour le lot du tout.
+  { id: 'xp', label: 'XP' },
   { id: 'coins', label: 'Pièces' },
-  { id: 'xp', label: 'Niveau' },
   { id: 'party', label: 'Party' },
 ];
 
 let popTimer = null;
-let popSort = 'coins';
+let popSort = 'xp';
 
 function openLeaderboard() {
   const box = el('div', 'lb-pop');
@@ -657,7 +664,7 @@ addEventListener('keydown', (e) => {
  *    d'empiler des bandeaux.
  */
 const INVITE_MS = 20000;
-const BUSY_VIEWS = new Set(['uc', 'pk', 'uno', 'bl', 'mono', 'blackjack']);
+const BUSY_VIEWS = new Set(['uc', 'pk', 'uno', 'bl', 'mono', 'lg', 'bt', 'blackjack']);
 let inviteTimer = null;
 let inviteRoom = null;
 

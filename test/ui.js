@@ -9,14 +9,8 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   const p = await ctx.newPage();
 
   // La porte : le site est fermé avant son ouverture, et le navigateur
-  // d'essai entre comme tout le monde — avec la clé.
-  await p.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await p.evaluate((k) => fetch('/api/gate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
-  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
-  // On n'écoute la console qu'À PARTIR D'ICI. Avant, on était sur la page
-  // d'attente, qui tente forcément de charger des ressources que la porte
-  // refuse : ces 503-là sont le comportement attendu, pas des erreurs.
+  // d'essai entre comme tout le monde — avec la clé, posée sur le contexte.
+  await require('./pass').browserPass(ctx);
   p.on('pageerror',e=>errs.push('ERR '+e.message));
   p.on('console',m=>{ if(m.type()==='error' && !/favicon|ERR_TUNNEL/.test(m.text())) errs.push('CON '+m.text()); });
 
@@ -230,10 +224,7 @@ const check=(l,ok,d='')=>{ res.push(ok); console.log(`${ok?'  ✓':'  ✗'} ${l}
   const p2 = await ctx2.newPage();
   // Nouveau contexte, nouveaux cookies : ce second navigateur doit lui
   // aussi franchir la porte avant de voir quoi que ce soit.
-  await p2.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await p2.evaluate((k) => fetch('/api/gate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
-  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
+  await require('./pass').browserPass(ctx2);
   await p2.goto('http://localhost:3000',{waitUntil:'networkidle'});
   await p2.fill('#guest-name','Lea'); await p2.click('#form-guest button');
   await p2.waitForSelector('#app.active'); await p2.waitForFunction(()=>window.PZ&&window.PZ.profile);

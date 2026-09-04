@@ -212,7 +212,9 @@ async function act(actor, action, payload = {}, ctx = {}) {
       const target = await loadTarget();
       const amount = Math.round(Number(payload.amount) || 0);
       if (!amount) return { ok: false, message: 'Indique une quantité.' };
-      store.grantXp(target, amount);
+      // Un rattrapage d'administrateur ne compte pas pour le mois : sinon
+      // un dépannage pourrait faire gagner le lot.
+      store.grantXp(target, amount, { season: false });
       await store.saveProfile(target);
       record(actor, 'xp', target.name, `${amount > 0 ? '+' : ''}${amount} XP`);
       pushProfile(io, presence, target);

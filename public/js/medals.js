@@ -33,7 +33,7 @@
     box.replaceChildren();
 
     s.tiers.forEach((t) => {
-      const node = el('div', `tier${t.done ? ' done' : ''}${t.first ? ' first' : ''}`);
+      const node = el('div', `tier${t.done ? ' done' : ''}`);
 
       node.appendChild(el('div', 'tier-icon', t.icon));
       node.appendChild(el('div', 'tier-name', t.name));
@@ -43,18 +43,20 @@
         node.appendChild(el('div', 'tier-unlock', `débloque : ${t.cosmetic.name}`));
       }
 
-      // La course au premier : soit c'est toi, soit c'est quelqu'un, soit
-      // c'est encore libre.
+      /*
+       * Un palier n'appartient à personne : tout le monde peut avoir les
+       * mêmes. On n'affiche donc plus qui l'a eu en premier — seulement si
+       * TU l'as, et depuis quand. C'est ta collection, pas un podium.
+       */
       const race = el('div', 'tier-race');
-      if (t.first) {
+      if (t.done) {
         race.classList.add('mine');
-        race.textContent = '🥇 Tu l’as eu en premier';
-      } else if (t.heldBy) {
-        race.textContent = `🥇 ${t.heldBy.name}`;
-        race.dataset.tip = `Premier du site à ce palier, le ${new Date(t.heldBy.at).toLocaleDateString('fr-FR')}`;
+        race.textContent = t.at
+          ? `✓ décroché le ${new Date(t.at).toLocaleDateString('fr-FR')}`
+          : '✓ décroché';
       } else {
         race.classList.add('open');
-        race.textContent = '🥇 encore libre';
+        race.textContent = `encore ${t.need - s.collected} objets`;
       }
       node.appendChild(race);
 
@@ -142,13 +144,15 @@
     seasonTimer = setInterval(tick, 30000);
 
     box.appendChild(el('p', 'fine',
-      'Le classement du mois compte le BÉNÉFICE net, pas le solde : miser gros et tout ' +
-      'récupérer ne fait pas monter. Le lot est remis à la main par un administrateur, ' +
+      'Le classement du mois se joue à l’XP, pas aux pièces. L’XP vient des caisses ' +
+      'que tu ouvres — donc garder son magot sans jamais rien ouvrir ne rapporte rien. ' +
+      'L’XP de la section Party ne compte pas ici : elle sert à être le meilleur entre ' +
+      'potes, pas à gagner le lot. Le lot est remis à la main par un administrateur, ' +
       'le site ne fait que désigner le vainqueur.'));
 
     const list = el('ol', 'lb season-lb');
     if (!s.ranking.length) {
-      list.appendChild(el('li', 'empty', 'Personne n’est encore en positif ce mois-ci.'));
+      list.appendChild(el('li', 'empty', 'Personne n’a encore marqué d’XP ce mois-ci.'));
     }
     s.ranking.slice(0, 10).forEach((p) => {
       const li = el('li');
@@ -160,20 +164,26 @@
       li.appendChild(img);
       const who = el('div', 'who');
       who.appendChild(el('b', 'n', p.name));
-      who.appendChild(el('span', 't', `${fmt(p.rounds)} manches`));
+      who.appendChild(el('span', 't', `${fmt(p.rounds)} manches jouées`));
       li.appendChild(who);
-      li.appendChild(el('span', 'v', `+${fmt(p.coins)} ¤`));
+      li.appendChild(el('span', 'v', `${fmt(p.xp)} XP`));
       list.appendChild(li);
     });
     box.appendChild(list);
 
     if (s.you) {
       const you = el('div', 'season-you');
-      you.appendChild(el('span', null, 'Ton bénéfice du mois'));
-      const v = el('b', null, `${s.you.coins >= 0 ? '+' : ''}${fmt(s.you.coins)} ¤`);
-      v.style.color = s.you.coins >= 0 ? 'var(--green)' : 'var(--red)';
-      you.appendChild(v);
+      you.appendChild(el('span', null, 'Ton XP du mois'));
+      you.appendChild(el('b', null, `${fmt(s.you.xp || 0)} XP`));
       box.appendChild(you);
+
+      // Le bénéfice reste affiché, en petit : c'est une statistique utile
+      // pour savoir si le casino t'a été favorable, mais elle ne classe
+      // plus personne.
+      const side = el('p', 'fine season-side');
+      side.textContent = `Bénéfice du casino ce mois-ci : ${s.you.coins >= 0 ? '+' : ''}${fmt(s.you.coins)} ¤ — ` +
+        'ça ne compte pas au classement, c’est juste ce qui te finance les caisses.';
+      box.appendChild(side);
     }
 
     if (s.hallOfFame && s.hallOfFame.length) {
@@ -183,7 +193,10 @@
         const line = el('div', 'hof-line');
         line.appendChild(el('span', 'hof-month', w.label));
         line.appendChild(el('b', null, w.name));
-        line.appendChild(el('span', 'hof-coins', `+${fmt(w.coins)} ¤`));
+        // Les mois d'avant le passage à l'XP n'ont que des pièces : on
+        // affiche ce qu'on a, plutôt que « 0 XP » qui serait faux.
+        line.appendChild(el('span', 'hof-coins',
+          w.xp ? `${fmt(w.xp)} XP` : `+${fmt(w.coins)} ¤`));
         hof.appendChild(line);
       });
       box.appendChild(hof);

@@ -29,14 +29,6 @@
       ready: true,
     },
     {
-      id: 'loupgarou', name: 'Loup-garou', icon: 'i-wolf', colour: '#c98da6',
-      players: '6 à 16', minutes: '25 min',
-      blurb: 'La nuit tombe, le village s’endort. Prévu avec le vocal : micro coupé ' +
-        'ou ouvert selon ton rôle.',
-      ready: false,
-      note: 'Le vocal a besoin d’un serveur relais dédié — c’est le prochain gros morceau.',
-    },
-    {
       id: 'uno', name: 'Uno', icon: 'i-uno', colour: '#e8a33c',
       players: '2 à 10', minutes: '15 min',
       blurb: 'Les +2 qui se cumulent, le +4 qu’on peut contester quand on sent le bluff, ' +
@@ -48,6 +40,20 @@
       players: '4', minutes: '30 min',
       blurb: 'En équipes de deux, face à face. Ordre des cartes différent à l’atout, ' +
         'obligation de fournir, de couper et de monter, belote-rebelote et dix de der.',
+      ready: true,
+    },
+    {
+      id: 'blindtest', name: 'Blindtest', icon: 'i-spark', colour: '#FF3D8B',
+      players: '1 à 12', minutes: '15 min',
+      blurb: 'Ta playlist YouTube, un extrait, quatre propositions. La musique ne s’arrête ' +
+        'pas quand quelqu’un trouve — les autres cherchent encore.',
+      ready: true,
+    },
+    {
+      id: 'loup', name: 'Loup-garou', icon: 'i-wolf', colour: '#c0504a',
+      players: '4 à 16', minutes: '25 min',
+      blurb: 'Les rôles, les nuits, les votes. Voyante, sorcière et chasseur compris. ' +
+        'Le débat se fait de vive voix sur Discord — le site ne fait que compter.',
       ready: true,
     },
     {
@@ -102,7 +108,9 @@
 
     box.appendChild(el('p', 'fine',
       'Ce rang ne dépend d’aucune pièce : une partie perdue rapporte quand même, ' +
-      'un peu moins qu’une gagnée. C’est la présence qui compte.'));
+      'un peu moins qu’une gagnée. C’est la présence qui compte. Il est aussi ' +
+      'complètement séparé du classement du mois : l’XP gagnée ici ne compte ' +
+      'pas pour le lot. C’est le classement entre potes, rien de plus.'));
   }
 
   /* ═══════════ La grille des jeux ═══════════ */
@@ -197,6 +205,225 @@
 
       box.appendChild(node);
     });
+  }
+
+  /* ═══════════ LA SOIRÉE ═══════════
+   *
+   * On coche deux à six jeux, dans l'ordre, et le site enchaîne les
+   * parties tout seul en additionnant les points. Le bandeau du haut suit
+   * partout — on sait toujours où on en est du cumul, même au milieu d'un
+   * Monopoly.
+   */
+
+  const SOIREE_MIN = 2;
+  const SOIREE_MAX = 6;
+
+  /** Les jeux retenus par l'organisateur, dans l'ordre des clics. */
+  let picks = [];
+  /** L'état de la soirée en cours, tel que le serveur le voit. */
+  let soiree = null;
+  PZ.soiree = () => soiree;
+
+  function renderSoireePicker() {
+    const box = $('#soiree-body');
+    box.replaceChildren();
+
+    box.appendChild(el('p', 'fine',
+      'Choisis les jeux dans l’ordre où tu veux les jouer. À la fin de chaque ' +
+      'partie, tout le monde bascule automatiquement dans la suivante. Dix points ' +
+      'au premier, six au deuxième, quatre, trois, deux — et un point pour tous ' +
+      'les autres, pour que personne ne soit hors course avant la fin.'));
+
+    const grid = el('div', 'soiree-pick');
+    GAMES.filter((g) => g.ready).forEach((g) => {
+      const at = picks.indexOf(g.id);
+      const node = el('button', `spick${at >= 0 ? ' on' : ''}`);
+      node.type = 'button';
+      node.style.setProperty('--c', g.colour);
+      const icon = el('span', 'spick-icon');
+      icon.innerHTML = `<svg viewBox="0 0 24 24" width="17" height="17"><use href="#${g.icon}"/></svg>`;
+      node.appendChild(icon);
+      node.appendChild(el('b', null, g.name));
+      node.appendChild(el('i', 'spick-n', at >= 0 ? String(at + 1) : ''));
+      node.addEventListener('click', () => {
+        if (at >= 0) picks.splice(at, 1);
+        else if (picks.length >= SOIREE_MAX) return PZ.toast(`Six manches au maximum — ça fait déjà une longue soirée.`, 'warn');
+        else picks.push(g.id);
+        renderSoireePicker();
+      });
+      grid.appendChild(node);
+    });
+    box.appendChild(grid);
+
+    const foot = el('div', 'soiree-foot');
+    const line = el('span', 'fine', picks.length
+      ? picks.map((id) => GAME_BY_ID[id].name).join(' → ')
+      : 'Rien de choisi pour l’instant.');
+    foot.appendChild(line);
+
+    const go = el('button', 'btn btn-green', picks.length
+      ? `Lancer la soirée (${picks.length} manches)` : 'Lancer la soirée');
+    go.disabled = picks.length < SOIREE_MIN;
+    go.addEventListener('click', () => PZ.socket.emit('soiree:create', { games: picks }));
+    foot.appendChild(go);
+    box.appendChild(foot);
+  }
+
+  /** Le classement cumulé, en tableau. */
+  function standingsTable(rows, { compact = false } = {}) {
+    const table = el('div', `soiree-table${compact ? ' compact' : ''}`);
+    rows.forEach((r, i) => {
+      const line = el('div', `sline${PZ.me && r.id === PZ.me.id ? ' me' : ''}`);
+      line.appendChild(el('span', 'sline-rank', String(i + 1)));
+      const img = new Image(24, 24);
+      img.src = PZ.avatarUrl(r);
+      img.alt = '';
+      line.appendChild(img);
+      line.appendChild(el('b', 'sline-name', r.name));
+      line.appendChild(el('span', 'sline-pts', `${r.points} pt${r.points > 1 ? 's' : ''}`));
+      table.appendChild(line);
+    });
+    return table;
+  }
+
+  /** Le panneau de la soirée en cours, dans le hall. */
+  function renderSoireeRunning() {
+    const box = $('#soiree-body');
+    box.replaceChildren();
+    const s = soiree;
+
+    const head = el('div', 'soiree-run');
+    head.appendChild(el('b', null, s.over
+      ? 'Soirée terminée'
+      : `Manche ${s.round}/${s.rounds} — ${GAME_BY_ID[s.game] ? GAME_BY_ID[s.game].name : s.game}`));
+    // La liste des manches, avec celles qui sont déjà passées : c'est ce
+    // qui dit d'un coup d'œil où on en est de la soirée.
+    const line = el('span', 'fine soiree-steps');
+    s.games.forEach((id, i) => {
+      const name = GAME_BY_ID[id] ? GAME_BY_ID[id].name : id;
+      const done = i < s.step || (i === s.step && s.awaiting) || s.over;
+      line.appendChild(el('i', `sstep${done ? ' done' : ''}${i === s.step && !s.over ? ' now' : ''}`, name));
+    });
+    head.appendChild(line);
+    box.appendChild(head);
+
+    box.appendChild(standingsTable(s.standings));
+
+    const foot = el('div', 'soiree-foot');
+    const isHost = PZ.me && s.hostId === PZ.me.id;
+    if (!s.over && s.roomCode) {
+      const back = el('button', 'btn btn-green', 'Retourner à la manche');
+      back.addEventListener('click', () => PZ.socket.emit('party:join', { code: s.roomCode }));
+      foot.appendChild(back);
+    }
+    if (!s.over && isHost && s.awaiting && s.nextGame) {
+      const next = el('button', 'btn btn-soft',
+        `Manche suivante : ${GAME_BY_ID[s.nextGame] ? GAME_BY_ID[s.nextGame].name : s.nextGame}`);
+      next.addEventListener('click', () => PZ.socket.emit('soiree:next'));
+      foot.appendChild(next);
+    }
+    const quit = el('button', 'btn btn-soft', s.over ? 'Fermer' : 'Quitter la soirée');
+    quit.addEventListener('click', () => PZ.socket.emit('soiree:quit'));
+    foot.appendChild(quit);
+    box.appendChild(foot);
+  }
+
+  function renderSoiree() {
+    if (!$('#soiree-body')) return;
+    if (soiree) renderSoireeRunning();
+    else renderSoireePicker();
+  }
+
+  /**
+   * LE BANDEAU DE SOIRÉE.
+   *
+   * Posé en haut de la vue du jeu en cours, comme celui du spectateur. Il
+   * rappelle la manche, le cumul, et — quand la partie est finie — donne à
+   * l'organisateur le bouton qui envoie tout le monde dans la suivante.
+   * Sans lui, on gagne un Uno sans jamais savoir ce que ça a changé au
+   * classement de la soirée.
+   */
+  const ROOM_VIEWS = ['uc', 'pk', 'uno', 'bl', 'mono', 'lg', 'bt'];
+
+  PZ.soireeBar = () => {
+    document.querySelectorAll('.soiree-bar').forEach((n) => n.remove());
+    if (!soiree || soiree.over || !ROOM_VIEWS.includes(PZ.view)) return;
+    const view = document.querySelector(`#view-${PZ.view}`);
+    if (!view) return;
+
+    const bar = el('div', 'soiree-bar');
+    bar.appendChild(el('b', null, `Soirée · manche ${soiree.round}/${soiree.rounds}`));
+
+    const top = soiree.standings.slice(0, 3)
+      .map((r, i) => `${i + 1}. ${r.name} ${r.points}`).join('   ');
+    bar.appendChild(el('span', 'fine', top || 'Classement à zéro.'));
+
+    // Le bouton n'apparaît qu'une fois la manche comptée : avant, il donnait
+    // à l'organisateur de quoi sauter une manche que personne n'avait jouée.
+    const isHost = PZ.me && soiree.hostId === PZ.me.id;
+    if (isHost && soiree.awaiting && soiree.nextGame) {
+      const next = el('button', 'btn btn-green', `Manche suivante : ${GAME_BY_ID[soiree.nextGame] ? GAME_BY_ID[soiree.nextGame].name : soiree.nextGame}`);
+      next.addEventListener('click', () => PZ.socket.emit('soiree:next'));
+      bar.appendChild(next);
+    }
+    const see = el('button', 'btn btn-soft', 'Classement');
+    see.addEventListener('click', () => showStandings());
+    bar.appendChild(see);
+
+    // Après le bandeau du spectateur s'il y en a un : il dit une chose plus
+    // urgente — que les boutons ne répondront pas.
+    const watch = view.querySelector('.watch-bar');
+    if (watch) watch.after(bar);
+    else view.insertBefore(bar, view.firstChild);
+  };
+
+  /** Une fenêtre simple, reprenant celle du classement du site. */
+  function openSoireeModal(title, body) {
+    const box = el('div', 'lb-pop');
+    const head = el('div', 'lb-pop-head');
+    head.appendChild(el('h2', null, title));
+    box.appendChild(head);
+    box.appendChild(body);
+    const foot = el('div', 'lb-pop-foot');
+    const close = el('button', 'btn btn-soft btn-block', 'Fermer');
+    close.addEventListener('click', () => PZ.closeModal());
+    foot.appendChild(close);
+    box.appendChild(foot);
+    PZ.openModal(box);
+  }
+
+  /** Le classement complet, en fenêtre. */
+  function showStandings() {
+    if (!soiree) return;
+    const body = el('div', 'soiree-modal');
+    body.appendChild(standingsTable(soiree.standings));
+    if (soiree.last) {
+      body.appendChild(el('h4', null, `Dernière manche — ${soiree.last.gameName}`));
+      const list = el('div', 'soiree-table compact');
+      soiree.last.table.forEach((t) => {
+        const line = el('div', 'sline');
+        line.appendChild(el('span', 'sline-rank', String(t.rank)));
+        line.appendChild(el('b', 'sline-name', t.name));
+        line.appendChild(el('span', 'sline-pts', `+${t.gained}`));
+        list.appendChild(line);
+      });
+      body.appendChild(list);
+    }
+    openSoireeModal('Classement de la soirée', body);
+  }
+
+  /** Le podium de fin de soirée. */
+  function showSoireeResult(s) {
+    const body = el('div', 'soiree-modal');
+    const names = s.result.winnerIds
+      .map((id) => (s.standings.find((r) => r.id === id) || {}).name)
+      .filter(Boolean);
+    body.appendChild(el('p', null, names.length
+      ? `${names.join(' et ')} remporte la soirée après ${s.result.rounds} manches.`
+      : 'Personne n’a marqué : match nul intégral.'));
+    body.appendChild(standingsTable(s.standings));
+    openSoireeModal('Soirée terminée', body);
+    if (PZ.me && s.result.winnerIds.includes(PZ.me.id)) PZ.confetti?.();
   }
 
   /* ═══════════ Rejoindre par code ═══════════ */
@@ -298,12 +525,13 @@
 
   /** Le chat du salon, redessiné entièrement. */
   PZ.roomChat = (box, messages) => {
-    // On ne recolle en bas que si on y était déjà : sinon un message qui
-    // arrive pendant qu'on relit l'historique renvoie brutalement en bas.
-    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+    // Coller en bas est écrit une seule fois, dans `chat.js` : il tient
+    // compte des avatars qui arrivent après coup et des salons redessinés
+    // alors qu'ils ne sont pas encore visibles. On ne recolle pas si la
+    // personne a remonté l'historique elle-même.
     box.replaceChildren();
     messages.forEach((m) => box.appendChild(chatNode(m)));
-    if (atBottom) box.scrollTop = box.scrollHeight;
+    PZ.chat.stick(box);
   };
 
   /* ═══════════ LES RÉACTIONS RAPIDES ═══════════
@@ -416,16 +644,38 @@
     socket.on('party:rank', renderRank);
     socket.on('party:reaction', popReaction);
 
+    /* ─── La soirée ─── */
+
+    socket.on('soiree:state', (s) => {
+      const wasOver = soiree && soiree.over;
+      soiree = s && s.games ? s : null;
+      if (PZ.view === 'party') renderSoiree();
+      PZ.soireeBar();
+      // Le podium ne s'ouvre qu'au moment où la soirée bascule sur « finie »,
+      // pas à chaque état reçu ensuite : sinon la fenêtre se rouvrirait
+      // toute seule à chaque rafraîchissement.
+      if (soiree && soiree.over && !wasOver && soiree.result) showSoireeResult(soiree);
+    });
+
+    // Le serveur a ouvert la manche suivante : on la rejoint par le chemin
+    // habituel, celui de quelqu'un qui taperait le code à la main.
+    socket.on('soiree:go', ({ code, round, rounds }) => {
+      PZ.toast(`Manche ${round}/${rounds} — on enchaîne.`, 'info');
+      socket.emit('party:join', { code });
+    });
+
     // Le serveur nous place dans un salon : on ouvre l'écran du jeu.
     socket.on('party:joined', ({ game }) => {
       // Chaque jeu Party a sa vue. La table de correspondance vit ici,
       // à un seul endroit : c'est ce qui évite qu'un nouveau jeu marche
       // partout sauf au moment de rejoindre un salon.
-      PZ.go({ poker: 'pk', uno: 'uno', belote: 'bl', monopoly: 'mono', undercover: 'uc' }[game] || 'uc');
+      PZ.go({ poker: 'pk', uno: 'uno', belote: 'bl', monopoly: 'mono', loup: 'lg', blindtest: 'bt', undercover: 'uc' }[game] || 'uc');
+      PZ.soireeBar();
     });
 
     socket.on('party:left', () => {
-      if (['uc', 'pk', 'uno', 'bl', 'mono'].includes(PZ.view)) PZ.go('party');
+      document.querySelectorAll('.soiree-bar').forEach((n) => n.remove());
+      if (ROOM_VIEWS.includes(PZ.view)) PZ.go('party');
     });
 
     // Un message de salon arrive tout seul, sans état complet : on l'ajoute
@@ -435,12 +685,11 @@
       if (!prefix) return;
       const box = $(`#${prefix}-chat`);
       if (!box || box.querySelector(`[data-mid="${m.id}"]`)) return;
-      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
       const node = chatNode(m);
       node.dataset.mid = m.id;
       box.appendChild(node);
       while (box.children.length > 60) box.firstElementChild.remove();
-      if (atBottom) box.scrollTop = box.scrollHeight;
+      PZ.chat.stick(box);
     });
 
     socket.on('party:closed', () => {
@@ -455,8 +704,10 @@
     enter() {
       bind();
       PZ.socket.emit('party:open');
+      PZ.socket.emit('soiree:state');
       renderGames(rooms);
       renderRooms(rooms);
+      renderSoiree();
     },
   };
 })();

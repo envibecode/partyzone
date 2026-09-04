@@ -61,6 +61,11 @@ class Room {
     this.closeTimer = null;
     this.private = false;
 
+    // Quand ce salon est une manche de soirée : le code de la soirée, et
+    // l'organisateur à qui la casquette d'hôte est réservée.
+    this.soiree = null;
+    this.reserveHost = null;
+
     // La partie peut se terminer sur un minuteur, pas seulement sur une
     // action : le serveur pose ici de quoi être prévenu dans tous les cas.
     this.onEnd = null;
@@ -137,6 +142,13 @@ class Room {
     };
     this.players.push(player);
     if (!this.hostId) this.hostId = player.id;
+    // Une manche de soirée réserve la casquette d'hôte à l'organisateur :
+    // sans ça, elle irait au premier navigateur à répondre, et le hasard du
+    // réseau déciderait de qui lance la manche suivante.
+    if (this.reserveHost && this.reserveHost === player.id) {
+      this.hostId = player.id;
+      this.reserveHost = null;
+    }
 
     clearTimeout(this.closeTimer);
     this.closeTimer = null;
@@ -318,6 +330,26 @@ class Room {
     };
   }
 
+  /**
+   * LE CLASSEMENT DE LA PARTIE, POUR LA SOIRÉE.
+   *
+   * Une soirée enchaîne des jeux qui ne comptent pas du tout pareil : des
+   * points à l'Uno, des jetons au poker, une fortune au Monopoly, et rien
+   * du tout au Loup-garou où on gagne en équipe. Plutôt que d'apprendre à
+   * la soirée les règles de chaque jeu, chaque jeu répond ici à une seule
+   * question : « qui est devant qui ? ».
+   *
+   * Le score renvoyé ne sert qu'à trier. Sa valeur n'a aucune importance :
+   * la soirée ne regarde que l'ordre et les égalités.
+   *
+   * Par défaut — et c'est ce qui convient aux jeux d'équipe — les gagnants
+   * sont premiers ex æquo, tous les autres derrière.
+   */
+  ranking() {
+    const won = new Set(this.winners());
+    return this.players.map((p) => ({ id: p.id, score: won.has(p.id) ? 1 : 0 }));
+  }
+
   /** La ligne du salon dans la liste publique. */
   listing() {
     const host = this.playerOf(this.hostId);
@@ -379,11 +411,14 @@ class Room {
 const NOT_SAVED = new Set(['io', 'timer', 'closeTimer', 'onEnd', 'onProfile']);
 
 function serialize(room) {
-  const out = { __maps: [] };
+  const out = { __maps: [], __sets: [] };
   for (const [key, value] of Object.entries(room)) {
     if (NOT_SAVED.has(key) || typeof value === 'function') continue;
     if (value instanceof Map) { out[key] = [...value.entries()]; out.__maps.push(key); continue; }
-    if (value instanceof Set) { out[key] = [...value]; continue; }
+    // Les `Set` étaient écrits en tableau et relus en tableau : au retour,
+    // `alive.has(...)` n'existait plus et la partie ne redémarrait pas. On
+    // note leur nom au même titre que celui des `Map`.
+    if (value instanceof Set) { out[key] = [...value]; out.__sets.push(key); continue; }
     out[key] = value;
   }
   // Les sockets d'un joueur ne se sauvegardent pas : personne n'est
@@ -399,9 +434,12 @@ function hydrate(room, data) {
   // reprendre le vrai.
   rooms.delete(room.code);
   const maps = new Set(data.__maps || []);
+  const sets = new Set(data.__sets || []);
   for (const [key, value] of Object.entries(data)) {
-    if (key === '__maps' || key === 'players') continue;
-    room[key] = maps.has(key) ? new Map(value) : value;
+    if (key === '__maps' || key === '__sets' || key === 'players') continue;
+    if (maps.has(key)) room[key] = new Map(value);
+    else if (sets.has(key)) room[key] = new Set(value);
+    else room[key] = value;
   }
   room.players = (data.players || []).map((p) => ({ ...p, sockets: new Set(), connected: false }));
   room.watchers = new Map();
@@ -429,8 +467,9 @@ function restoreAll(saved, builders) {
   for (const entry of saved || []) {
     const build = builders[entry.game];
     if (!build || !entry.data) continue;
+    let room = null;
     try {
-      const room = build();
+      room = build();
       hydrate(room, entry.data);
       // Le salon reprend là où il en était : minuteur réarmé à neuf, parce
       // qu'être éliminé par un déploiement serait la pire des injustices.
@@ -443,6 +482,15 @@ function restoreAll(saved, builders) {
       restored += 1;
     } catch (err) {
       console.error('[party] salon non restauré :', err.message);
+      // Un salon à moitié reconstruit ne reste pas dans le registre : sinon
+      // il continue d'exister, de s'afficher dans la liste, et ses minuteurs
+      // relancent la même erreur toutes les trente secondes jusqu'au
+      // prochain redémarrage.
+      if (room) {
+        clearTimeout(room.timer);
+        clearTimeout(room.closeTimer);
+        rooms.delete(room.code);
+      }
     }
   }
   return restored;

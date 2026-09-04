@@ -172,6 +172,37 @@ const SFX = (() => {
       tone(180, { at: 0.05, dur: 0.28, type: 'sawtooth', gain: 0.06 });
     },
 
+    /**
+     * LE SABOT SUR LA TERRE BATTUE.
+     *
+     * Un rouleau de la machine à sous qui se pose. Deux coups très courts
+     * et graves, séparés d'une trentaine de millisecondes : c'est ce
+     * décalage qui fait entendre un sabot plutôt qu'un simple « toc ».
+     */
+    hoof() {
+      tone(150, { dur: 0.05, type: 'sine', gain: 0.09 });
+      noise({ dur: 0.045, gain: 0.07, freq: 420, q: 1.1 });
+      tone(120, { at: 0.035, dur: 0.06, type: 'sine', gain: 0.07 });
+      noise({ at: 0.035, dur: 0.05, gain: 0.05, freq: 340, q: 1.1 });
+    },
+
+    /** Le hennissement : un glissando descendant, un peu nasillard. */
+    neigh() {
+      for (let i = 0; i < 5; i++) {
+        const at = i * 0.07;
+        tone(760 - i * 90, { at, dur: 0.09, type: 'sawtooth', gain: 0.055 });
+        tone(1140 - i * 130, { at, dur: 0.08, type: 'triangle', gain: 0.03 });
+      }
+      noise({ at: 0.34, dur: 0.16, gain: 0.05, freq: 1200, q: 0.8 });
+    },
+
+    /** La porte d'écurie qui claque. */
+    door() {
+      noise({ dur: 0.07, gain: 0.14, freq: 520, q: 0.9 });
+      tone(95, { at: 0.02, dur: 0.22, type: 'sine', gain: 0.1 });
+      tone(190, { at: 0.02, dur: 0.12, type: 'triangle', gain: 0.05 });
+    },
+
     fanfare() {
       const notes = [
         [523, 0], [659, 0.11], [784, 0.22], [1046, 0.33],

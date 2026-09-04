@@ -822,6 +822,15 @@ class Belote extends Room {
     return this.result ? this.result.winnerIds : [];
   }
 
+  /**
+   * Pour la soirée : les deux coéquipiers finissent au même rang. La belote
+   * se gagne à deux — on ne va pas inventer un vainqueur individuel.
+   */
+  ranking() {
+    if (!this.result) return super.ranking();
+    return this.order.map((id, i) => ({ id, score: this.result.scores[i % 2] }));
+  }
+
   /* ─── L'état envoyé ────────────────────────────────────────────────── */
 
   /**

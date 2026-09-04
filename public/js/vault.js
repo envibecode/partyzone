@@ -652,14 +652,9 @@
   function celebrate(tiers) {
     tiers.forEach((tier, i) => {
       setTimeout(() => {
-        PZ.toast(
-          tier.first
-            ? `${tier.icon} ${tier.name} — et tu es le PREMIER du site à l’atteindre !`
-            : `${tier.icon} ${tier.name} débloqué : ${tier.need} objets trouvés.`,
-          'success'
-        );
+        PZ.toast(`${tier.icon} ${tier.name} débloqué : ${tier.need} objets trouvés.`, 'success');
         SFX.fanfare();
-        PZ.confetti(tier.first ? 150 : 80);
+        PZ.confetti(110);
       }, 600 + i * 1400);
     });
   }

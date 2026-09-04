@@ -24,6 +24,8 @@ const STATUS_LABEL = {
   uno: 'À l’Uno',
   belote: 'À la belote',
   monopoly: 'Au Monopoly',
+  loup: 'Au Loup-garou',
+  blindtest: 'Au blindtest',
   admin: 'Au panel admin',
 };
 

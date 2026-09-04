@@ -482,29 +482,45 @@ async function topUp(player, target) {
   section('Machine à sous');
   alice.socket.emit('slots:open');
   const slots = await waitFor(() => alice.slots, 4000, 'config de la machine');
-  check('cinq rouleaux, trois rangées, dix lignes',
-    slots.reels === 5 && slots.rows === 3 && slots.lines === 10);
+  check('cinq rouleaux, trois rangées, vingt lignes',
+    slots.reels === 5 && slots.rows === 3 && slots.lines === 20,
+    `${slots.reels}×${slots.rows}, ${slots.lines} lignes`);
   check('redistribution mesurée et annoncée', slots.rtp > 90 && slots.rtp < 100,
     `${slots.rtp} % sur ${slots.measuredOn.toLocaleString('fr-FR')} tours`);
+  check('la porte d’écurie est cantonnée aux rouleaux du milieu',
+    slots.wildReels.join(',') === '1,2,3', slots.wildReels.map((r) => r + 1).join(', '));
+  check('le fer à cheval ne tombe que sur 1, 3 et 5',
+    slots.scatterReels.join(',') === '0,2,4', slots.scatterReels.map((r) => r + 1).join(', '));
+  check('un plafond de gain est annoncé', slots.maxWinX > 0, `${slots.maxWinX}× la mise`);
 
-  await topUp(alice, 60000);
+  await topUp(alice, 200000);
   let slStaked = 0;
   let slPaid = 0;
   let bonusSeen = 0;
+  let badMult = 0;
   for (let i = 0; i < 40; i++) {
     alice.lastSlots = null;
     alice.socket.emit('slots:spin', { bet: 10 });
-    const r = await waitFor(() => alice.lastSlots, 5000, 'tour de machine');
+    const r = await waitFor(() => alice.lastSlots, 6000, 'tour de machine');
     if (!r.ok) break;
     slStaked += r.staked;
     slPaid += r.payout;
-    if (r.bonus.length) bonusSeen++;
+    if (r.free.length) bonusSeen++;
+    // Toute porte envoyée à l'écran doit porter un multiplicateur valable :
+    // c'est ce que le joueur voit, et il doit pouvoir refaire l'addition.
+    for (const col of r.spin.grid) {
+      for (const cell of col) {
+        if (cell.id === 'wild' && ![2, 3].includes(cell.mult)) badMult++;
+      }
+    }
   }
   check('grille complète à chaque tour', alice.lastSlots.spin.grid.length === 5
     && alice.lastSlots.spin.grid.every((c) => c.length === 3));
-  check('la mise est bien de dix fois la mise par ligne', alice.lastSlots.staked === alice.lastSlots.perLine * 10);
+  check('la mise est bien de vingt fois la mise par ligne',
+    alice.lastSlots.staked === alice.lastSlots.perLine * 20);
+  check('chaque porte d’écurie porte un ×2 ou un ×3', badMult === 0, `${badMult} anomalie(s)`);
   check('les tours offerts sont joués par le serveur',
-    alice.lastSlots.bonus.every((b) => Array.isArray(b.grid)));
+    alice.lastSlots.free.every((b) => Array.isArray(b.grid) && typeof b.left === 'number'));
   console.log(`     ${slStaked} misés, ${slPaid} rendus (${((slPaid / slStaked) * 100).toFixed(1)} %), ${bonusSeen} bonus sur 40 tours`);
 
   /* ── Cadeaux ── */
@@ -553,8 +569,21 @@ async function topUp(player, target) {
   alice.socket.emit('season:open');
   const season = await waitFor(() => alice.season, 4000, 'classement du mois');
   check('le mois en cours est identifié', Boolean(season.label && season.endsAt > Date.now()));
-  check('le classement compte le bénéfice net, pas le solde',
-    season.ranking.every((p, i2, a) => i2 === 0 || a[i2 - 1].coins >= p.coins));
+  /*
+   * Le classement se joue à l'XP, pas aux pièces.
+   *
+   * C'est le but du site : on gagne le mois en OUVRANT des caisses, pas en
+   * gardant son magot. On vérifie donc que les places suivent l'XP — et,
+   * surtout, qu'un joueur sans XP n'est pas classé, même très riche.
+   * `test/objectif-sim.js` détaille le reste sans passer par le réseau.
+   */
+  check('le classement est trié par XP',
+    season.ranking.every((p, i2, a) => i2 === 0 || (a[i2 - 1].xp || 0) >= (p.xp || 0)),
+    season.ranking.map((p) => `${p.name} ${p.xp}`).join(', ') || 'personne encore');
+  check('personne n’est classé sans avoir marqué d’XP',
+    season.ranking.every((p) => (p.xp || 0) > 0));
+  check('ton compteur du mois est en XP',
+    season.you && typeof season.you.xp === 'number', `${season.you && season.you.xp} XP`);
   check('le lot du mois est annoncé', Boolean(season.prize));
 
   /* ── Équité vérifiable ── */

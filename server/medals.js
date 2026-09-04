@@ -6,14 +6,12 @@
  * donne une médaille et débloque de quoi personnaliser son pseudo : un
  * contour d'avatar, un effet de texte, une icône animée.
  *
- * Il y a deux façons de décrocher une médaille :
- *   • en atteignant le palier, comme tout le monde ;
- *   • en étant LE PREMIER du site à l'atteindre — et là, la médaille est
- *     dorée et personne d'autre ne pourra jamais l'avoir.
- *
- * Le « premier » est enregistré à part, dans un fichier de records partagé
- * par tout le site. On ne peut pas le recalculer après coup : c'est une
- * course, et elle ne se rejoue pas.
+ * Un palier se mérite, il ne se réserve pas : TOUT LE MONDE peut décrocher
+ * les mêmes. Il y a eu un temps une course au « premier du site », avec une
+ * version dorée réservée au premier arrivé. À quelques joueurs, ça figeait
+ * tout dès la première semaine — les paliers étaient pris, et les suivants
+ * recevaient une médaille estampillée du nom de quelqu'un d'autre. Ce n'est
+ * pas une course, c'est une collection.
  */
 
 const collection = require('./data/collection');
@@ -100,7 +98,9 @@ function blankCosmetics() {
 }
 
 function blankMedals() {
-  return { tiers: [], firsts: [], best: 0 };
+  // `firsts` ne sert plus à rien : il date de la course au « premier du
+  // site ». On le garde vide pour ne pas casser les profils déjà écrits.
+  return { tiers: [], firsts: [], best: 0, at: {} };
 }
 
 /* ─── Progression ──────────────────────────────────────── */
@@ -114,10 +114,9 @@ function collected(profile) {
 /**
  * Met le profil à jour après une ouverture de caisse.
  *
- * `records` est l'objet partagé qui retient, pour chaque palier, qui l'a
- * atteint le premier. On le passe en argument plutôt que de le lire ici :
- * le module de stockage reste seul responsable de le charger et de
- * l'enregistrer.
+ * `records` est une trace historique, écrite mais plus jamais affichée :
+ * elle date de l'époque de la course au premier. On la garde parce
+ * qu'effacer un historique déjà écrit ne rend service à personne.
  */
 function check(profile, records) {
   const have = collected(profile);
@@ -133,14 +132,25 @@ function check(profile, records) {
 
     medals.tiers.push(tier.id);
 
-    // La course au premier : le premier arrivé prend la médaille dorée, et
-    // elle n'est plus jamais attribuée.
-    let first = false;
+    /*
+     * Il n'y a plus de « premier du site ».
+     *
+     * L'idée était de récompenser celui qui arrivait le premier à chaque
+     * palier. En pratique, à quelques joueurs, ça figeait la course dès la
+     * première semaine : les paliers étaient tous pris, et les suivants
+     * décrochaient une médaille marquée du nom de quelqu'un d'autre. Un
+     * palier, ça se mérite — ça ne se réserve pas. Tout le monde peut avoir
+     * les mêmes, et on garde la date à laquelle on l'a eu, pour soi.
+     *
+     * On continue d'écrire la trace dans l'état du site : elle ne s'affiche
+     * nulle part, mais effacer un historique déjà écrit ne rend service à
+     * personne.
+     */
     if (records && !records[tier.id]) {
       records[tier.id] = { id: profile.id, name: profile.name, at: Date.now() };
-      medals.firsts.push(tier.id);
-      first = true;
     }
+    medals.at = medals.at || {};
+    medals.at[tier.id] = Date.now();
 
     // Le cosmétique se débloque avec le palier.
     if (!profile.unlocked) profile.unlocked = [];
@@ -148,7 +158,7 @@ function check(profile, records) {
       profile.unlocked.push(tier.unlocks);
     }
 
-    earned.push({ ...tier, first });
+    earned.push({ ...tier });
   }
 
   return earned;
@@ -179,8 +189,8 @@ function equip(profile, kind, id) {
 
 /* ─── Vues ─────────────────────────────────────────────── */
 
-/** La vitrine : les paliers, ce qui est pris, ce qui reste. */
-function view(profile, records) {
+/** La vitrine : les paliers décrochés, et ceux qui restent à faire. */
+function view(profile) {
   const have = collected(profile);
   const medals = profile.medals || blankMedals();
   const unlocked = profile.unlocked || [];
@@ -189,17 +199,14 @@ function view(profile, records) {
     collected: have,
     total: TOTAL,
     step: STEP,
-    tiers: TIERS.map((t) => {
-      const record = records && records[t.id];
-      return {
-        ...t,
-        done: medals.tiers.includes(t.id),
-        first: medals.firsts.includes(t.id),
-        // Qui a décroché le « premier du site », s'il est déjà pris.
-        heldBy: record ? { name: record.name, at: record.at, you: record.id === profile.id } : null,
-        cosmetic: COSMETICS[t.unlocks] || null,
-      };
-    }),
+    tiers: TIERS.map((t) => ({
+      ...t,
+      done: medals.tiers.includes(t.id),
+      // La date à laquelle on l'a décroché, pour soi. Aucun nom d'autre
+      // joueur ne part d'ici : un palier n'appartient à personne.
+      at: (medals.at || {})[t.id] || null,
+      cosmetic: COSMETICS[t.unlocks] || null,
+    })),
     cosmetics: Object.values(COSMETICS).map((c) => ({
       ...c,
       unlocked: unlocked.includes(c.id),
@@ -216,8 +223,9 @@ function publicCosmetics(profile) {
     frame: c.frame,
     name: c.name,
     badge: c.badge ? (COSMETICS[c.badge] || {}).icon || null : null,
-    // Le nombre de médailles dorées : c'est ce qui se frime le mieux.
-    firsts: (profile.medals && profile.medals.firsts.length) || 0,
+    // Le nombre de paliers décrochés : c'est ce qui se frime le mieux, et
+    // ça ne dépend de personne d'autre.
+    tiers: (profile.medals && profile.medals.tiers.length) || 0,
   };
 }
 

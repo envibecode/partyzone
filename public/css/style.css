@@ -2141,7 +2141,76 @@ button.seat.free:hover {
   border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line);
   transition: background .18s, opacity .18s, box-shadow .18s;
 }
-.cell .sym { font-size: clamp(24px, 4.6vw, 38px); line-height: 1; }
+/* ── Les symboles de Horse House ──
+   Le symbole est un SVG plein cadre ; la lettre des cartes se pose par
+   dessus la planche de bois, et le multiplicateur d'une porte s'affiche en
+   pastille dans le coin. */
+.cell { position: relative; overflow: hidden; }
+.cell .sl-sym { width: 82%; height: 82%; display: block; }
+.cell .sl-letter {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 800 clamp(17px, 3.2vw, 27px)/1 Georgia, 'Times New Roman', serif;
+  color: #6f4f26; pointer-events: none;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .28);
+}
+.cell .sl-mult {
+  position: absolute; right: 4px; bottom: 4px;
+  padding: 2px 6px; border-radius: 999px;
+  background: var(--gold); color: #2a1e0c;
+  font: 800 clamp(9px, 1.5vw, 12px)/1 var(--f-num); font-style: normal;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, .7);
+}
+
+/* La porte d'écurie et le fer à cheval se voient de loin : ce sont les
+   deux seuls symboles qu'on cherche des yeux pendant que ça tourne. */
+.cell.is-wild {
+  background: linear-gradient(180deg, rgba(212, 175, 106, .2), rgba(120, 80, 30, .14));
+  border-color: rgba(212, 175, 106, .55);
+}
+.cell.is-scatter {
+  background: radial-gradient(60% 60% at 50% 45%, rgba(255, 207, 61, .22), transparent 70%), var(--panel-2);
+  border-color: rgba(255, 207, 61, .5);
+}
+
+/* Une porte collée pendant les tours offerts : elle respire, pour qu'on
+   voie bien qu'elle ne repartira pas. */
+/* L'ambre, ici, n'est pas la couleur d'accent du jeu : c'est celle du
+   coucher de soleil sur le ranch. Le bonus doit se distinguer du reste du
+   site d'un seul coup d'œil, y compris de son propre écran normal. */
+.cell.is-sticky {
+  border-color: #ffb03c;
+  box-shadow: 0 0 0 2px rgba(255, 176, 60, .38), 0 0 26px -8px #ffb03c;
+  animation: sticky-breathe 1.6s ease-in-out infinite;
+}
+@keyframes sticky-breathe {
+  50% { box-shadow: 0 0 0 3px rgba(255, 176, 60, .6), 0 0 34px -6px #ffb03c; }
+}
+
+/* Le mode tours offerts : le plateau passe au coucher de soleil. */
+.slots.free {
+  background: radial-gradient(520px 240px at 50% 0%, rgba(255, 176, 60, .22), transparent 70%),
+              linear-gradient(180deg, rgba(80, 40, 12, .55), rgba(30, 16, 6, .6));
+  border-color: rgba(255, 176, 60, .45);
+  box-shadow: 0 0 60px -30px rgba(255, 176, 60, .8);
+}
+.slots.free .cell { background: rgba(60, 34, 12, .55); border-color: rgba(255, 176, 60, .22); }
+
+/* ── La table des gains ── */
+.sl-paytable .pay-sym {
+  position: relative; width: 34px; height: 34px; flex: none; display: grid; place-items: center;
+}
+.sl-paytable .pay-sym svg { width: 34px; height: 34px; }
+.sl-paytable .pay-letter {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 800 13px/1 Georgia, serif; color: #6f4f26;
+}
+.sl-rules { display: grid; gap: 10px; margin-top: 16px; }
+.sl-rule {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, .28);
+}
+.sl-rule b { display: block; font-size: 13px; margin-bottom: 3px; }
+.sl-rule span { font-size: 12px; line-height: 1.55; color: var(--dim); }
 .cell.win {
   background: rgba(212, 175, 106, .16); border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(212, 175, 106, .3), 0 0 22px -6px var(--gold);
@@ -2157,7 +2226,7 @@ button.seat.free:hover {
 }
 .sl-total b { font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
 
-.sl-paytable { width: min(520px, 92vw); }
+.sl-paytable { width: min(560px, 92vw); }
 .pay-grid { margin-top: 16px; display: flex; flex-direction: column; gap: 3px; }
 .pay-row {
   display: grid; grid-template-columns: 1fr 58px 58px 58px; gap: 8px; align-items: center;
@@ -2190,11 +2259,6 @@ button.seat.free:hover {
   opacity: .6; transition: opacity .2s, border-color .2s;
 }
 .tier.done { opacity: 1; border-color: var(--line-firm); background: var(--panel-2); }
-.tier.first {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px rgba(212, 175, 106, .3), 0 0 30px -12px var(--gold);
-  background: radial-gradient(120px 60px at 50% 0%, rgba(212, 175, 106, .16), transparent 70%), var(--panel-2);
-}
 .tier-icon { font-size: 32px; line-height: 1; }
 .tier.done .tier-icon { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, .5)); }
 .tier:not(.done) .tier-icon { filter: grayscale(1) brightness(.6); }
@@ -2206,8 +2270,9 @@ button.seat.free:hover {
   padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, .3); color: var(--dim);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tier-race.mine { background: rgba(212, 175, 106, .18); color: var(--gold); }
-.tier-race.open { color: var(--gold); background: rgba(212, 175, 106, .1); }
+/* Décroché : discret et net. Pas décroché : ce qu'il reste à faire. */
+.tier-race.mine { background: rgba(140, 200, 120, .14); color: var(--green); }
+.tier-race.open { color: var(--dim); background: rgba(0, 0, 0, .3); }
 
 /* ── Les parures ── */
 
@@ -4706,3 +4771,474 @@ button.seat.free:hover {
   margin-top: var(--s-2); font: var(--ty-fine); font-size: 11px; color: var(--t-low);
 }
 .bl-ann-verdict.won { color: var(--g-party); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LOUP-GAROU
+
+   L'écran change de lumière avec la partie : la nuit il s'assombrit et
+   vire au bleu de lune, le jour il se réchauffe. C'est le seul effet
+   « décoratif » du jeu, et il porte une information — on sait où on en est
+   sans lire le bandeau.
+
+   Le reste est volontairement pauvre : pendant le débat, le centre est
+   presque vide, parce que la parole se passe sur Discord et que l'écran
+   n'a rien à y faire.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.lg-stage { align-content: start; gap: var(--s-4); }
+
+.lg-scene {
+  align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-3); text-align: center;
+  min-height: 220px; padding: var(--s-6) var(--s-5);
+  border-radius: var(--r-tile);
+  background: var(--ink-1);
+  border: 1px solid var(--hair);
+  transition: background var(--t-slow) var(--ease), border-color var(--t-slow) var(--ease);
+}
+.lg-scene h2 { font: var(--ty-title); color: var(--t-hi); }
+.lg-scene p { font: var(--ty-body); color: var(--t-mid); max-width: 56ch; }
+
+/* La nuit : bleu de lune, froid, presque noir. */
+.lg-scene.ph-nuit {
+  background: radial-gradient(120% 90% at 50% 20%, #101A33 0%, #0A1020 55%, #070A14 100%);
+  border-color: rgba(120, 160, 255, .14);
+}
+/* Le matin : la lumière revient, chaude et basse. */
+.lg-scene.ph-matin {
+  background: radial-gradient(120% 90% at 50% 10%, #33220F 0%, #1C1509 55%, #100B06 100%);
+  border-color: rgba(255, 190, 110, .14);
+}
+.lg-scene.ph-bucher, .lg-scene.ph-chasseur {
+  background: radial-gradient(120% 90% at 50% 25%, #2A0F12 0%, #180A0C 60%, #0D0607 100%);
+  border-color: rgba(255, 110, 110, .16);
+}
+.lg-scene.ph-over { border-color: color-mix(in srgb, var(--g-party) 30%, transparent); }
+
+.lg-death { color: var(--lose) !important; font-weight: 600; }
+.lg-win { color: var(--g-party) !important; }
+
+/* Le dépouillement du vote. */
+.lg-tally { display: flex; flex-direction: column; gap: 3px; width: min(320px, 100%); }
+.lg-tally div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3);
+  padding: 7px 11px; border-radius: var(--r-control);
+  background: var(--ink-2);
+}
+.lg-tally div.out { background: var(--lose-wash); }
+.lg-tally span { font: var(--ty-label); color: var(--t-mid); }
+.lg-tally b { font: 700 14px/1 var(--f-num); color: var(--t-hi); }
+
+/* Le tableau final : qui était quoi. */
+.lg-final { display: flex; flex-direction: column; gap: 2px; width: min(420px, 100%); margin-top: var(--s-3); }
+.lg-final div {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 11px; border-radius: var(--r-control);
+  background: var(--ink-2); text-align: left;
+}
+.lg-final div.won { background: var(--brand-wash); }
+.lg-final-emoji { font-size: 16px; line-height: 1; flex: none; }
+.lg-final b { flex: 1; font: var(--ty-label); }
+.lg-final i { font-style: normal; font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); }
+.lg-final em {
+  font-style: normal; flex: none; min-width: 44px; text-align: right;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--g-party);
+}
+
+/* ── SON RÔLE, TOUJOURS SOUS LES YEUX ── */
+
+.lg-role[hidden] { display: none; }
+.lg-role { align-self: stretch; }
+.lg-card {
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--ink-2); border: 1px solid var(--hair-firm);
+  border-left: 4px solid var(--t-off);
+}
+.lg-card.camp-loups   { border-left-color: var(--lose); }
+.lg-card.camp-village { border-left-color: var(--win); }
+.lg-card.dead { opacity: .6; }
+.lg-card-emoji { font-size: 26px; line-height: 1; flex: none; }
+.lg-card b { display: block; font: var(--ty-sub); color: var(--t-hi); }
+.lg-card span { display: block; font: var(--ty-fine); color: var(--t-mid); margin-top: 2px; }
+
+.lg-seen { margin-top: var(--s-2); padding: var(--s-3); border-radius: var(--r-control); background: var(--ink-1); }
+.lg-seen > b {
+  display: block; margin-bottom: 6px;
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+.lg-seen div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3);
+  padding: 4px 0;
+}
+.lg-seen span { font: var(--ty-label); color: var(--t-mid); }
+.lg-seen i { font-style: normal; font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); }
+.lg-seen div.wolf i { color: var(--lose); font-weight: 700; }
+
+/* ── LES ACTIONS ── */
+
+.lg-actions {
+  align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-3);
+}
+.lg-hint { font: var(--ty-fine); color: var(--t-mid); text-align: center; max-width: 52ch; }
+.lg-witch { width: 100%; display: flex; flex-direction: column; gap: var(--s-3); align-items: center; }
+
+.lg-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px; width: 100%;
+}
+.lg-pickbtn {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 9px 6px; border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.lg-pickbtn img { border-radius: var(--r-circle); background: var(--ink-3); }
+.lg-pickbtn span {
+  font: var(--ty-fine); font-size: 11px; color: var(--t-mid);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lg-pickbtn:hover { background: var(--ink-3); border-color: var(--hair-firm); }
+.lg-pickbtn.on { border-color: var(--g-party); background: var(--ink-4); }
+.lg-pickbtn.on span { color: var(--t-hi); }
+
+/* ── LE VILLAGE, DANS LA COLONNE ── */
+
+.lg-who {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px; border-radius: var(--r-control);
+}
+.lg-who + .lg-who { margin-top: 2px; }
+.lg-who img { border-radius: var(--r-circle); background: var(--ink-3); flex: none; }
+.lg-who.dead { opacity: .42; }
+.lg-who.dead img { filter: grayscale(1); }
+.lg-who.you { background: var(--brand-wash); }
+.lg-who.wolf { box-shadow: inset 2px 0 0 var(--lose); }
+.lg-who.away { opacity: .55; }
+.lg-who-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lg-who-info b { font: var(--ty-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-who-info span { font: var(--ty-fine); font-size: 11px; color: var(--t-low); }
+.lg-tag { font-style: normal; margin-left: 5px; font-size: 11px; }
+.lg-pick { font: var(--ty-fine); font-size: 10.5px; color: var(--lose); flex: none; }
+
+.lg-settings, .lg-log {
+  margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair);
+}
+.lg-settings h3 {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3);
+}
+.lg-settings .lg-hint { text-align: left; margin-top: var(--s-2); }
+.lg-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
+.lg-line.death { color: var(--lose); }
+.lg-line.night { color: #7B9BE0; }
+.lg-line.day { color: var(--t-mid); }
+.lg-line.end { color: var(--g-party); font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   BLINDTEST
+
+   Le lecteur YouTube est hors de vue : on entend le morceau, on ne le voit
+   pas — sinon ce n'est plus un blindtest. À sa place, un disque qui tourne
+   au rythme de la manche. Un rectangle noir n'a jamais fait danser
+   personne, et c'est la seule animation permanente de tout le site : ici
+   elle porte une information, le morceau joue.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.bt-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
+.bt-stage-wrap { align-content: start; gap: var(--s-4); }
+.bt-stage {
+  align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-3); text-align: center;
+  min-height: 260px; padding: var(--s-6) var(--s-5);
+  border-radius: var(--r-tile);
+  background: radial-gradient(120% 90% at 50% 25%, #24101E 0%, #150A12 55%, #0B0509 100%);
+  border: 1px solid rgba(255, 61, 139, .16);
+}
+.bt-stage h2 { font: var(--ty-title); color: var(--t-hi); }
+.bt-stage p { font: var(--ty-body); color: var(--t-mid); max-width: 52ch; }
+
+/* Le disque. Il tourne tant que la manche dure, et s'arrête avec elle : la
+   seule animation permanente du site, parce qu'ici elle DIT quelque chose. */
+.bt-disc {
+  position: relative;
+  width: 118px; height: 118px; border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, #1A1620 0 2px, #100D16 2px 4px),
+    #14111A;
+  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, .9), inset 0 0 0 1px rgba(255, 255, 255, .05);
+  animation: bt-spin 2.6s linear infinite;
+}
+.bt-disc-hole {
+  position: absolute; inset: 50% auto auto 50%;
+  width: 34px; height: 34px; margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  background: var(--g-slots);
+  box-shadow: inset 0 0 0 6px var(--ink-0);
+}
+@keyframes bt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bt-disc { animation: none; } }
+
+.bt-hint-line { color: var(--g-mine) !important; font-weight: 600; }
+.bt-answer-tag {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low);
+}
+.bt-answer { color: var(--g-slots) !important; }
+.bt-first-line { color: var(--win) !important; font-weight: 600; }
+.bt-miss { color: var(--t-low) !important; }
+
+/* ── LES PROPOSITIONS ── */
+
+.bt-choices {
+  align-self: stretch;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;
+}
+.bt-choice {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; border-radius: var(--r-control);
+  background: var(--ink-2); border: 1px solid var(--hair);
+  text-align: left;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.bt-choice:hover:not(:disabled) { background: var(--ink-3); border-color: var(--hair-firm); }
+.bt-choice:active:not(:disabled) { transform: translateY(1px); }
+.bt-choice-key {
+  flex: none; display: grid; place-items: center;
+  width: 24px; height: 24px; border-radius: var(--r-inline);
+  background: var(--ink-4); color: var(--t-low);
+  font: 700 12px/1 var(--f-num);
+}
+.bt-choice-text {
+  flex: 1; min-width: 0; font: var(--ty-label); color: var(--t-mid);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bt-choice.mine { border-color: var(--brand); background: var(--brand-wash); }
+.bt-choice.mine .bt-choice-text { color: var(--t-hi); }
+.bt-choice.good { border-color: var(--win); background: var(--win-wash); }
+.bt-choice.good .bt-choice-key { background: var(--win); color: var(--ink-0); }
+.bt-choice.good .bt-choice-text { color: var(--t-hi); }
+.bt-choice.bad { border-color: var(--lose); background: var(--lose-wash); }
+.bt-choice:disabled { cursor: default; }
+
+/* ── LE PODIUM ── */
+
+.bt-podium {
+  display: flex; align-items: flex-end; justify-content: center; gap: 10px;
+  margin: var(--s-4) 0 var(--s-2);
+}
+.bt-step {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  width: 108px; padding: var(--s-3) var(--s-2);
+  border-radius: var(--r-panel) var(--r-panel) 0 0;
+  background: var(--ink-2); border: 1px solid var(--hair);
+  border-bottom: 0;
+}
+/* La marche du milieu est la plus haute : c'est un podium, pas un tableau. */
+.bt-step.p1 { padding-bottom: var(--s-6); border-color: color-mix(in srgb, var(--g-mine) 45%, transparent); }
+.bt-step.p2 { padding-bottom: var(--s-4); }
+.bt-step.p3 { padding-bottom: var(--s-3); }
+.bt-step img { border-radius: var(--r-circle); background: var(--ink-3); }
+.bt-step b { font: var(--ty-label); color: var(--t-hi); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-step span { font: 700 11px/1 var(--f-num); color: var(--t-low); }
+.bt-step i {
+  position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+  font-style: normal; font: 800 22px/1 var(--f-brand); color: var(--t-off);
+}
+.bt-step.p1 i { color: var(--g-mine); }
+
+/* ── LE TABLEAU DES SCORES ── */
+
+.bt-player {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px; border-radius: var(--r-control);
+}
+.bt-player + .bt-player { margin-top: 2px; }
+.bt-player.you { background: var(--brand-wash); }
+.bt-player.away { opacity: .5; }
+.bt-player.answered { box-shadow: inset 2px 0 0 var(--brand); }
+.bt-player.right { box-shadow: inset 2px 0 0 var(--win); }
+.bt-player.wrong { box-shadow: inset 2px 0 0 var(--lose); }
+.bt-rank { width: 14px; font: 700 11px/1 var(--f-num); color: var(--t-off); flex: none; }
+.bt-player img { border-radius: var(--r-circle); background: var(--ink-3); flex: none; }
+.bt-player-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bt-player-info b { font: var(--ty-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-player-info span { font: var(--ty-fine); font-size: 10.5px; color: var(--t-low); }
+.bt-first { font-style: normal; margin-left: 4px; }
+.bt-score {
+  flex: none; font: 700 13px/1 var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--t-mid);
+}
+.bt-player.you .bt-score { color: var(--t-hi); }
+
+.bt-settings, .bt-log {
+  margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--hair);
+}
+.bt-settings h3 {
+  font: var(--ty-eyebrow); letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase; color: var(--t-low); margin-bottom: var(--s-3);
+}
+.bt-playlist { display: flex; gap: 6px; }
+.bt-playlist .input { flex: 1; min-width: 0; }
+.bt-hint { font: var(--ty-fine); font-size: 11px; color: var(--t-low); margin-top: 6px; }
+.bt-line { font: var(--ty-fine); font-size: 11.5px; color: var(--t-low); padding: 3px 0; }
+.bt-line.ok { color: var(--win); }
+.bt-line.miss { color: var(--t-off); }
+.bt-line.end { color: var(--g-party); font-weight: 600; }
+
+/* ═══════════ LA SOIRÉE ═══════════
+   Plusieurs jeux à la suite, un seul classement. Le panneau du hall pour
+   composer la soirée, le bandeau qui suit dans chaque salon, et le tableau
+   cumulé — même grammaire visuelle que le reste de la Party. */
+
+.soiree-panel .fine { line-height: 1.5; }
+
+.soiree-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.spick {
+  --c: var(--accent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ink-12);
+  border-radius: 12px;
+  background: var(--ink-04);
+  color: var(--ink-90);
+  font: 500 13px/1 var(--f-ui);
+  cursor: pointer;
+  transition: border-color .16s, background .16s, transform .16s;
+}
+.spick:hover { border-color: var(--ink-24); transform: translateY(-1px); }
+.spick.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.spick-icon { display: grid; place-items: center; color: var(--c); }
+.spick b { flex: 1; text-align: left; font-weight: 500; }
+.spick-n {
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--c);
+  color: #0b0b0d;
+  font: 600 11px/1 var(--f-num);
+  font-style: normal;
+  opacity: 0;
+}
+.spick.on .spick-n { opacity: 1; }
+
+.soiree-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--ink-08);
+}
+
+.soiree-run { display: grid; gap: 4px; margin-bottom: 12px; }
+.soiree-run b { font: 500 15px/1.3 var(--f-ui); }
+
+.soiree-table { display: grid; gap: 4px; margin: 10px 0 14px; }
+.soiree-table .sline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--ink-04);
+}
+.soiree-table .sline.me { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.soiree-table.compact .sline { padding: 5px 10px; }
+.sline-rank {
+  min-width: 20px;
+  font: 600 12px/1 var(--f-num);
+  color: var(--ink-56);
+}
+.sline img { border-radius: 999px; }
+.sline-name { flex: 1; font: 500 13px/1 var(--f-ui); }
+.sline-pts { font: 600 13px/1 var(--f-num); }
+
+/* Le bandeau, posé en haut de la vue du jeu en cours. */
+.soiree-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--ink-12);
+  border-radius: 12px;
+  background: var(--ink-04);
+}
+.soiree-bar b { font: 500 13px/1 var(--f-ui); }
+.soiree-bar .fine { flex: 1; font-family: var(--f-num); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.soiree-bar .btn { padding: 6px 12px; font-size: 12px; }
+
+.soiree-modal h4 { margin: 16px 0 0; font: 500 13px/1 var(--f-ui); color: var(--ink-56); }
+
+/* La liste des manches d'une soirée : jouées, en cours, à venir. */
+.soiree-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.sstep {
+  font-style: normal;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink-06);
+  color: var(--ink-56);
+  font: 500 12px/1.6 var(--f-ui);
+}
+.sstep.done { color: var(--ink-90); text-decoration: line-through; text-decoration-color: var(--ink-24); }
+.sstep.now { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--ink-90); }
+
+/* ══════════════ LE BUT DU JEU ══════════════
+   Quatre étapes, dites une fois, en haut de l'accueil. C'est le seul
+   endroit du site qui explique POURQUOI on joue — le reste explique
+   comment. */
+
+.loop-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+.loop-steps li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'n title' 'n text';
+  column-gap: 10px;
+  row-gap: 3px;
+  align-content: start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-2);
+}
+.loop-n {
+  grid-area: n;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #0b0b0d;
+  font: 800 12px/1 var(--f-num);
+}
+.loop-steps b { grid-area: title; font-size: 13.5px; font-weight: 800; }
+.loop-steps span:not(.loop-n) { grid-area: text; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.loop-note { margin-top: 12px; }
+.season-side { margin-top: 6px; }

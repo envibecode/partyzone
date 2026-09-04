@@ -18,13 +18,8 @@ async function player(browser, name) {
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 940 }, locale: 'fr-FR' });
   const p = await ctx.newPage();
   // La porte : le site est fermé avant son ouverture, et le navigateur
-  // d'essai entre comme tout le monde — avec la clé.
-  await p.goto('http://localhost:3000/maintenance.html', { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await p.evaluate((k) => fetch('/api/gate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }),
-  }).then((r) => r.json()), process.env.ADMIN_KEY || 'test-admin-key');
-  // On écoute la console seulement une fois la porte franchie : les 503 de
-  // la page d'attente sont le comportement attendu.
+  // d'essai entre comme tout le monde — avec la clé, posée sur le contexte.
+  await require('./pass').browserPass(ctx);
   p.on('pageerror', e => errs.push(`ERR(${name}) ` + e.message));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|ERR_TUNNEL/.test(m.text())) errs.push(`CON(${name}) ` + m.text()); });
 
@@ -55,18 +50,22 @@ async function player(browser, name) {
   await wait(900);
   check('le rang Party s’affiche', /rang Party/i.test(await a.textContent('#party-rank')));
   const games = (await a.$$('#party-games .pgame')).length;
-  check('les six jeux sont listés', games === 6, `${games} cartes`);
   /*
-   * On ne compte plus les jeux « à venir » : ce chiffre baisse à chaque
-   * fois qu'on en livre un, et un test qu'il faut réécrire à chaque
-   * livraison finit par être réécrit sans être relu. On vérifie la RÈGLE :
-   * un jeu marqué à venir n'est pas cliquable, un jeu prêt l'est — et il
-   * en reste au moins un de chaque, sinon le hall n'a plus rien à dire.
+   * On ne compte plus un nombre exact de jeux, et on n'exige plus qu'il en
+   * reste un « à venir ».
+   *
+   * Ces deux chiffres changeaient à chaque livraison, et un test qu'il faut
+   * réécrire à chaque livraison finit par être réécrit sans être relu.
+   * Maintenant que les sept jeux annoncés sont là, la liste des « à venir »
+   * est vide — et c'est une bonne nouvelle, pas un échec. On vérifie donc
+   * la RÈGLE : chaque carte est soit prête, soit à venir, et une carte à
+   * venir n'est pas cliquable.
    */
+  check('le hall liste les jeux', games >= 7, `${games} cartes`);
   const soon = (await a.$$('#party-games .pgame.soon')).length;
   const ready = (await a.$$('#party-games .pgame:not(.soon)')).length;
   check('le hall distingue les jeux prêts de ceux à venir',
-    ready >= 3 && soon >= 1 && ready + soon === games, `${ready} jouables, ${soon} à venir`);
+    ready >= 3 && ready + soon === games, `${ready} jouables, ${soon} à venir`);
   const soonClickable = await a.evaluate(() =>
     [...document.querySelectorAll('#party-games .pgame.soon button')].filter((b) => !b.disabled).length);
   check('on ne peut pas ouvrir un salon d’un jeu pas encore là', soonClickable === 0);

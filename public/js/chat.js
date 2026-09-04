@@ -70,20 +70,78 @@
     return log.scrollHeight - log.scrollTop - log.clientHeight < 60;
   }
 
+  /*
+   * COLLER EN BAS, VRAIMENT.
+   *
+   * Trois choses faisaient rater ça, et il fallait les trois pour que ça
+   * marche vraiment :
+   *
+   *  1. On mesurait « est-ce que j'étais en bas ? » au moment d'ajouter un
+   *     message. Mais quand le chat est dans une page pas encore affichée,
+   *     sa hauteur vaut zéro : le calcul répondait « non », et on ne
+   *     recollait jamais. C'est le cas de l'accueil, qui est monté avant
+   *     même l'écran de connexion. On garde donc un état explicite —
+   *     `stick` — vrai par défaut, et changé UNIQUEMENT quand la personne
+   *     fait défiler elle-même.
+   *
+   *  2. Les avatars se chargent APRÈS coup et rallongent la liste. On
+   *     collait en bas d'une liste qui grandissait juste après, et on se
+   *     retrouvait quelques messages trop haut.
+   *
+   *  3. Quand la page devient visible, la liste passe d'une hauteur nulle à
+   *     sa vraie hauteur : il faut recoller à ce moment-là aussi.
+   */
+  function toEnd(mount) {
+    const log = mount.log;
+    const go = () => { log.scrollTop = log.scrollHeight; };
+    go();
+    requestAnimationFrame(go);
+    // Les images pas encore arrivées : on recolle quand chacune se pose.
+    log.querySelectorAll('img').forEach((img) => {
+      if (img.complete) return;
+      const again = () => { if (mount.stick) go(); };
+      img.addEventListener('load', again, { once: true });
+      img.addEventListener('error', again, { once: true });
+    });
+  }
+
+  /** Recolle en bas si la personne n'a pas remonté l'historique elle-même. */
+  function keepEnd(mount) {
+    if (mount.stick !== false) toEnd(mount);
+  }
+
+  /** Branche la surveillance d'un emplacement : défilement et visibilité. */
+  function watch(mount) {
+    mount.stick = true;
+    mount.log.addEventListener('scroll', () => {
+      // Une liste invisible mesure zéro : on ne conclut rien dans ce cas,
+      // sinon un simple changement de page « décrocherait » le chat.
+      if (!mount.log.clientHeight) return;
+      mount.stick = atBottom(mount.log);
+    }, { passive: true });
+
+    // La page devient visible : la liste prend sa vraie hauteur, on recolle.
+    if (typeof ResizeObserver === 'function') {
+      let had = 0;
+      new ResizeObserver(() => {
+        const now = mount.log.clientHeight;
+        if (now && !had) keepEnd(mount);
+        had = now;
+      }).observe(mount.log);
+    }
+  }
+
   function redraw(mount) {
     mount.log.replaceChildren();
     history.forEach((m) => mount.log.appendChild(nodeFor(m)));
-    mount.log.scrollTop = mount.log.scrollHeight;
+    keepEnd(mount);
   }
 
   function append(m) {
     mounts.forEach((mount) => {
-      // On ne colle en bas que si la personne y était déjà : sinon on la
-      // laisse lire tranquillement ce qu'elle est en train de remonter.
-      const stick = atBottom(mount.log);
       mount.log.appendChild(nodeFor(m));
       while (mount.log.children.length > 80) mount.log.firstElementChild.remove();
-      if (stick) mount.log.scrollTop = mount.log.scrollHeight;
+      keepEnd(mount);
     });
   }
 
@@ -127,6 +185,7 @@
     /** Enregistre un emplacement d'affichage : { log, form, input }. */
     mount(mount) {
       mounts.push(mount);
+      watch(mount);
       redraw(mount);
 
       if (mount.form) {
@@ -144,6 +203,23 @@
 
     /** Redessine partout : utile quand on vient d'obtenir les droits admin. */
     refresh() { mounts.forEach(redraw); },
+
+    /**
+     * Le même « coller en bas », pour les chats de salon Party qui ne
+     * passent pas par `mount` (ils sont redessinés par leur jeu).
+     * Écrit une fois ici plutôt que recopié dans chaque jeu.
+     */
+    stick(log) {
+      if (!log) return;
+      if (log.__pzStick === undefined) {
+        log.__pzStick = true;
+        log.addEventListener('scroll', () => {
+          if (!log.clientHeight) return;
+          log.__pzStick = atBottom(log);
+        }, { passive: true });
+      }
+      if (log.__pzStick) toEnd({ log, stick: true });
+    },
   };
 
   document.addEventListener('pz:ready', bind);

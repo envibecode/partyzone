@@ -241,16 +241,83 @@ function connect(cookie, name) {
 
   /* ── ET ELLE REPART ── */
   section('Et on peut continuer à jouer');
-  const turn = players.find((p) => p.mono && p.mono.you.yourTurn);
+  let turn = players.find((p) => p.mono && p.mono.you.yourTurn);
   check('celui dont c’est le tour a la main', Boolean(turn));
-  if (turn) {
+
+  /*
+   * ON AMÈNE D'ABORD LA PARTIE SUR UN COUP OÙ L'ON PEUT LANCER LES DÉS.
+   *
+   * La sauvegarde tombe n'importe où dans un tour. Au réveil, le joueur en
+   * cours peut aussi bien devoir lancer que devoir décider d'acheter la
+   * case sur laquelle il vient de tomber, ou simplement passer la main.
+   * Envoyer `mono:roll` d'office faisait échouer ce test une fois sur cinq
+   * — pas parce que la reprise était cassée, mais parce que le test
+   * demandait un coup interdit, et se plaignait ensuite que rien ne
+   * bougeait.
+   *
+   * On rejoue donc les mêmes actions que la boucle d'avant le redémarrage,
+   * jusqu'à retomber sur « à toi de lancer ». C'est au passage la
+   * vérification la plus utile de toutes : la partie reprise accepte les
+   * coups, dans le bon ordre, et la main continue de tourner.
+   */
+  let steps = 0;
+  let answered = 0;
+  while (turn && turn.mono.step !== 'roll' && steps++ < 16) {
+    const before = `${turn.mono.currentId}/${turn.mono.step}`;
+    const step = turn.mono.step;
+    // On rejoue les mêmes actions que la boucle d'avant l'arrêt. « decide »
+    // se règle en achetant, « end » en passant la main. Une étape qu'on ne
+    // sait pas jouer (une enchère, une dette) n'est pas un échec : on
+    // s'arrête là et on le dit.
+    if (step === 'decide') turn.socket.emit('mono:buy');
+    else if (step === 'end') turn.socket.emit('mono:end');
+    else break;
+    await waitFor(() => {
+      const now = players.find((p) => p.mono && p.mono.you.yourTurn);
+      return now && `${now.mono.currentId}/${now.mono.step}` !== before;
+    }, 8000, `la partie répond après « ${step} »`);
+    answered += 1;
+    await wait(150);
+    turn = players.find((p) => p.mono && p.mono.you.yourTurn);
+  }
+  const reached = turn ? turn.mono.step : '—';
+  check('la partie reprise accepte les coups',
+    answered > 0 || reached === 'roll',
+    `${answered} action(s) jouée(s), étape « ${reached} »`);
+
+  if (turn && turn.mono.step === 'roll') {
     const posBefore = turn.mono.players.find((p) => p.you).pos;
     // Les dés du coup PRÉCÉDENT ont été sauvegardés avec la partie : on
     // attend qu'ils changent, pas qu'ils existent — sinon on lit l'état
     // d'avant le redémarrage et on croit que rien n'a bougé.
-    const diceBefore = (turn.mono.dice || []).join('-');
+    /*
+     * ON SURVEILLE UNE EMPREINTE, PAS UN SEUL CHAMP.
+     *
+     * Chaque candidat pris isolément a son angle mort, et chacun a fait
+     * échouer ce test à tour de rôle sans qu'il y ait le moindre bug :
+     *
+     *   · les DÉS peuvent retomber sur la même paire qu'avant le
+     *     redémarrage (une fois sur vingt et une) ;
+     *   · l'ÉTAPE revient sur « à toi de lancer » quand on fait un double ;
+     *   · le JOURNAL ne reçoit pas toujours de ligne — tomber sur une case
+     *     libre n'écrit rien, ça ouvre juste le choix d'acheter ;
+     *   · la LONGUEUR du journal ne bouge plus du tout : il est plafonné à
+     *     trente lignes et il est déjà plein.
+     *
+     * On regarde donc tout à la fois : dés, position, argent, étape et
+     * dernière ligne du journal. Un lancer change forcément au moins l'un
+     * des cinq.
+     */
+    const sig = () => JSON.stringify([
+      turn.mono.dice,
+      turn.mono.step,
+      (turn.mono.players.find((p) => p.you) || {}).pos,
+      (turn.mono.players.find((p) => p.you) || {}).money,
+      (turn.mono.log || [])[0] || null,
+    ]);
+    const sigBefore = sig();
     turn.socket.emit('mono:roll');
-    await waitFor(() => (turn.mono.dice || []).join('-') !== diceBefore, 9000, 'nouveaux dés');
+    await waitFor(() => sig() !== sigBefore, 9000, 'nouveaux dés');
     check('les dés répondent', Array.isArray(turn.mono.dice), (turn.mono.dice || []).join('+'));
     const posAfter = turn.mono.players.find((p) => p.you).pos;
     check('le pion avance', posAfter !== posBefore || turn.mono.you.jail,

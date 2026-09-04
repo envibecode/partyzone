@@ -49,4 +49,24 @@ function withPass(pass, cookie) {
   return pass ? `${pass}; ${cookie}` : cookie;
 }
 
-module.exports = { gatePass, withPass };
+/**
+ * Pose le laissez-passer directement dans un navigateur d'essai.
+ *
+ * On ne passe plus par la page d'attente pour ça. Elle se redirige toute
+ * seule vers l'accueil dès que le site est ouvert — et le jour de
+ * l'ouverture, ça a fait échouer tous les parcours navigateur d'un coup :
+ * le contexte d'exécution disparaissait au milieu du `fetch`. Le cookie
+ * posé sur le contexte marche dans les deux cas, porte ouverte ou fermée.
+ */
+async function browserPass(ctx, base = 'http://localhost:3000') {
+  const pass = await gatePass(base);
+  if (!pass) return false;   // le site est ouvert : rien à poser
+  const url = new URL(base);
+  await ctx.addCookies(pass.split('; ').map((one) => {
+    const at = one.indexOf('=');
+    return { name: one.slice(0, at), value: one.slice(at + 1), domain: url.hostname, path: '/' };
+  }));
+  return true;
+}
+
+module.exports = { gatePass, withPass, browserPass };

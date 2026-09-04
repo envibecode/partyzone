@@ -121,6 +121,188 @@
       <circle cx="8.5" cy="15.5" r=".9" fill="currentColor" stroke="none"/>
       <circle cx="15.5" cy="15.5" r=".9" fill="currentColor" stroke="none"/>
     </g>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         LES SYMBOLES DE « HORSE HOUSE »
+
+         Dessinés à la main, en SVG, plutôt que chargés comme images : ils
+         se colorent avec le thème, restent nets à toutes les tailles, et
+         ne demandent aucun fichier à héberger. Chaque symbole tient dans
+         une boîte de 64 × 64, ce qui permet de les échanger sans toucher
+         à la mise en page des rouleaux.
+
+         Le style suit la direction artistique du site : aplats, contours
+         épais, pas de dégradés compliqués. Les quatre chevaux partagent la
+         même tête ; seuls la robe et l'accessoire changent, ce qui les
+         rend reconnaissables d'un coup d'œil sur un rouleau qui tourne.
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Le cheval cowboy : chapeau et bandana rouge ── -->
+    <symbol id="hs-cowboy" viewBox="0 0 64 64">
+      <path d="M20 26 L17 14 L28.5 20 Z" fill="#7d5330"/>
+      <path d="M44 26 L47 14 L35.5 20 Z" fill="#7d5330"/>
+      <rect x="15" y="19" width="34" height="29" rx="13.5" fill="#a26c3e"/>
+      <ellipse cx="32" cy="46" rx="12.5" ry="9.5" fill="#e0b184"/>
+      <ellipse cx="27" cy="45" rx="1.8" ry="2.6" fill="#7a4a26"/>
+      <ellipse cx="37" cy="45" rx="1.8" ry="2.6" fill="#7a4a26"/>
+      <path d="M26 50.5 q6 4 12 0" stroke="#7a4a26" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="25" cy="31" r="4.6" fill="#fff"/><circle cx="39" cy="31" r="4.6" fill="#fff"/>
+      <circle cx="26" cy="31.8" r="2.4" fill="#1d1710"/><circle cx="40" cy="31.8" r="2.4" fill="#1d1710"/>
+      <path d="M15 53 q17 8 34 0 l2 5.5 q-19 9 -38 0 Z" fill="#cf4038"/>
+      <path d="M22 55.5 q10 3.5 20 0" stroke="#a72f28" stroke-width="1.6" fill="none"/>
+      <path d="M4 20 q28 8 56 0 q-3 7.5 -28 7.5 q-25 0 -28 -7.5 Z" fill="#7d5836"/>
+      <path d="M19.5 20.5 q0 -13 12.5 -13 q12.5 0 12.5 13 z" fill="#9a6c40"/>
+      <rect x="18.5" y="16.5" width="27" height="4.5" rx="2.2" fill="#5d3f22"/>
+    </symbol>
+
+    <!-- ── La jument princesse : couronne de fleurs, crinière blonde ── -->
+    <symbol id="hs-princess" viewBox="0 0 64 64">
+      <path d="M20 20 L16.5 7 L28.5 14 Z" fill="#e8dcc6"/>
+      <path d="M44 20 L47.5 7 L35.5 14 Z" fill="#e8dcc6"/>
+      <rect x="15" y="13" width="34" height="31" rx="14" fill="#f5ecd9"/>
+      <path d="M13 20 q-4 12 1 22 q4 -12 3 -22 Z" fill="#f2cf72"/>
+      <path d="M51 20 q4 12 -1 22 q-4 -12 -3 -22 Z" fill="#f2cf72"/>
+      <path d="M17 15 q7 -6 15 -5 q8 -1 15 5 q-3 -10 -15 -10 q-12 0 -15 10 Z" fill="#f2cf72"/>
+      <ellipse cx="32" cy="44" rx="12.5" ry="10" fill="#fdf7ea"/>
+      <ellipse cx="27" cy="43" rx="1.8" ry="2.6" fill="#c9a37c"/>
+      <ellipse cx="37" cy="43" rx="1.8" ry="2.6" fill="#c9a37c"/>
+      <path d="M26 49 q6 4 12 0" stroke="#c9a37c" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="25" cy="27" r="5" fill="#fff"/><circle cx="39" cy="27" r="5" fill="#fff"/>
+      <circle cx="26" cy="27.8" r="2.6" fill="#2f5aa8"/><circle cx="40" cy="27.8" r="2.6" fill="#2f5aa8"/>
+      <circle cx="25.2" cy="26.6" r="1" fill="#fff"/><circle cx="39.2" cy="26.6" r="1" fill="#fff"/>
+      <g>
+        <circle cx="19" cy="14" r="4" fill="#ef7fa8"/><circle cx="19" cy="14" r="1.6" fill="#ffd76e"/>
+        <circle cx="30" cy="9" r="4.4" fill="#f6a8c6"/><circle cx="30" cy="9" r="1.7" fill="#ffd76e"/>
+        <circle cx="41" cy="12" r="4" fill="#ef7fa8"/><circle cx="41" cy="12" r="1.6" fill="#ffd76e"/>
+      </g>
+    </symbol>
+
+    <!-- ── Le poulain farceur : petite tête, casquette à l'envers ── -->
+    <symbol id="hs-foal" viewBox="0 0 64 64">
+      <path d="M21 24 L18 12 L29 18 Z" fill="#8e5f36"/>
+      <path d="M43 24 L46 12 L35 18 Z" fill="#8e5f36"/>
+      <rect x="17" y="18" width="30" height="28" rx="13" fill="#b47c48"/>
+      <ellipse cx="32" cy="45" rx="11.5" ry="9" fill="#e8c096"/>
+      <ellipse cx="27.5" cy="44" rx="1.7" ry="2.4" fill="#8a5730"/>
+      <ellipse cx="36.5" cy="44" rx="1.7" ry="2.4" fill="#8a5730"/>
+      <path d="M26.5 49.5 q5.5 4.5 11 0" stroke="#8a5730" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="31" r="4.6" fill="#fff"/><circle cx="38" cy="31" r="4.6" fill="#fff"/>
+      <circle cx="27.2" cy="31.6" r="2.4" fill="#1d1710"/><circle cx="39.2" cy="31.6" r="2.4" fill="#1d1710"/>
+      <path d="M12 25 q20 -14 40 0 q-20 -5 -40 0 Z" fill="#3f7ad6"/>
+      <path d="M15 24 q17 -13 34 0 q-17 -6 -34 0 Z" fill="#5590e8"/>
+      <path d="M46 22 q10 1 11 7 q-7 -2 -11 -3 Z" fill="#2f63b5"/>
+      <circle cx="32" cy="18" r="2.4" fill="#ffd76e"/>
+    </symbol>
+
+    <!-- ── L'étalon musclé : robe sombre, crinière noire, lunettes ── -->
+    <symbol id="hs-stallion" viewBox="0 0 64 64">
+      <path d="M20 20 L16.5 7 L28.5 14 Z" fill="#4a3021"/>
+      <path d="M44 20 L47.5 7 L35.5 14 Z" fill="#4a3021"/>
+      <rect x="15" y="13" width="34" height="31" rx="14" fill="#8a5a35"/>
+      <path d="M17 15 q7 -6 15 -5 q8 -1 15 5 q-3 -10 -15 -10 q-12 0 -15 10 Z" fill="#2b1f15"/>
+      <path d="M13 14 q-4 12 1 22 q5 -12 3 -22 Z" fill="#2b1f15"/>
+      <ellipse cx="32" cy="44" rx="12.5" ry="10" fill="#bd8452"/>
+      <ellipse cx="27" cy="43" rx="1.8" ry="2.6" fill="#4a3021"/>
+      <ellipse cx="37" cy="43" rx="1.8" ry="2.6" fill="#4a3021"/>
+      <path d="M26 50 q6 3 12 0" stroke="#4a3021" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M16 26 h32" stroke="#181410" stroke-width="2.6" stroke-linecap="round"/>
+      <rect x="17" y="22" width="13" height="9" rx="3.5" fill="#181410"/>
+      <rect x="34" y="22" width="13" height="9" rx="3.5" fill="#181410"/>
+      <rect x="18.6" y="23.6" width="9.8" height="5.8" rx="2.4" fill="#46608a"/>
+      <rect x="35.6" y="23.6" width="9.8" height="5.8" rx="2.4" fill="#46608a"/>
+      <path d="M20 24.5 l4 0 -5.5 4 z" fill="#a9c1e0" opacity=".75"/>
+      <path d="M37 24.5 l4 0 -5.5 4 z" fill="#a9c1e0" opacity=".75"/>
+    </symbol>
+
+    <!-- ── La botte de foin ── -->
+    <symbol id="hs-hay" viewBox="0 0 64 64">
+      <!-- Les brins qui dépassent : c'est ce qui distingue une botte de
+           foin d'une caisse en bois, et rien d'autre. -->
+      <g stroke="#e9c76d" stroke-width="2.2" stroke-linecap="round" fill="none">
+        <path d="M11 19 q3 -8 8 -9"/><path d="M22 17 q1 -8 5 -10"/>
+        <path d="M42 17 q-1 -8 -5 -10"/><path d="M53 19 q-3 -8 -8 -9"/>
+      </g>
+      <rect x="9" y="17" width="46" height="32" rx="6" fill="#dfae47"/>
+      <rect x="9" y="17" width="46" height="32" rx="6" fill="none" stroke="#a97a27" stroke-width="2.4"/>
+      <g stroke="#c2903a" stroke-width="1.7" stroke-linecap="round">
+        <path d="M13 23 h12 M29 23 h9 M42 23 h9"/>
+        <path d="M13 30 h8 M25 30 h13 M42 30 h9"/>
+        <path d="M13 37 h13 M30 37 h8 M42 37 h9"/>
+        <path d="M13 44 h9 M26 44 h12 M42 44 h9"/>
+      </g>
+      <rect x="18" y="15" width="5" height="36" rx="2.2" fill="#7c5a2a"/>
+      <rect x="41" y="15" width="5" height="36" rx="2.2" fill="#7c5a2a"/>
+      <path d="M18 22 h5 M41 22 h5" stroke="#5d4320" stroke-width="1.4"/>
+    </symbol>
+
+    <!-- ── Le fer à cheval du ranch : du fer, pas de l'or ── -->
+    <symbol id="hs-shoe" viewBox="0 0 64 64">
+      <path d="M32 8 C18 8 12 20 13 32 C14 42 16 48 18 54 L27 52 C25 46 23 40 23 32 C23 24 26 18 32 18 C38 18 41 24 41 32 C41 40 39 46 37 52 L46 54 C48 48 50 42 51 32 C52 20 46 8 32 8 Z"
+            fill="#c8933a" stroke="#8d6524" stroke-width="2.4" stroke-linejoin="round"/>
+      <circle cx="19" cy="26" r="2" fill="#6d4d1a"/><circle cx="45" cy="26" r="2" fill="#6d4d1a"/>
+      <circle cx="19.5" cy="38" r="2" fill="#6d4d1a"/><circle cx="44.5" cy="38" r="2" fill="#6d4d1a"/>
+      <circle cx="21" cy="48" r="2" fill="#6d4d1a"/><circle cx="43" cy="48" r="2" fill="#6d4d1a"/>
+    </symbol>
+
+    <!-- ── Le seau d'avoine ── -->
+    <symbol id="hs-oats" viewBox="0 0 64 64">
+      <!-- L'anse passe AU-DESSUS du seau, comme sur un vrai seau de ferme.
+           Sur le côté, ça faisait une chope de bière. -->
+      <path d="M15 24 q17 -16 34 0" stroke="#8d99a6" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      <path d="M15 25 L49 25 L44.5 55 Q32 58 19.5 55 Z" fill="#c2cad3"/>
+      <path d="M15 25 L49 25 L47.8 33 Q32 37 16.2 33 Z" fill="#dde3ea"/>
+      <g stroke="#9aa5b1" stroke-width="1.6">
+        <path d="M21 29 L19.5 54 M32 29 L32 56 M43 29 L44.5 54"/>
+      </g>
+      <path d="M16 40 q16 4 32 0" stroke="#9aa5b1" stroke-width="2" fill="none"/>
+      <ellipse cx="32" cy="25" rx="17" ry="5" fill="#dfae47"/>
+      <ellipse cx="25" cy="23.6" rx="4" ry="2.3" fill="#f0ca7c"/>
+      <ellipse cx="38" cy="24.6" rx="4.5" ry="2.5" fill="#f0ca7c"/>
+      <g stroke="#c99436" stroke-width="2.1" fill="none" stroke-linecap="round">
+        <path d="M24 21 q2 -8 6 -10"/><path d="M35 20.5 q3 -8 8 -9"/>
+      </g>
+      <circle cx="15" cy="25" r="2.2" fill="#8d99a6"/><circle cx="49" cy="25" r="2.2" fill="#8d99a6"/>
+    </symbol>
+
+    <!-- ══ Les cartes : une planche de bois, deux clous, une lettre ══ -->
+    <symbol id="hs-card" viewBox="0 0 64 64">
+      <rect x="8" y="10" width="48" height="44" rx="6" fill="#cfa571"/>
+      <rect x="8" y="10" width="48" height="44" rx="6" fill="none" stroke="#8f6836" stroke-width="2.5"/>
+      <path d="M8 22 h48 M8 42 h48" stroke="#b98f5d" stroke-width="1.6"/>
+      <circle cx="14" cy="16" r="1.8" fill="#6f4f26"/><circle cx="50" cy="16" r="1.8" fill="#6f4f26"/>
+      <circle cx="14" cy="48" r="1.8" fill="#6f4f26"/><circle cx="50" cy="48" r="1.8" fill="#6f4f26"/>
+    </symbol>
+
+    <!-- ══ La porte d'écurie : le joker ══ -->
+    <symbol id="hs-wild" viewBox="0 0 64 64">
+      <rect x="6" y="8" width="52" height="48" rx="5" fill="#6b4527"/>
+      <rect x="9" y="11" width="21" height="42" rx="3" fill="#8a5c33"/>
+      <rect x="34" y="11" width="21" height="42" rx="3" fill="#8a5c33"/>
+      <path d="M9 20 h21 M9 44 h21 M34 20 h21 M34 44 h21" stroke="#6b4527" stroke-width="2"/>
+      <path d="M9 11 L30 53 M30 11 L9 53" stroke="#6b4527" stroke-width="2.6" opacity=".55"/>
+      <path d="M34 11 L55 53 M55 11 L34 53" stroke="#6b4527" stroke-width="2.6" opacity=".55"/>
+      <circle cx="29.5" cy="47" r="2.1" fill="#3f2a15"/>
+      <circle cx="34.5" cy="47" r="2.1" fill="#3f2a15"/>
+      <rect x="9" y="23" width="46" height="16" rx="3" fill="#e8b53c" stroke="#a97a1e" stroke-width="2"/>
+      <text x="32" y="34.5" text-anchor="middle" font-family="Georgia, serif" font-weight="700"
+            font-size="10" letter-spacing=".5" fill="#5c3d12">HORSE</text>
+    </symbol>
+
+    <!-- ══ Le fer à cheval porte-bonheur : le scatter ══ -->
+    <symbol id="hs-scatter" viewBox="0 0 64 64">
+      <path d="M32 12 C20 12 15 22 16 32 C17 41 19 46 20.5 51 L28 49.5 C26.5 44 25 39 25 32 C25 25 27.5 20 32 20 C36.5 20 39 25 39 32 C39 39 37.5 44 36 49.5 L43.5 51 C45 46 47 41 48 32 C49 22 44 12 32 12 Z"
+            fill="#ffcf3d" stroke="#c48f10" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M28 16 q4 -2 8 0 q-4 2 -8 0 Z" fill="#fff3c4"/>
+      <circle cx="21.5" cy="28" r="1.8" fill="#a97a10"/><circle cx="42.5" cy="28" r="1.8" fill="#a97a10"/>
+      <circle cx="22" cy="40" r="1.8" fill="#a97a10"/><circle cx="42" cy="40" r="1.8" fill="#a97a10"/>
+      <g fill="#fff6cf">
+        <path d="M9 14 l1.6 4.2 4.2 1.6 -4.2 1.6 -1.6 4.2 -1.6 -4.2 -4.2 -1.6 4.2 -1.6 Z"/>
+        <path d="M55 10 l1.3 3.4 3.4 1.3 -3.4 1.3 -1.3 3.4 -1.3 -3.4 -3.4 -1.3 3.4 -1.3 Z"/>
+        <path d="M52 46 l1.1 2.9 2.9 1.1 -2.9 1.1 -1.1 2.9 -1.1 -2.9 -2.9 -1.1 2.9 -1.1 Z"/>
+        <path d="M11 44 l1.1 2.9 2.9 1.1 -2.9 1.1 -1.1 2.9 -1.1 -2.9 -2.9 -1.1 2.9 -1.1 Z"/>
+      </g>
+    </symbol>
+
   </defs>
 </svg>
 
@@ -315,6 +497,49 @@
         <div class="hero-cards" id="hero-cards"></div>
       </header>
 
+      <!-- ─ LE BUT DU JEU ─
+           Une boucle en quatre temps, dite une bonne fois. Sans ça, on
+           arrive sur un site plein de jeux sans savoir ce qu'on y cherche —
+           et on croit que le but est d'amasser des pièces, alors que c'est
+           exactement le contraire : il faut les dépenser. -->
+      <section class="section loop">
+        <div class="section-head">
+          <h2>Le but</h2>
+          <p>Finir le mois avec le plus d’<b>XP</b>. Rien d’autre ne compte pour le lot.</p>
+        </div>
+        <ol class="loop-steps">
+          <li>
+            <span class="loop-n">1</span>
+            <b>Tu joues au casino</b>
+            <span>Blackjack, roulette, Plinko, machine à sous. C’est là qu’on fait
+                  les pièces — ou qu’on les perd.</span>
+          </li>
+          <li>
+            <span class="loop-n">2</span>
+            <b>Tu ouvres des caisses</b>
+            <span>Les pièces servent à ça, et seules les caisses donnent de
+                  grosses quantités d’XP. Garder son magot ne rapporte rien.</span>
+          </li>
+          <li>
+            <span class="loop-n">3</span>
+            <b>Tu montes au classement</b>
+            <span>Le premier en XP au dernier jour du mois remporte le lot.
+                  Le site désigne, un humain remet.</span>
+          </li>
+          <li>
+            <span class="loop-n">4</span>
+            <b>À sec ? La mine</b>
+            <span>Le filet de secours : une barre d’endurance vaut environ
+                  60 pièces. De quoi reposer une mise, pas de quoi s’enrichir.</span>
+          </li>
+        </ol>
+        <p class="fine loop-note">
+          La section <b>Party</b> est à part : son rang ne compte <b>pas</b> pour le lot
+          du mois. On y joue pour être le meilleur entre potes, et aucune pièce
+          n’y est misée.
+        </p>
+      </section>
+
       <!-- ─ 2. À quoi je joue ─ -->
       <section class="section">
         <div class="section-head">
@@ -371,16 +596,18 @@
     <section class="view" id="view-leaderboard">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-trophy"/></svg>Classement</h1>
-        <p>Qui a le plus de pièces, qui a le plus joué, et qui vient le plus souvent
-           en Party. Trois façons de lire la même soirée.</p>
+        <p><b>L’XP est ce qui compte</b> : c’est elle qui décide du vainqueur du mois.
+           Les pièces ne sont qu’un moyen — elles servent à ouvrir des caisses, et
+           ce sont les caisses qui donnent l’XP. Le rang Party, lui, ne compte que
+           pour la fierté entre potes.</p>
       </div>
       <div class="lb-grid">
         <div class="panel">
           <div class="panel-head">
             <h2>Le tableau</h2>
             <div class="segs" id="lb-sort">
-              <button class="seg active" data-sort="coins">Pièces</button>
-              <button class="seg" data-sort="xp">Niveau</button>
+              <button class="seg active" data-sort="xp">XP</button>
+              <button class="seg" data-sort="coins">Pièces</button>
               <button class="seg" data-sort="party">Party</button>
             </div>
           </div>
@@ -486,7 +713,7 @@
     <section class="view" id="view-slots" data-game="slots">
       <div class="game-layout three">
         <aside class="betpanel">
-          <div class="bet-tabs"><button class="bet-tab active">Les Copains</button></div>
+          <div class="bet-tabs"><button class="bet-tab active">Horse House</button></div>
           <label class="field">
             <span>Mise par ligne <i class="unit">¤</i></span>
             <div class="bet-input">
@@ -495,8 +722,8 @@
             </div>
           </label>
           <div class="sl-total">
-            <span>10 lignes fixes · total misé</span>
-            <b id="sl-total">200</b>
+            <span id="sl-lines-label">20 lignes fixes · total misé</span>
+            <b id="sl-total">400</b>
           </div>
           <button class="btn btn-green btn-block big" id="sl-spin">TOURNER</button>
           <button class="btn btn-mini btn-block" id="sl-auto">Auto : off</button>
@@ -748,8 +975,9 @@
     <section class="view" id="view-medals">
       <div class="view-head">
         <h1><svg class="h1-icon" viewBox="0 0 24 24"><use href="#i-medal"/></svg>Médailles &amp; parures</h1>
-        <p>Tous les cinquante objets trouvés, un palier tombe. Le premier joueur du site
-           à l’atteindre décroche la version dorée — et elle ne se redonne jamais.</p>
+        <p>Tous les cinquante objets trouvés, un palier tombe, et il débloque de quoi
+           personnaliser ton pseudo. <b>Tout le monde peut avoir les mêmes</b> — un palier
+           se mérite, il ne se réserve pas.</p>
       </div>
 
       <div class="med-top">
@@ -849,6 +1077,15 @@
           </form>
           <p class="fine">Quatre lettres, données par celui qui a ouvert le salon.</p>
         </div>
+      </div>
+
+      <!-- LA SOIRÉE : plusieurs jeux à la suite, un seul classement. -->
+      <div class="panel soiree-panel" id="party-soiree">
+        <div class="panel-head">
+          <h2>Une soirée</h2>
+          <span class="fine">Plusieurs jeux à la suite, un seul classement</span>
+        </div>
+        <div id="soiree-body"></div>
       </div>
 
       <div class="panel">
@@ -1112,6 +1349,141 @@
       </div>
     </section>
 
+    <!-- ══════ BLINDTEST ══════
+         La toute première idée du site, revenue à sa place. Le lecteur
+         YouTube est caché : on entend le morceau, on ne le voit pas — sans
+         quoi ce ne serait plus un blindtest. À sa place, un disque qui
+         tourne, parce qu'un rectangle noir n'a jamais fait danser
+         personne. -->
+    <section class="view" id="view-bt" data-game="party">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-spark"/></svg> Blindtest</span>
+          <button class="room-code" id="bt-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="bt-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-soft hidden" id="bt-skip">Passer</button>
+          <button class="btn btn-gold" id="bt-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="bt-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="bt-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>Scores</h2></div>
+          <div id="bt-board"></div>
+
+          <div class="bt-settings hidden" id="bt-settings">
+            <h3>La playlist</h3>
+            <form class="bt-playlist" id="bt-playlist-form">
+              <input class="input" id="bt-url" placeholder="Adresse d’une playlist YouTube" autocomplete="off">
+              <button class="btn btn-soft" id="bt-load" type="submit">Charger</button>
+            </form>
+            <p class="bt-hint" id="bt-status">Colle l’adresse d’une playlist publique. Ton navigateur la lit —
+               aucune clé, aucun compte Google.</p>
+
+            <h3 style="margin-top:16px">Réglages</h3>
+            <div class="set-row">
+              <span>Niveau</span>
+              <div class="segs" id="bt-level">
+                <button class="seg" data-level="facile">Facile</button>
+                <button class="seg active" data-level="moyen">Moyen</button>
+                <button class="seg" data-level="difficile">Dur</button>
+              </div>
+            </div>
+            <div class="set-row">
+              <span>Manches</span>
+              <div class="segs" id="bt-rounds">
+                <button class="seg" data-rounds="5">5</button>
+                <button class="seg active" data-rounds="10">10</button>
+                <button class="seg" data-rounds="20">20</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bt-log" id="bt-log"></div>
+        </aside>
+
+        <div class="stage bt-stage-wrap">
+          <div class="bt-stage" id="bt-stage"></div>
+          <div class="bt-choices" id="bt-choices"></div>
+          <!-- Les deux lecteurs YouTube. Le premier joue les extraits, le
+               second sert seulement à lire une playlist. Tous deux sont
+               hors de vue : entendre, pas regarder. -->
+          <div class="bt-hidden"><div id="bt-player"></div><div id="bt-loader"></div></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="bt-chat"></div>
+          <form class="chat-form" id="bt-chat-form">
+            <input class="input" id="bt-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════ LOUP-GAROU ══════
+         Le site tient les rôles, les nuits, les votes et les morts. Il ne
+         tient pas la parole : le débat se fait de vive voix sur Discord.
+         C'est pour ça que le centre de l'écran est presque vide pendant le
+         débat — il n'a rien à y faire. -->
+    <section class="view" id="view-lg" data-game="party">
+      <div class="room-bar">
+        <div class="room-id">
+          <span class="room-game"><svg viewBox="0 0 24 24" width="17" height="17"><use href="#i-wolf"/></svg> Loup-garou</span>
+          <button class="room-code" id="lg-code" data-tip="Copier le code">————</button>
+        </div>
+        <div class="room-phase" id="lg-phase">—</div>
+        <div class="room-acts">
+          <button class="btn btn-gold" id="lg-start">Lancer la partie</button>
+          <button class="btn btn-soft" id="lg-leave">Quitter</button>
+        </div>
+      </div>
+      <div class="room-timer"><span id="lg-bar"></span></div>
+
+      <div class="room-layout">
+        <aside class="panel room-players">
+          <div class="panel-head"><h2>Le village</h2></div>
+          <div id="lg-village"></div>
+
+          <div class="lg-settings hidden" id="lg-settings">
+            <h3>Réglages</h3>
+            <div class="set-row">
+              <span>Débat</span>
+              <div class="segs" id="lg-debate">
+                <button class="seg" data-debate="90">1 min 30</button>
+                <button class="seg active" data-debate="150">2 min 30</button>
+                <button class="seg" data-debate="240">4 min</button>
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" id="lg-reveal" checked> Révéler le rôle des morts</label>
+            <p class="lg-hint" id="lg-compo">—</p>
+          </div>
+
+          <div class="lg-log" id="lg-log"></div>
+        </aside>
+
+        <div class="stage lg-stage">
+          <div class="lg-scene" id="lg-scene"></div>
+          <div class="lg-role" id="lg-role"></div>
+          <div class="lg-actions" id="lg-actions"></div>
+        </div>
+
+        <aside class="panel room-chat">
+          <div class="panel-head"><h2>Salon</h2></div>
+          <div class="room-msgs" id="lg-chat"></div>
+          <form class="chat-form" id="lg-chat-form">
+            <input class="input" id="lg-chat-input" maxlength="200" placeholder="Parler…" autocomplete="off">
+            <button class="btn btn-soft" type="submit">→</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+
     <!-- ══════ MONOPOLY ══════ -->
     <!--
       Le plateau français, onze cases sur onze.
@@ -1257,12 +1629,13 @@
           <h2 class="road-title building">En chantier</h2>
 
           <article class="road-card">
-            <header><span class="road-icon">🐺</span><h3>Loup-garou</h3></header>
-            <p>Le village, la nuit, les rôles. Avec le vocal : micro coupé ou ouvert selon
-               ce qu’on est, et le casque qui se coupe pendant la nuit.</p>
-            <p class="road-note">Le vocal a besoin d’un serveur relais dédié (TURN). C’est le
-               seul point de la liste qui bute sur une contrainte technique réelle et non sur
-               du temps : il n’existe pas d’option gratuite fiable pour ça.</p>
+            <header><span class="road-icon">🎙️</span><h3>Le vocal dans le Loup-garou</h3></header>
+            <p>Le jeu est en ligne, et le débat se fait pour l’instant sur Discord à côté.
+               La version aboutie, c’est le vocal <b>dans</b> le site : micro coupé ou ouvert
+               selon ton rôle, et le casque qui se coupe pendant la nuit.</p>
+            <p class="road-note">C’est le seul point de la liste qui bute sur une contrainte
+               technique réelle et non sur du temps : le vocal a besoin d’un serveur relais
+               dédié (TURN), et il n’existe pas d’option gratuite fiable pour ça.</p>
           </article>
 
           <article class="road-card">
@@ -1272,9 +1645,10 @@
           </article>
 
           <article class="road-card">
-            <header><span class="road-icon">🎴</span><h3>Uno · Belote · Monopoly</h3></header>
-            <p>Trois jeux complets, à faire dans cet ordre. Uno d’abord, c’est le plus court
-               à écrire et le plus joué.</p>
+            <header><span class="road-icon">🎧</span><h3>Le blindtest depuis Spotify</h3></header>
+            <p>YouTube marche sans clé et sans compte, c’est pour ça qu’il est arrivé le
+               premier. Spotify demanderait à chacun de connecter son compte et n’envoie que
+               trente secondes d’extrait — à peser avant de s’y mettre.</p>
           </article>
         </div>
 
@@ -1319,7 +1693,11 @@
             <li>Médailles, parures, classement du mois</li>
             <li>Marché de revente entre joueurs</li>
             <li>Rakeback sur tout ce qui est misé</li>
-            <li>Section Party : Undercover et Poker</li>
+            <li>Section Party : Undercover, Poker, Uno, Belote, Monopoly, Loup-garou, Blindtest</li>
+            <li>Les soirées : plusieurs jeux à la suite, un seul classement</li>
+            <li>Les défis du jour, le palmarès, la page « mon profil »</li>
+            <li>Regarder une partie en cours, les réactions rapides</li>
+            <li>Les parties qui survivent à une mise à jour</li>
             <li>Cadeaux de caisses, chat, panel admin</li>
           </ul>
           <p class="fine">Une idée qui n’est pas là ? Dis-la, elle finira dans cette colonne.</p>
@@ -1403,6 +1781,8 @@
 <script src="/js/poker.js"></script>
 <script src="/js/uno.js"></script>
 <script src="/js/belote.js"></script>
+<script src="/js/blindtest.js"></script>
+<script src="/js/loup.js"></script>
 <script src="/js/monopoly.js"></script>
 <script src="/js/profile.js"></script>
 <script src="/js/admin.js"></script>

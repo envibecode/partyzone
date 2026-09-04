@@ -6,6 +6,22 @@
  * 1er de chaque mois. À la bascule, le premier du mois écoulé est inscrit
  * au palmarès et prévenu.
  *
+ * CE QU'IL CLASSE : L'XP. PAS LES PIÈCES.
+ * ───────────────────────────────────────
+ * C'est le but du site, et il tient en une phrase : finir le mois avec le
+ * plus d'XP. Le reste n'est que le chemin pour y arriver — l'XP vient des
+ * caisses, les pièces pour ouvrir les caisses viennent du casino, et la
+ * mine est là pour se refaire quand on n'a plus rien.
+ *
+ * Classer sur les pièces récompensait le contraire de ce qu'on veut : le
+ * joueur le plus prudent, celui qui garde son magot sans jamais l'ouvrir.
+ * Sur l'XP, il faut DÉPENSER pour marquer. Amasser sans ouvrir ne rapporte
+ * rien du tout.
+ *
+ * L'XP de la section Party est comptée à part, dans `profile.party.xp`, et
+ * n'entre JAMAIS ici. Gagner au Monopoly ne fait pas gagner le lot du
+ * mois : ça sert à être le meilleur entre potes, et c'est tout.
+ *
  * Sur le lot : c'est un concours GRATUIT, pas une loterie. Personne ne peut
  * acheter de pièces, donc personne ne paie pour participer — et c'est
  * exactement ce qui rend la chose saine. Le site désigne le gagnant et
@@ -33,7 +49,7 @@ function nextReset(date = new Date()) {
 }
 
 function blankSeason(now = Date.now()) {
-  return { month: monthKey(new Date(now)), coins: 0, wagered: 0, rounds: 0, best: 0 };
+  return { month: monthKey(new Date(now)), xp: 0, coins: 0, wagered: 0, rounds: 0, best: 0 };
 }
 
 /**
@@ -46,10 +62,29 @@ function ensure(profile, now = Date.now()) {
   if (!profile.season || profile.season.month !== key) {
     profile.season = blankSeason(now);
   }
+  // Les profils écrits avant que le classement passe à l'XP n'ont pas le
+  // champ : on le crée à zéro plutôt que de laisser passer un `undefined`
+  // qui contaminerait toutes les additions.
+  if (typeof profile.season.xp !== 'number') profile.season.xp = 0;
   return profile.season;
 }
 
-/** Enregistre un gain net dans le compteur du mois. */
+/**
+ * Enregistre l'XP gagnée dans le compteur du mois.
+ *
+ * C'est LE compteur qui décide du classement. Il est alimenté depuis un
+ * seul endroit — `store.grantXp` —, donc aucune source d'XP ne peut être
+ * oubliée, ni comptée deux fois.
+ */
+function recordXp(profile, amount, now = Date.now()) {
+  const s = ensure(profile, now);
+  // Une reprise d'XP par un administrateur ne retire pas du classement :
+  // on ne compte que ce qui a été gagné.
+  if (amount > 0) s.xp += Math.round(amount);
+  return s;
+}
+
+/** Enregistre un gain net dans le compteur du mois (statistique). */
 function record(profile, { profit = 0, staked = 0, rounds = 0 } = {}, now = Date.now()) {
   const season = ensure(profile, now);
   season.coins += profit;
@@ -78,8 +113,8 @@ function rollover(state, profiles, now = Date.now()) {
   // Le vainqueur du mois écoulé : celui qui avait le plus gros compteur
   // encore marqué de ce mois-là.
   const ranked = profiles
-    .filter((p) => p.season && p.season.month === ended && p.season.coins > 0 && !p.banned)
-    .sort((a, b) => b.season.coins - a.season.coins);
+    .filter((p) => p.season && p.season.month === ended && (p.season.xp || 0) > 0 && !p.banned)
+    .sort((a, b) => (b.season.xp || 0) - (a.season.xp || 0));
 
   if (!ranked.length) return null;
 
@@ -90,6 +125,7 @@ function rollover(state, profiles, now = Date.now()) {
     id: winner.id,
     name: winner.name,
     avatar: winner.avatar,
+    xp: winner.season.xp || 0,
     coins: winner.season.coins,
     prize: PRIZE,
     at: now,
@@ -105,14 +141,15 @@ function rollover(state, profiles, now = Date.now()) {
 function ranking(profiles, limit = 20, now = Date.now()) {
   const key = monthKey(new Date(now));
   return profiles
-    .filter((p) => p.season && p.season.month === key && p.season.coins > 0 && !p.banned)
-    .sort((a, b) => b.season.coins - a.season.coins)
+    .filter((p) => p.season && p.season.month === key && (p.season.xp || 0) > 0 && !p.banned)
+    .sort((a, b) => (b.season.xp || 0) - (a.season.xp || 0))
     .slice(0, limit)
     .map((p, i) => ({
       rank: i + 1,
       id: p.id,
       name: p.name,
       avatar: p.avatar,
+      xp: p.season.xp || 0,
       coins: p.season.coins,
       rounds: p.season.rounds,
       best: p.season.best,
@@ -130,4 +167,4 @@ function view(state, now = Date.now()) {
   };
 }
 
-module.exports = { monthKey, monthLabel, nextReset, blankSeason, ensure, record, rollover, ranking, view, PRIZE };
+module.exports = { monthKey, monthLabel, nextReset, blankSeason, ensure, record, recordXp, rollover, ranking, view, PRIZE };

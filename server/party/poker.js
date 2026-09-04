@@ -556,6 +556,12 @@ class Poker extends Room {
     return this.result && this.result.winnerId ? [this.result.winnerId] : [];
   }
 
+  /** Pour la soirée : le tapis restant range tout le monde d'un coup. */
+  ranking() {
+    if (!this.result) return super.ranking();
+    return this.result.standings.map((p) => ({ id: p.id, score: p.chips }));
+  }
+
   /* ─── Minuterie ─── */
 
   armAction() {

@@ -1173,6 +1173,15 @@ class Monopoly extends Room {
     return this.result ? this.result.winnerIds : [];
   }
 
+  /**
+   * Pour la soirée : la fortune finale départage. Un joueur ruiné compte
+   * zéro même s'il lui restait des hypothèques : il est sorti, c'est tout.
+   */
+  ranking() {
+    if (!this.result) return super.ranking();
+    return this.result.table.map((t) => ({ id: t.id, score: t.out ? 0 : t.worth }));
+  }
+
   /* ─── État envoyé au client ────────────────────────────────────────── */
 
   /**

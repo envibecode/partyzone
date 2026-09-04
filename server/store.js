@@ -344,7 +344,7 @@ function publicProfile(profile) {
     opened: profile.vault.opened || 0,
     collectionTotal: require('./data/collection').TOTAL,
     cosmetics: medals.publicCosmetics(profile),
-    medals: { tiers: profile.medals.tiers.length, firsts: profile.medals.firsts.length },
+    medals: { tiers: profile.medals.tiers.length },
     season: profile.season,
     party: partyRank.view(profile),
     rake: rakeback.view(profile, lvl.level),
@@ -411,8 +411,9 @@ function recordPlay(profile, staked, returned, game = 'jeu') {
   s.rounds += 1;
   s.biggestWin = Math.max(s.biggestWin, returned);
 
-  // Le classement du mois compte le BÉNÉFICE net, pas le solde : sinon il
-  // suffirait de miser gros et de tout récupérer pour grimper.
+  // Le compteur de bénéfice du mois reste tenu, mais il ne classe plus
+  // personne : c'est une statistique, affichée à côté de l'XP. Ce qui
+  // décide du mois, c'est l'XP — voir `grantXp`.
   season.record(profile, { profit: returned - staked, staked, rounds: 1 });
 
   // Le rakeback se nourrit du VOLUME joué, gagné ou perdu. C'est ce qui fait
@@ -424,11 +425,23 @@ function recordPlay(profile, staked, returned, game = 'jeu') {
   return xp;
 }
 
-/** Ajoute de l'XP et signale un éventuel passage de niveau. */
-function grantXp(profile, amount) {
+/**
+ * Ajoute de l'XP et signale un éventuel passage de niveau.
+ *
+ * C'est le SEUL endroit du site où l'XP bouge — caisses, manches de jeu,
+ * défis du jour, tout passe ici. Et c'est ce qui permet d'alimenter le
+ * classement du mois sans risquer d'oublier une source : le classement se
+ * joue à l'XP, pas aux pièces.
+ *
+ * `season: false` sert aux corrections d'administrateur : rattraper l'XP
+ * de quelqu'un est un dépannage, pas une performance, et ça ne doit pas
+ * pouvoir faire gagner le mois.
+ */
+function grantXp(profile, amount, { season: counts = true } = {}) {
   const before = levelFromXp(profile.xp).level;
   profile.xp = Math.max(0, profile.xp + Math.round(amount));
   const after = levelFromXp(profile.xp).level;
+  if (counts) season.recordXp(profile, amount);
   return { gained: Math.round(amount), levelUp: after > before, level: after };
 }
 

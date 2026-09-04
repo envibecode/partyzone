@@ -31,6 +31,9 @@ const { Poker } = require('./party/poker');
 const { Uno } = require('./party/uno');
 const { Belote } = require('./party/belote');
 const { Monopoly } = require('./party/monopoly');
+const { Loup } = require('./party/loup');
+const { Blindtest } = require('./party/blindtest');
+const soirees = require('./party/soiree');
 const gate = require('./gate');
 const assets = require('./assets');
 const ledger = require('./ledger');
@@ -287,10 +290,10 @@ async function checkSeason() {
       store.touchState();
       await store.flushState();
       io.emit('announce', {
-        text: `${winner.name} remporte le mois de ${winner.label} avec ${winner.coins.toLocaleString('fr-FR')} pièces de bénéfice — ${winner.prize} !`,
+        text: `${winner.name} remporte le mois de ${winner.label} avec ${(winner.xp || 0).toLocaleString('fr-FR')} XP — ${winner.prize} !`,
       });
       chat.system(`🏆 ${winner.name} termine premier de ${winner.label}. Le lot est remis à la main par un administrateur.`, 'announce');
-      console.log(`[saison] ${winner.label} remporté par ${winner.name} (${winner.coins})`);
+      console.log(`[saison] ${winner.label} remporté par ${winner.name} (${winner.xp || 0} XP)`);
     }
   } finally {
     seasonChecking = false;
@@ -343,6 +346,54 @@ async function creditPartyRoom(room) {
   }
 }
 
+/* ═══════════ LA SOIRÉE ═══════════ */
+
+/**
+ * Envoie l'état d'une soirée à ceux qui la suivent.
+ *
+ * On vise les joueurs un par un plutôt que le canal du salon : entre deux
+ * manches, la soirée n'a pas de salon, et les spectateurs d'une manche ne
+ * font pas partie de la soirée.
+ */
+function emitSoiree(s) {
+  const payload = s.state();
+  for (const id of s.scores.keys()) {
+    const entry = presence.users.get(id);
+    if (!entry) continue;
+    for (const socketId of entry.sockets) io.to(socketId).emit('soiree:state', payload);
+  }
+}
+
+/**
+ * La fin d'une partie Party, une bonne fois pour toutes.
+ *
+ * Deux choses arrivent : le rang Party est crédité, et si la partie était
+ * une manche de soirée, le classement cumulé est mis à jour. Les deux
+ * chemins de fin — le clic et le minuteur — passent ici.
+ */
+function onPartyEnd(room) {
+  creditPartyRoom(room).catch((e) => console.error('[party]', e.message));
+
+  const s = soirees.ofRoom(room);
+  if (s && s.record(room)) {
+    emitSoiree(s);
+    if (s.over && s.result) {
+      const names = s.result.winnerIds.map((id) => {
+        const who = s.names.get(id);
+        return who ? who.name : '—';
+      });
+      room.system(names.length
+        ? `Soirée terminée — ${names.join(' et ')} l’emporte au cumul après ${s.history.length} manches.`
+        : 'Soirée terminée.', 'end');
+    } else if (s.nextGame) {
+      const next = PARTY_GAMES[s.nextGame];
+      room.system(`Manche ${s.step + 1}/${s.games.length} comptée. Prochaine : ${next ? next.name : s.nextGame}.`, 'end');
+    }
+  }
+
+  io.emit('party:list', { rooms: partyRooms.list() });
+}
+
 /* ═══════════ LES JEUX PARTY, ET LEUR SURVIE ═══════════ */
 
 /**
@@ -353,11 +404,13 @@ async function creditPartyRoom(room) {
  * ajouté partout.
  */
 const PARTY_GAMES = {
-  undercover: { build: () => new Undercover(io) },
-  poker: { build: () => new Poker(io) },
-  uno: { build: () => new Uno(io) },
-  belote: { build: () => new Belote(io) },
-  monopoly: { build: () => new Monopoly(io) },
+  undercover: { name: 'Undercover', build: () => new Undercover(io) },
+  poker: { name: 'Poker', build: () => new Poker(io) },
+  uno: { name: 'Uno', build: () => new Uno(io) },
+  belote: { name: 'Belote', build: () => new Belote(io) },
+  monopoly: { name: 'Monopoly', build: () => new Monopoly(io) },
+  loup: { name: 'Loup-garou', build: () => new Loup(io) },
+  blindtest: { name: 'Blindtest', build: () => new Blindtest(io) },
 };
 const PARTY_BUILDERS = Object.fromEntries(
   Object.entries(PARTY_GAMES).map(([id, g]) => [id, g.build])
@@ -374,6 +427,10 @@ async function savePartyRooms() {
   try {
     const state = await store.siteState();
     state.partyRooms = partyRooms.saveAll();
+    // Une soirée, c'est trois quarts d'heure à quatre : elle survit au
+    // redéploiement comme les parties elles-mêmes.
+    soirees.sweep(partyRooms);
+    state.soirees = soirees.saveAll();
     store.touchState();
   } catch (err) {
     console.error('[party] sauvegarde impossible :', err.message);
@@ -387,15 +444,12 @@ async function restorePartyRooms() {
     const state = await store.siteState();
     const n = partyRooms.restoreAll(state.partyRooms, PARTY_BUILDERS);
     if (n) console.log(`  Salons Party  : ${n} partie(s) reprise(s) après redémarrage`);
+    const s = soirees.restoreAll(state.soirees);
+    if (s) console.log(`  Soirées       : ${s} reprise(s) après redémarrage`);
     // Les salons rechargés doivent recevoir le crédit de fin de partie
     // comme les autres : on rebranche le rappel, perdu à la sérialisation.
     for (const room of partyRooms.rooms.values()) {
-      if (!room.onEnd) {
-        room.onEnd = (finished) => {
-          creditPartyRoom(finished).catch((e) => console.error('[party]', e.message));
-          io.emit('party:list', { rooms: partyRooms.list() });
-        };
-      }
+      if (!room.onEnd) room.onEnd = onPartyEnd;
     }
   } catch (err) {
     console.error('[party] restauration impossible :', err.message);
@@ -523,21 +577,25 @@ io.on('connection', async (socket) => {
     const result = slots.play(profile, payload);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
 
-    store.recordPlay(profile, result.staked, result.payout, 'machine à sous');
+    store.recordPlay(profile, result.staked, result.payout, 'horse house');
     await save();
 
     socket.emit('slots:result', { ...result, me: store.publicProfile(profile) });
     socket.emit('profile:update', store.publicProfile(profile));
 
-    if (result.bonus.length) {
+    if (result.free.length) {
+      const tours = result.free.length;
       io.emit('feed', {
-        name: user.name, avatar: user.avatar, game: 'Machine à sous',
-        text: 'tour bonus déclenché', amount: result.payout,
+        name: user.name, avatar: user.avatar, game: 'Horse House',
+        text: `${tours} tours offerts`, amount: result.payout,
       });
-      chat.system(`${user.name} déclenche le tour bonus et ramasse ${result.payout} ¤ !`, 'win');
+      chat.system(
+        `🐴 ${user.name} ouvre les portes de l’écurie : ${tours} tours offerts`
+        + `${result.extraSpins ? ` (dont ${result.extraSpins} rajoutés)` : ''}`
+        + ` et ${result.payout} ¤ ramassés !`, 'win');
     } else if (result.profit >= result.staked * 15) {
       io.emit('feed', {
-        name: user.name, avatar: user.avatar, game: 'Machine à sous',
+        name: user.name, avatar: user.avatar, game: 'Horse House',
         text: `×${Math.round(result.payout / result.staked)}`, amount: result.payout,
       });
     }
@@ -831,14 +889,9 @@ io.on('connection', async (socket) => {
     socket.emit('profile:update', store.publicProfile(profile));
 
     for (const tier of earned) {
-      if (tier.first) {
-        io.emit('announce', {
-          text: `${user.name} est le PREMIER du site à atteindre ${tier.need} objets — ${tier.icon} ${tier.name} !`,
-        });
-        chat.system(`🥇 ${user.name} décroche « ${tier.name} » en premier — ${tier.need} objets !`, 'win');
-      } else {
-        chat.system(`${tier.icon} ${user.name} atteint ${tier.need} objets : ${tier.name}.`, 'drop');
-      }
+      // Un palier n'est plus une course : on annonce celui qui l'atteint,
+      // sans le comparer à personne.
+      chat.system(`${tier.icon} ${user.name} atteint ${tier.need} objets : ${tier.name}.`, 'drop');
     }
 
     for (const pull of result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r))) {
@@ -876,7 +929,7 @@ io.on('connection', async (socket) => {
 
   async function sendMedals() {
     const state = await store.siteState();
-    socket.emit('medals:state', medals.view(profile, state.records));
+    socket.emit('medals:state', medals.view(profile));
   }
 
   socket.on('medals:open', () => { sendMedals(); });
@@ -1207,6 +1260,16 @@ io.on('connection', async (socket) => {
     if (!result.rejoined) room.system(`${user.name} rejoint le salon.`);
     room.broadcast();
     broadcastPartyList();
+
+    // Entrer dans une manche de soirée, c'est entrer dans la soirée : on
+    // est inscrit au classement dès maintenant, avec zéro point, plutôt
+    // qu'à la fin de la manche. Sinon on joue une partie entière sans
+    // savoir qu'elle compte.
+    const s = soirees.ofRoom(room);
+    if (s && !s.over) {
+      s.remember(room);
+      emitSoiree(s);
+    }
     return result;
   }
 
@@ -1235,12 +1298,9 @@ io.on('connection', async (socket) => {
 
     const room = entry.build();
     // La partie peut s'achever sur un minuteur du salon, pas seulement sur
-    // un clic : on branche le crédit du rang directement sur la fin de
-    // partie, sinon les XP ne tomberaient que par hasard.
-    room.onEnd = (finished) => {
-      creditParty(finished).catch((e) => console.error('[party]', e.message));
-      broadcastPartyList();
-    };
+    // un clic : on branche la fin de partie ici, sinon les XP et le
+    // classement de la soirée ne tomberaient que par hasard.
+    room.onEnd = onPartyEnd;
     const result = enterRoom(room);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
     socket.emit('party:joined', { code: room.code, game: room.game });
@@ -1371,6 +1431,186 @@ io.on('connection', async (socket) => {
    * la performance.
    */
   const creditParty = creditPartyRoom;
+  void creditParty;
+
+  /* ══════════ LA SOIRÉE ══════════
+   *
+   * Plusieurs jeux à la suite, un seul classement. L'organisateur choisit
+   * la liste, le serveur ouvre un salon par manche, et à la fin de chaque
+   * partie tout le monde bascule dans le suivant.
+   *
+   * On ne déplace personne de force : le serveur envoie le code du salon
+   * suivant, et le navigateur le rejoint tout seul par le chemin habituel.
+   */
+
+  /** Ouvre le salon de la manche `s.step + 1` et y envoie tout le monde. */
+  function openSoireeRound(s, fromRoom) {
+    const id = s.nextGame;
+    const entry = GAMES[id];
+    if (!entry) return { ok: false, message: 'Ce jeu n’existe plus.' };
+
+    const room = entry.build();
+    room.onEnd = onPartyEnd;
+    room.soiree = s.code;
+    room.reserveHost = s.hostId;   // la casquette revient à l'organisateur
+    s.step += 1;
+    s.roomCode = room.code;
+    s.awaiting = false;            // la manche est ouverte : plus rien à attendre
+
+    // On prévient les joueurs, pas les spectateurs : un spectateur n'est
+    // pas de la soirée, et il n'a rien à faire dans le salon suivant.
+    const targets = fromRoom ? fromRoom.players.map((p) => p.id) : [...s.scores.keys()];
+    const seen = new Set();
+    for (const playerId of targets) {
+      if (seen.has(playerId)) continue;
+      seen.add(playerId);
+      const online = presence.users.get(playerId);
+      if (!online) continue;
+      for (const socketId of online.sockets) {
+        io.to(socketId).emit('soiree:go', { code: room.code, game: room.game, round: s.step + 1, rounds: s.games.length });
+      }
+    }
+    emitSoiree(s);
+    broadcastPartyList();
+    return { ok: true, room };
+  }
+
+  socket.on('soiree:create', ({ games } = {}) => {
+    const list = (Array.isArray(games) ? games : [])
+      .map((g) => String(g))
+      .filter((g) => GAMES[g])
+      .slice(0, soirees.MAX_GAMES);
+
+    if (list.length < soirees.MIN_GAMES) {
+      return socket.emit('toast', {
+        message: `Une soirée, c’est au moins ${soirees.MIN_GAMES} jeux à la suite.`, kind: 'error',
+      });
+    }
+
+    // Une soirée déjà en cours pour cette personne : on ne la double pas.
+    const running = soirees.ofPlayer(user.id);
+    if (running && !running.over) {
+      return socket.emit('toast', { message: 'Tu es déjà dans une soirée. Termine-la ou quitte-la.', kind: 'warn' });
+    }
+
+    if (partyRoom()) leaveParty();
+
+    const s = new soirees.Soiree(list, user.id);
+    s.scores.set(user.id, 0);
+    s.names.set(user.id, { name: user.name, avatar: user.avatar });
+
+    const opened = openSoireeRound(s, null);
+    if (!opened.ok) { s.close(); return socket.emit('toast', { message: opened.message, kind: 'error' }); }
+
+    const joined = enterRoom(opened.room);
+    if (!joined.ok) { s.close(); opened.room.close(); return socket.emit('toast', { message: joined.message, kind: 'error' }); }
+    socket.emit('party:joined', { code: opened.room.code, game: opened.room.game });
+    opened.room.system(
+      `Soirée en ${list.length} manches : ${list.map((g) => GAMES[g].name).join(' → ')}.`, 'end');
+
+    socket.broadcast.emit('party:invite', {
+      code: opened.room.code,
+      game: opened.room.game,
+      gameName: opened.room.gameName,
+      host: user.name,
+      hostAvatar: user.avatar || null,
+      max: opened.room.max,
+      soiree: list.length,
+      at: Date.now(),
+    });
+    opened.room.broadcast();
+    emitSoiree(s);
+  });
+
+  socket.on('soiree:next', () => {
+    const s = soirees.ofPlayer(user.id);
+    if (!s) return socket.emit('toast', { message: 'Aucune soirée en cours.', kind: 'warn' });
+    if (s.hostId !== user.id) return socket.emit('toast', { message: 'C’est l’organisateur qui lance la manche suivante.', kind: 'warn' });
+    if (s.over || !s.nextGame) return socket.emit('toast', { message: 'La soirée est terminée.', kind: 'info' });
+
+    const current = s.roomCode ? partyRooms.get(s.roomCode) : null;
+    /*
+     * On ne saute pas une manche : il faut qu'elle ait été COMPTÉE.
+     *
+     * Tester la phase du salon ne suffisait pas — un salon encore au lobby
+     * n'est pas « en cours », et l'organisateur pouvait donc enchaîner sans
+     * que personne ait joué. Le vrai critère, c'est le classement : tant
+     * que la manche n'a rien rapporté, il n'y a pas de manche suivante.
+     *
+     * La seule exception : un salon qui a disparu (tout le monde a fermé
+     * l'onglet, le concierge l'a fermé). Là, rester bloqué serait pire.
+     */
+    if (!s.awaiting && current) {
+      return socket.emit('toast', {
+        message: current.phase === 'lobby'
+          ? 'La manche n’a pas encore été jouée.'
+          : 'La manche en cours n’est pas finie.',
+        kind: 'warn',
+      });
+    }
+    const opened = openSoireeRound(s, current);
+    if (!opened.ok) return socket.emit('toast', { message: opened.message, kind: 'error' });
+  });
+
+  socket.on('soiree:state', () => {
+    const s = soirees.ofPlayer(user.id);
+    if (s) socket.emit('soiree:state', s.state());
+    else socket.emit('soiree:state', null);
+  });
+
+  socket.on('soiree:quit', () => {
+    const s = soirees.ofPlayer(user.id);
+    if (!s) return;
+    // On sort du classement, on ne supprime pas la soirée des autres.
+    s.scores.delete(user.id);
+    if (!s.scores.size) s.close();
+    else emitSoiree(s);
+    socket.emit('soiree:state', null);
+  });
+
+  /* ─── Blindtest ─── */
+
+  const btRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'blindtest' ? room : null;
+  };
+  const btDo = (fn) => {
+    const room = btRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  };
+
+  socket.on('bt:configure', (payload = {}) => btDo((r) => r.configure(user.id, payload)));
+  socket.on('bt:playlist', (payload = {}) => btDo((r) => {
+    const out = r.setPlaylist(user.id, payload);
+    if (out.ok) socket.emit('toast', { message: `Playlist chargée : ${out.count} morceaux.`, kind: 'success' });
+    return out;
+  }));
+  socket.on('bt:answer', ({ index } = {}) => btDo((r) => r.answer(user.id, index)));
+  socket.on('bt:skip', () => btDo((r) => r.skip(user.id)));
+
+  /* ─── Loup-garou ─── */
+
+  const lgRoom = () => {
+    const room = partyRoom();
+    return room && room.game === 'loup' ? room : null;
+  };
+  const lgDo = (fn) => {
+    const room = lgRoom();
+    if (!room) return;
+    const result = fn(room);
+    if (result && !result.ok) socket.emit('toast', { message: result.message, kind: 'warn' });
+  };
+
+  socket.on('lg:configure', (payload = {}) => lgDo((r) => r.configure(user.id, payload)));
+  socket.on('lg:wolf', ({ id } = {}) => lgDo((r) => r.wolfVote(user.id, id)));
+  socket.on('lg:seer', ({ id } = {}) => lgDo((r) => r.seerLookAt(user.id, id)));
+  socket.on('lg:witch', (payload = {}) => lgDo((r) => r.witchAct(user.id, payload)));
+  socket.on('lg:witch-pass', () => lgDo((r) => r.witchPass(user.id)));
+  socket.on('lg:vote', ({ id } = {}) => lgDo((r) => r.vote(user.id, id || null)));
+  socket.on('lg:shoot', ({ id } = {}) => lgDo((r) => r.hunterShoot(user.id, id)));
+  socket.on('lg:skip-debate', () => lgDo((r) => r.skipDebate(user.id)));
 
   /* ─── Monopoly ─── */
 

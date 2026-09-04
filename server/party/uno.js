@@ -701,6 +701,12 @@ class Uno extends Room {
     return this.result ? this.result.winnerIds : [];
   }
 
+  /** Pour la soirée : le classement, c'est celui des points. */
+  ranking() {
+    if (!this.result) return super.ranking();
+    return this.result.table.map((t) => ({ id: t.id, score: t.points }));
+  }
+
   /* ─── État envoyé au client ────────────────────────────────────────── */
 
   /**

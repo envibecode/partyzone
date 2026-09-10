@@ -1011,11 +1011,34 @@ io.on('connection', async (socket) => {
     socket.emit('mine:state', { mine: clicker.view(profile), me: store.publicProfile(profile), idle });
   });
 
+  /*
+   * Le message de secours de la mine.
+   *
+   * Quand la mine attend une preuve de présence, elle ne rend plus rien —
+   * et si le bouton ne s'affiche pas (un onglet resté ouvert depuis avant
+   * la mise à jour tourne encore avec l'ancien script), on clique dans le
+   * vide sans comprendre. Le message, lui, passe partout : c'est l'un des
+   * plus vieux événements du site, tous les navigateurs le connaissent.
+   *
+   * Une fois par question, pas plus : sinon dix clics font dix messages.
+   */
+  let ditAwake = null;
+
   socket.on('mine:click', ({ count } = {}) => {
     const result = clicker.click(profile, count);
     saveSoon();
     socket.emit('mine:hit', result);
     socket.emit('profile:update', store.publicProfile(profile));
+
+    if (result.asleep && result.awake && result.awake.token !== ditAwake) {
+      ditAwake = result.awake.token;
+      socket.emit('toast', {
+        message: 'La mine te demande si tu es toujours là : clique sur le bouton qui vient '
+          + 'd’apparaître. S’il n’apparaît pas, recharge la page.',
+        kind: 'warn',
+      });
+    }
+    if (!result.asleep) ditAwake = null;
   });
 
   /*

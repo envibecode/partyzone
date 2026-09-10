@@ -51,6 +51,37 @@ const SESSION_MAX_MS = 10 * 60 * 1000;   // dix minutes de minage d'affilée
 const SESSION_GAP_MS = 30 * 1000;        // une pause de trente secondes remet à zéro
 const AWAKE_GRACE_MS = 2 * 60 * 1000;    // le temps laissé pour répondre
 
+/*
+ * ET SURTOUT : LA QUESTION FINIT PAR S'OUBLIER.
+ *
+ * Première version : une question posée restait posée pour toujours. Tant
+ * qu'on n'y avait pas répondu, la mine ne rendait plus rien — et comme la
+ * question vit dans le profil, elle survivait à la déconnexion, au
+ * redémarrage, à tout. Un joueur dont l'onglet n'avait pas rechargé depuis
+ * la mise à jour ne voyait jamais le bouton, cliquait dans le vide, et son
+ * compte restait bloqué pendant que ses copains minaient.
+ *
+ * C'est le genre de panne qui ne se voit pas en développement — il faut un
+ * vieil onglet ouvert quelque part —, et qui ne se répare pas toute seule.
+ *
+ * Alors la question expire — mais PAS au bout d'un quart d'heure tout
+ * court : au bout d'un quart d'heure DE SILENCE. C'est toute la nuance, et
+ * le premier jet s'y est cassé les dents.
+ *
+ * Une expiration au temps écoulé rouvrait grand la porte : un autoclic
+ * continue de taper pendant qu'il est bloqué, donc il repartait de plus
+ * belle un quart d'heure plus tard. Mesuré : 11 000 pièces la nuit, au lieu
+ * de 554. La question ne protégeait plus rien.
+ *
+ * En comptant le SILENCE, les deux cas se séparent proprement, et c'est
+ * exactement la différence entre une machine et quelqu'un :
+ *
+ *  · l'autoclic ne se tait jamais — il reste bloqué jusqu'au matin ;
+ *  · la personne dont le bouton ne s'affiche pas essaie trois fois, hausse
+ *    les épaules et va faire autre chose — au retour, sa mine remarche.
+ */
+const AWAKE_EXPIRE_MS = 15 * 60 * 1000;
+
 /* ─── Endurance ────────────────────────────────────────── */
 
 const STAMINA_MAX = 60;          // coups tapables d'affilée à plein régime
@@ -186,6 +217,27 @@ function trackSession(mine, now) {
   return now - mine.sessionStart > SESSION_MAX_MS;
 }
 
+/**
+ * Une question restée sans réponse trop longtemps est abandonnée.
+ *
+ * On l'appelle partout où l'on regarde `mine.awake` : au clic, à
+ * l'affichage de la page, et à la réponse. Comme ça il n'existe aucun
+ * chemin par lequel un joueur puisse rester bloqué.
+ *
+ * @returns {boolean} vrai si la question vient d'être oubliée
+ */
+function forgetAwake(mine, now) {
+  if (!mine.awake) return false;
+  // Le silence se compte depuis la DERNIÈRE tentative, pas depuis la
+  // question : c'est ce qui distingue une machine d'une personne partie.
+  const dernier = mine.awake.lastTryAt || mine.awake.askedAt || 0;
+  if (now - dernier <= AWAKE_EXPIRE_MS) return false;
+  mine.awake = null;
+  mine.sessionStart = now;
+  mine.lastClickAt = now;
+  return true;
+}
+
 /** Tire une question de présence. Le jeton ne sort que d'ici. */
 function askAwake(mine, now) {
   mine.awake = {
@@ -206,6 +258,7 @@ function askAwake(mine, now) {
  */
 function stayAwake(profile, token, now = Date.now()) {
   const mine = profile.clicker;
+  if (forgetAwake(mine, now)) return { ok: true, oublie: true };
   if (!mine.awake) return { ok: true };
   if (token !== mine.awake.token) return { ok: false, message: 'Réponse invalide.' };
   if (now - mine.awake.askedAt > AWAKE_GRACE_MS) {
@@ -221,11 +274,14 @@ function stayAwake(profile, token, now = Date.now()) {
 function click(profile, count = 1, now = Date.now()) {
   const mine = profile.clicker;
   recover(mine, now);
+  forgetAwake(mine, now);
 
   // La mine attend une preuve de présence : rien ne se passe tant qu'on n'a
   // pas répondu. On ne consomme ni endurance ni budget de clics — ce serait
   // punir quelqu'un qui s'est absenté deux minutes.
   if (mine.awake) {
+    // On note la tentative : tant que ça tape, ce n'est pas du silence.
+    mine.awake.lastTryAt = now;
     return {
       coins: 0, crits: 0, counted: 0, asleep: true,
       awake: { token: mine.awake.token, x: mine.awake.x, y: mine.awake.y },
@@ -323,6 +379,9 @@ function buy(profile, id) {
 function view(profile, now = Date.now()) {
   const mine = profile.clicker;
   recover(mine, now);
+  // Quelqu'un qui revient sur la page après une absence ne doit pas
+  // retrouver une question posée il y a trois jours.
+  forgetAwake(mine, now);
   const l = levels(mine);
 
   return {
@@ -373,5 +432,5 @@ function collect() {
 module.exports = {
   blankClicker, collect, click, buy, view, stayAwake,
   clickValue, staminaMax, UPGRADES, MAX_CLICKS_PER_SEC,
-  SESSION_MAX_MS, SESSION_GAP_MS, AWAKE_GRACE_MS,
+  SESSION_MAX_MS, SESSION_GAP_MS, AWAKE_GRACE_MS, AWAKE_EXPIRE_MS, forgetAwake,
 };

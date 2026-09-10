@@ -5590,3 +5590,92 @@ button.seat.free:hover {
   .objet-jour { flex-wrap: wrap; }
   .oj-new { margin-left: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LE MODE CANAPÉ
+   La télé du salon. On grossit tout, on retire ce qui ne se lit pas à trois
+   mètres, et on affiche le code du salon assez gros pour être lu du fond de
+   la pièce. La télé REGARDE la partie : elle n'a ni main, ni rôle, ni mot —
+   c'est le serveur qui le garantit, pas ces quelques lignes de CSS.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * On agrandit avec `zoom` plutôt qu'en retouchant cinquante tailles de
+ * police : la mise en page d'une partie tient à des dizaines de valeurs en
+ * pixels (cartes, jetons, plateaux), et les grossir une par une casserait
+ * quelque chose quelque part. `zoom` agrandit TOUT d'un bloc, en gardant
+ * exactement les proportions qui ont été réglées à l'écran.
+ */
+body.canape .view.active { zoom: 1.35; }
+/* Tout ce qui ne sert à rien à trois mètres. */
+body.canape .topbar,
+body.canape .rail,
+body.canape .rail-veil,
+body.canape #btn-rail,
+body.canape .chat,
+body.canape .party-chat,
+body.canape .room-chat,
+body.canape #toasts,
+body.canape .mois-bar,
+body.canape .defi-pill,
+body.canape .feed,
+/* Le bandeau « tu regardes cette partie » et le bouton « quitter » du
+   salon : la télé a déjà son propre bandeau, et personne ne va cliquer
+   dessus depuis le canapé. */
+body.canape .watch-bar,
+body.canape #uc-leave,
+body.canape #pk-leave,
+body.canape #uno-leave,
+body.canape #bl-leave,
+body.canape #bt-leave,
+body.canape #lg-leave,
+body.canape #mono-leave,
+body.canape .party-reactions { display: none !important; }
+
+body.canape .main { padding-top: 76px; max-width: none; }
+body.canape .view-head { display: none; }
+body.canape .view-head p,
+body.canape .fine { font-size: 15px; }
+body.canape h1 { font-size: 42px; }
+body.canape h2 { font-size: 26px; }
+body.canape .panel { padding: 22px 26px; }
+
+/* Les jeux : on grossit les éléments qui portent l'information. */
+body.canape .sline-name,
+body.canape .seat-name,
+body.canape .uno-seat b,
+body.canape .pk-seat b { font-size: 20px; }
+body.canape .uno-card,
+body.canape .card { transform: scale(1.15); transform-origin: center; }
+
+/* Le bandeau de la télé : nom du site, code du salon, sortie. */
+.canape-bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 70;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 14px 28px;
+  background: linear-gradient(180deg, rgba(18, 14, 26, .97), rgba(18, 14, 26, .8));
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+}
+.cb-left { display: flex; flex-direction: column; }
+.cb-left b { font-size: 17px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
+.cb-left span { font-size: 13px; color: var(--dim); }
+
+.cb-code { display: flex; align-items: baseline; gap: 16px; }
+.cb-code span { font-size: 13px; letter-spacing: 3px; color: var(--dim); }
+.cb-code b {
+  font-size: 46px; font-weight: 800; letter-spacing: 10px; line-height: 1;
+  color: var(--t-hi);
+  text-shadow: 0 0 26px rgba(255, 61, 139, .3);
+}
+.cb-out {
+  padding: 9px 16px; border-radius: var(--r-control);
+  border: 1px solid var(--line); color: var(--dim); font-size: 13px;
+}
+.cb-out:hover { color: var(--t-hi); border-color: var(--accent); }
+
+@media (max-width: 900px) {
+  .cb-code b { font-size: 30px; letter-spacing: 6px; }
+  .canape-bar { padding: 10px 14px; gap: 10px; }
+  .cb-left span { display: none; }
+}

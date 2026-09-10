@@ -561,6 +561,17 @@
         <div class="quest-list" id="quest-list"></div>
       </section>
 
+      <!-- ─ LE JOURNAL DU LENDEMAIN ─
+           Ce qui s'est passé hier soir, en trois phrases. Le site sait tout
+           compter ; ce qu'il ne savait pas faire, c'est le dire. -->
+      <section class="section journal" id="journal-box" hidden>
+        <div class="section-head">
+          <h2>Le journal</h2>
+          <span class="section-meta" id="journal-meta">—</span>
+        </div>
+        <div id="journal-body"></div>
+      </section>
+
       <!-- ─ 3. Avec qui ─ -->
       <div class="social">
         <section class="section">
@@ -648,10 +659,19 @@
             <div class="stamina-bar"><span id="stam-fill"></span></div>
             <p class="fine" id="stam-note">À bout de souffle, chaque coup ne rapporte plus que 12 %.</p>
           </div>
-          <button class="rock" id="rock" aria-label="Miner">
-            <span class="rock-face">💎</span>
-            <span class="rock-ring"></span>
-          </button>
+          <div class="mine-field" id="mine-field">
+            <button class="rock" id="rock" aria-label="Miner">
+              <span class="rock-face">💎</span>
+              <span class="rock-ring"></span>
+            </button>
+            <!-- La preuve de présence : un bouton posé au hasard dans la
+                 zone, ailleurs que sur le rocher. Un humain le voit, un
+                 autoclic braqué sur le rocher tape à côté toute la nuit. -->
+            <div class="mine-awake" id="mine-awake" hidden>
+              <p>Tu mines depuis dix minutes d’affilée. Toujours là&nbsp;?</p>
+              <button class="btn btn-primary" id="mine-awake-btn">Oui, je suis là</button>
+            </div>
+          </div>
           <div class="floaters" id="floaters" aria-hidden="true"></div>
           <p class="fine">
             Coup critique : <b id="mine-crit">5</b> % de chances de gagner <b id="mine-critx">7</b>×.
@@ -1614,6 +1634,46 @@
         <div class="panel-head"><h2>Tes ventes</h2></div>
         <div class="mk-history" id="mk-history"><div class="empty">Aucune vente pour l’instant.</div></div>
       </div>
+
+      <!--
+        ══════ LES ENCHÈRES DU DIMANCHE ══════
+        Un objet, une fois par semaine. Les pièces gagnantes sont détruites :
+        c'est ce qui empêche l'enchère de devenir un moyen de faire monter un
+        copain au classement.
+      -->
+      <div class="panel" id="enchere-panel">
+        <div class="panel-head">
+          <h2>🔨 Les enchères du dimanche</h2>
+          <span class="fine" id="enchere-when">—</span>
+        </div>
+        <div id="enchere-body"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <!--
+        ══════ LA CAGNOTTE COMMUNE ══════
+        Le seul endroit du site où l'on joue ENSEMBLE plutôt que les uns
+        contre les autres.
+      -->
+      <div class="panel" id="cagnotte-panel">
+        <div class="panel-head">
+          <h2>💰 Les cagnottes</h2>
+          <button class="btn btn-soft" id="cagnotte-new">Ouvrir une cagnotte</button>
+        </div>
+        <div id="cagnotte-body"><div class="empty">Aucune cagnotte en cours.</div></div>
+      </div>
+
+      <!--
+        ══════ LE TROC ══════
+        « Je te donne mon Doge contre ton Pepe. » Ça se propose depuis la
+        liste des connectés ; ici on répond.
+      -->
+      <div class="panel" id="troc-panel">
+        <div class="panel-head">
+          <h2>🔁 Les trocs</h2>
+          <span class="fine">Propose un troc depuis la liste des joueurs connectés.</span>
+        </div>
+        <div id="troc-body"><div class="empty">Aucune proposition en cours.</div></div>
+      </div>
     </section>
 
     <!-- ══════ À VENIR ══════ -->
@@ -1785,6 +1845,8 @@
 <script src="/js/loup.js"></script>
 <script src="/js/monopoly.js"></script>
 <script src="/js/profile.js"></script>
+<script src="/js/rivalites.js"></script>
+<script src="/js/echanges.js"></script>
 <script src="/js/admin.js"></script>
 </body>
 </html>

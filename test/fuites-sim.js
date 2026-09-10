@@ -55,9 +55,15 @@ const io = {
     });
     g.start('j0');
 
-    // On fait éliminer quelqu'un : tout le monde vote sur le même joueur.
-    const victimId = g.players[1].id;
-    const victim = g.playerOf(victimId);
+    /*
+     * On élimine quelqu'un QUI A UN MOT.
+     *
+     * Prendre un joueur au hasard tombait une fois sur cinq sur Monsieur
+     * Blanc, qui n'en a pas — et le test échouait en annonçant une fuite
+     * là où il n'y avait rien à faire fuir.
+     */
+    const victim = g.players.find((p) => p.word);
+    const victimId = victim.id;
     const motDeLaVictime = victim.word;
     check('la victime avait bien un mot', Boolean(motDeLaVictime), motDeLaVictime || '—');
 

@@ -5268,3 +5268,325 @@ button.seat.free:hover {
   margin-bottom: var(--s-3);
 }
 .bt-unlock span { flex: 1; font-size: 13px; line-height: 1.45; }
+
+/* ══════════════ LA PREUVE DE PRÉSENCE DE LA MINE ══════════════
+   Dix minutes de minage d'affilée, et la mine demande s'il y a quelqu'un.
+   Le bouton se pose à un endroit tiré au sort par le SERVEUR : un autoclic
+   braqué sur le rocher ne tombera jamais dessus. */
+
+.mine-field { position: relative; display: grid; place-items: center; width: 100%; }
+
+.mine-awake {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; align-content: center; gap: var(--s-3);
+  border-radius: var(--r-lg);
+  background: rgba(0, 0, 0, .78);
+  backdrop-filter: blur(3px);
+  text-align: center; padding: var(--s-4);
+  z-index: 3;
+}
+.mine-awake[hidden] { display: none; }
+.mine-awake p { font-size: 14px; font-weight: 700; max-width: 32ch; margin: 0; }
+/* Le bouton est placé en pourcentage par le script, d'après la position
+   tirée par le serveur. */
+.mine-awake .btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* ══════════════ LE JOURNAL DU LENDEMAIN ══════════════
+   Des phrases, pas un tableau. Un tableau se regarde une fois ; une phrase
+   se raconte le lendemain à midi. */
+
+#journal-body { display: grid; gap: 10px; }
+
+.jour {
+  padding: 14px 16px;
+  border-radius: var(--r);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+.jour-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 6px;
+}
+.jour-head b { font-size: 13.5px; font-weight: 800; }
+.jour p { margin: 0 0 4px; font-size: 13px; line-height: 1.6; color: var(--text); }
+.jour p:last-child { margin-bottom: 0; }
+
+/* Le prix Citron : jaune, un peu ridicule, et c'est le but. */
+.citron {
+  padding: 14px 16px;
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(240, 200, 60, .12), rgba(240, 200, 60, .04));
+  border: 1px solid rgba(240, 200, 60, .35);
+}
+.citron-head { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+.citron-emoji { font-size: 20px; line-height: 1; }
+.citron-head b { font-size: 13px; font-weight: 800; color: #f0c83c; }
+.citron-who { margin: 0 0 3px; font-size: 17px; font-weight: 800; }
+.citron .fine { margin: 0 0 3px; line-height: 1.55; }
+
+/* Le badge du retour des enfers. */
+.me-retour {
+  display: flex; gap: 12px; align-items: flex-start;
+  margin-top: 14px; padding: 14px 16px; border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(255, 120, 60, .12), rgba(255, 120, 60, .04));
+  border: 1px solid rgba(255, 120, 60, .3);
+}
+.me-retour-emoji { font-size: 24px; line-height: 1; }
+.me-retour b { display: block; font-size: 14px; margin-bottom: 3px; }
+.me-retour span { font-size: 12.5px; line-height: 1.55; color: var(--dim); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LES RIVALITÉS
+   Le défi, le face-à-face, les paris, la cible du mois. Quatre choses qui
+   se posent PAR-DESSUS le site sans jamais déplacer personne : une pastille
+   qui attend, des fenêtres, un bandeau. Quelqu'un qui joue ne doit jamais
+   se retrouver ailleurs à cause d'un défi reçu.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── La liste des connectés : les deux gestes ─── */
+.rail-item { display: flex; align-items: center; gap: 2px; }
+.rail-item .rail-row { flex: 1; min-width: 0; }
+.rail-acts { display: flex; gap: 2px; flex: none; opacity: .35; transition: opacity var(--t-fast) var(--ease); }
+.rail-item:hover .rail-acts, .rail-item:focus-within .rail-acts { opacity: 1; }
+.rail-act {
+  width: 26px; height: 26px; border-radius: var(--r-control);
+  font-size: 13px; line-height: 1;
+  display: grid; place-items: center;
+}
+.rail-act:hover { background: var(--ink-3); }
+
+/* ─── La pastille des défis reçus ───
+   Elle reste tant qu'on n'a pas répondu : un défi vaut trois minutes, une
+   notification qui passe ne suffit pas. */
+.defi-pill {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 60;
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 16px; border-radius: 999px;
+  background: linear-gradient(180deg, #2a1e3d, #1b1428);
+  border: 1px solid rgba(255, 61, 139, .5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  font-weight: 700; font-size: 13.5px; color: var(--t-hi);
+  animation: defi-pop .3s var(--ease) both;
+}
+.defi-pill:hover { border-color: var(--accent); }
+.defi-pill span { font-size: 15px; }
+@keyframes defi-pop {
+  from { transform: translate(-50%, 14px); opacity: 0; }
+  to   { transform: translate(-50%, 0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .defi-pill { animation: none; } }
+
+/* ─── La fenêtre d'envoi d'un défi ─── */
+.defi-form, .defi-list, .pari { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
+.defi-jeux, .defi-vite { display: flex; flex-wrap: wrap; gap: 7px; }
+.defi-jeu {
+  padding: 8px 14px; border-radius: var(--r-control);
+  border: 1px solid var(--line); font-weight: 700; font-size: 13px;
+  color: var(--dim);
+}
+.defi-jeu.on { border-color: var(--accent); color: var(--text); background: var(--brand-wash); }
+.defi-mise { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.defi-mise span { font-size: 13px; color: var(--dim); }
+.defi-mise input {
+  width: 140px; padding: 9px 11px; border-radius: var(--r-control);
+  background: var(--ink-3); border: 1px solid var(--line);
+  color: var(--text); font-weight: 700; text-align: right;
+}
+.defi-row {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 12px 14px; border-radius: var(--r);
+  background: var(--ink-3); border: 1px solid var(--line);
+}
+.defi-row.pale { opacity: .65; }
+.defi-acts { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ─── Le face-à-face ─── */
+.ff { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
+.ff-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ff-who { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; min-width: 0; }
+.ff-who img { width: 46px; height: 46px; border-radius: var(--r-circle); background: var(--ink-3); }
+.ff-who b { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-vs { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--dim); flex: none; }
+.ff-score { text-align: center; font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+.ff-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--ink-3); }
+.ff-bar i { display: block; transition: width var(--t-slow) var(--ease); }
+.ff-bar .ff-a { background: var(--accent); }
+.ff-bar .ff-b { background: #4a4359; }
+.ff-resume { margin: 0; text-align: center; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+.ff-table { display: flex; flex-direction: column; }
+.ff-line {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+  padding: 7px 2px; border-bottom: 1px solid var(--line);
+}
+.ff-line:last-child { border-bottom: 0; }
+.ff-n { font-size: 14px; font-weight: 700; color: var(--dim); }
+.ff-n.win { color: var(--gold); }
+.ff-line .ff-n:first-child { text-align: right; }
+.ff-label { font-size: 12px; color: var(--dim); text-align: center; }
+.ff-last { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ff-dot {
+  width: 20px; height: 20px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; font-style: normal;
+  background: var(--ink-3); color: var(--dim);
+}
+.ff-dot.win { background: rgba(60, 200, 130, .18); color: #4ad295; }
+.ff-dot.lose { background: rgba(255, 90, 90, .15); color: #ff7b7b; }
+
+/* ─── Les paris ─── */
+.pari-liste { display: flex; flex-direction: column; gap: 6px; }
+.pari-qui {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 11px; border-radius: var(--r-control);
+  border: 1px solid var(--line); text-align: left;
+}
+.pari-qui img { width: 26px; height: 26px; border-radius: var(--r-circle); background: var(--ink-3); }
+.pari-qui.on { border-color: var(--accent); background: var(--brand-wash); }
+.pari-qui:disabled { opacity: .4; }
+.pari-etat {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 11px 13px; border-radius: var(--r);
+  background: var(--ink-3); border: 1px solid var(--line);
+  font-size: 13px;
+}
+.pari-row { display: flex; justify-content: space-between; gap: 10px; }
+.proom-pot { margin-left: 7px; font-style: normal; font-size: 11.5px; color: var(--gold); }
+.proom-bet { padding-left: 11px; padding-right: 11px; }
+
+/* ─── Le bandeau du mois ───
+   Il ne s'affiche que quand il a quelque chose à dire. Un bandeau permanent
+   devient invisible en trois jours. */
+.mois-bar {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 0 var(--s-5) 10px;
+}
+.mois-chip {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 8px 14px; border-radius: 999px;
+  background: var(--ink-2, var(--ink-3)); border: 1px solid var(--line);
+  font-size: 12.5px; color: var(--dim);
+}
+.mois-chip b { font-size: 12.5px; font-weight: 800; color: var(--text); }
+.mois-chip:hover { border-color: var(--accent); }
+.mois-chip.hot { border-color: rgba(255, 140, 60, .45); }
+.mois-chip.hot b { color: #ffa25a; }
+.mois-chip.moi { border-color: rgba(232, 181, 60, .5); }
+.mois-chip.moi b { color: var(--gold); }
+
+@media (max-width: 700px) {
+  .mois-bar { padding: 0 var(--s-3) 8px; }
+  .mois-chip { flex-direction: column; gap: 1px; align-items: flex-start; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LES ÉCHANGES
+   La cagnotte, le troc, les enchères, l'objet du jour. Trois panneaux de
+   plus sur la page du Marché, et un bandeau sur celle des caisses.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── La cagnotte ─── */
+.cag {
+  padding: 14px 16px; margin-bottom: 10px;
+  border-radius: var(--r); background: var(--ink-3);
+  border: 1px solid var(--line);
+}
+.cag:last-child { margin-bottom: 0; }
+.cag.full { border-color: rgba(232, 181, 60, .45); }
+.cag.done { opacity: .6; }
+.cag-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.cag-head b { font-size: 14.5px; }
+.cag-bar { height: 9px; border-radius: 999px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.cag-bar i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  transition: width var(--t-slow) var(--ease);
+}
+.cag-nums { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 7px 0 10px; }
+.cag-nums b { font-size: 13.5px; }
+.cag-acts { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* ─── Le troc ─── */
+.troc-row {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 13px 15px; margin-bottom: 10px;
+  border-radius: var(--r); background: var(--ink-3); border: 1px solid var(--line);
+}
+.troc-row.pale { opacity: .68; }
+.troc-deal { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.troc-side { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; min-width: 120px; }
+.troc-vs { font-size: 17px; color: var(--dim); flex: none; }
+.troc-obj {
+  padding: 4px 9px; border-radius: 999px;
+  background: rgba(255, 255, 255, .05); border: 1px solid var(--line);
+  font-size: 12px;
+}
+.troc-obj.coins { color: var(--gold); border-color: rgba(232, 181, 60, .4); }
+
+.troc-pick { margin-bottom: 6px; }
+.troc-pick h4 { margin: 0 0 7px; font-size: 13px; }
+.troc-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px; max-height: 190px; overflow-y: auto; padding-right: 3px;
+}
+.troc-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 5px; border-radius: var(--r-control);
+  border: 1px solid var(--line); position: relative;
+}
+.troc-cell.on { border-color: var(--accent); background: var(--brand-wash); }
+.troc-emo { font-size: 19px; line-height: 1; }
+.troc-nom {
+  font-size: 10.5px; color: var(--dim); text-align: center;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.troc-n { position: absolute; top: 3px; right: 5px; font-size: 9.5px; font-style: normal; color: var(--dim); }
+
+/* ─── Les enchères ─── */
+.ench-lot {
+  display: flex; align-items: center; gap: 14px;
+  padding: 15px 17px; border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015));
+  border: 1px solid var(--line);
+}
+.ench-emo { font-size: 34px; line-height: 1; }
+.ench-info b { display: block; font-size: 16px; }
+.ench-etat { display: flex; align-items: baseline; gap: 12px; margin: 12px 0 10px; }
+.ench-etat b { font-size: 22px; font-weight: 800; color: var(--gold); }
+.ench-bid { display: flex; gap: 8px; }
+.ench-bid input { flex: 1; text-align: right; font-weight: 700; }
+.ench-list { margin-top: 10px; display: flex; flex-direction: column; }
+.ench-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 6px 2px; font-size: 12.5px; color: var(--dim);
+  border-bottom: 1px solid var(--line);
+}
+.ench-row:last-child { border-bottom: 0; }
+.ench-row b { color: var(--text); }
+
+/* ─── L'objet du jour ─── */
+.objet-jour {
+  display: flex; align-items: center; gap: 13px;
+  margin-top: 14px; padding: 12px 16px; border-radius: var(--r);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c, #888) 16%, transparent), transparent);
+  border: 1px solid color-mix(in srgb, var(--c, #888) 40%, transparent);
+}
+.oj-emo { font-size: 26px; line-height: 1; }
+.oj-info b { display: block; font-size: 14px; margin-bottom: 2px; }
+.oj-new {
+  margin-left: auto; flex: none; font-style: normal;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--brand-wash); border: 1px solid var(--accent);
+  font-size: 11px; font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .troc-deal { flex-direction: column; align-items: stretch; }
+  .troc-vs { text-align: center; }
+  .objet-jour { flex-wrap: wrap; }
+  .oj-new { margin-left: 0; }
+}

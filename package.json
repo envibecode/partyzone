@@ -24,7 +24,17 @@
     "test:soiree-live": "node test/soiree-live.js",
     "test:objectif": "node test/objectif-sim.js",
     "test:ui-chat": "node test/ui-chat.js",
-    "test:slots": "node test/slots-sim.js"
+    "test:slots": "node test/slots-sim.js",
+    "test:fuites": "node test/fuites-sim.js",
+    "test:youtube": "node test/youtube-sim.js",
+    "test:journal": "node test/journal-sim.js",
+    "test:carte": "node test/carte-sim.js",
+    "test:paris": "node test/paris-sim.js",
+    "test:mois": "node test/mois-sim.js",
+    "test:rivalites": "node test/rivalites-live.js",
+    "test:ui-rivalites": "node test/ui-rivalites.js",
+    "test:echanges": "node test/echanges-sim.js",
+    "test:ui-echanges": "node test/ui-echanges.js"
   },
   "engines": {
     "node": ">=18"

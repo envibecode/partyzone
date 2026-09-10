@@ -49,7 +49,7 @@ Rien n'est distribué automatiquement.
 
 | | |
 |---|---|
-| ⛏️ **La Mine** | Le robinet de secours, volontairement chiche : une barre d'endurance pleine vaut **environ 60 pièces**, et elle met 85 secondes à se refaire. De quoi poser une mise quand on est fauché, pas de quoi s'enrichir. Autoclic inutile par construction. |
+| ⛏️ **La Mine** | Le robinet de secours, volontairement chiche : une barre d'endurance pleine vaut **environ 60 pièces**, et elle met 85 secondes à se refaire. De quoi poser une mise quand on est fauché, pas de quoi s'enrichir. Autoclic inutile par construction — et au-delà de **dix minutes de clics d'affilée**, la mine demande de toucher un bouton qui change de place : une nuit d'autoclic rapporte moins qu'un quart d'heure de jeu éveillé. |
 | 💸 **Rakeback** | **1 à 1,8 % de tout ce qui est misé** revient au joueur, gagné ou perdu. Comme les jeux détruisent 3 à 5 % du volume, l'ensemble reste déflationniste. C'est la vraie source de revenus d'un joueur régulier. |
 | 🛒 **Marché** | Revente de doublons entre joueurs, au prix qu'on veut. Commission de 8 % **détruite** (pas redistribuée), prix plancher et plafond, et le dernier exemplaire d'un objet n'est jamais vendable. |
 | 🃏 **Blackjack** | Vrai tapis vert à **cinq places, pas une de plus**, 6 jeux de cartes, blackjack payé 3:2. **Aucun bot**. On peut **regarder une partie sans jouer** (et s'asseoir quand une place se libère), la donne **part dès que tout le monde a misé** au lieu d'attendre les 22 secondes, et l'hôte peut **retirer quelqu'un qui squatte un siège** — jamais quelqu'un qui a une mise en jeu. Paris annexes (paires parfaites, 21+3), mode auto, remise en un clic, chat à la table. |
@@ -76,6 +76,19 @@ Rien n'est distribué automatiquement.
 | 👤 **Mon profil** | Une page par joueur : niveau, rang Party, collection, médailles, parures, et l'historique de ce qui a été joué. |
 | 😂 **Réactions** | Six emojis, un clic, et ça s'affiche deux secondes au-dessus de ton siège. Parce que personne ne tape « ahah » au moment où il se prend un +4. Cadence limitée côté serveur. |
 | 📣 **Bandeau d'invitation** | « Léa vient d'ouvrir une table de belote » s'affiche partout sur le site, pas seulement dans le hall Party. À quatre connectés, c'est ce détail qui fait la soirée. |
+| ⚔️ **Le défi direct** | « Toi et moi, tout de suite. » Depuis la liste des connectés : on désigne quelqu'un, on choisit le jeu (Uno, Poker, Monopoly, Blindtest), on pose une mise si on veut — ou rien, pour l'honneur. L'autre accepte, le salon s'ouvre pour eux deux. **Les mises partent en séquestre à l'acceptation** (sinon il suffirait de perdre puis de tout dépenser avant la fin) et le pot revient entier au vainqueur : le site ne prélève rien. Égalité, salon disparu, serveur redémarré : **tout est rendu**. |
+| ⚖️ **Le face-à-face** | La seule question que ni le classement ni le palmarès ne savaient traiter : « toi et moi, ça donne quoi ? » À la fin de chaque partie Party, le site regarde pour **chaque paire** de joueurs lequel a fini devant l'autre — pas qui a gagné : finir troisième quand ton rival finit cinquième, ça compte. Score global, détail par jeu, les huit dernières, et une phrase qui résume. |
+| 🎟️ **Les paris entre potes** | Miser sur quelqu'un depuis le hall, avant que la partie commence. **Mutuel, pas de cote** : le site n'a aucun moyen sérieux d'estimer les chances de Momo à l'Uno, alors le pot est partagé au prorata entre ceux qui avaient raison, et le site ne prélève rien. Une seule règle non négociable : **on ne parie jamais contre soi-même** — si tu joues, tu ne peux miser que sur toi. Les paris ferment au lancement, et si le joueur sur qui tu as misé quitte la table avant le début, ta mise t'est rendue. |
+| 🎯 **La cible du mois** | Le premier du classement porte une cible dans le dos : le battre en Party rapporte une prime de 2 000 pièces. Ça lui retire la paix, et ça donne à tout le monde une raison de l'inviter plutôt que de jouer quand il n'est pas là. Trois garde-fous : **trois joueurs minimum** (sinon c'est un distributeur), **deux primes par jour**, et il faut finir **devant** lui, pas à côté. La prime est en pièces, jamais en XP — la section Party ne décide pas du lot du mois. |
+| 🔥 **Les 48 dernières heures** | La dernière ligne droite : les **dix premières caisses** de chacun rapportent une fois et demie l'XP. Le plafond est en **nombre de caisses, pas en durée** — c'est tout le point : ça donne une vraie dernière cartouche au poursuivant sans récompenser la nuit blanche, puisque la onzième caisse rapporte exactement ce qu'elle rapporte un mardi ordinaire. |
+| 💰 **La cagnotte commune** | Le seul endroit du site où l'on joue **ensemble**. Un pot commun avec un objectif affiché et un bénéficiaire annoncé d'avance : pour quelqu'un (« on renfloue Ana »), ou pour le vainqueur du mois. Trois règles : **on ne reprend pas sa mise**, **le pot ne dépasse jamais l'objectif** (la dernière part est rabotée à ce qui manquait), et **une cagnotte qui ne se remplit pas en quinze jours est rendue, part par part** — sans quoi ouvrir une cagnotte trop ambitieuse reviendrait à détruire l'argent de ses copains. |
+| 🔁 **Le troc** | « Je te donne mon Doge contre ton Pepe. » Nommé, direct, négocié — ce que le marché anonyme ne saura jamais faire. On n'échange que ses **doublons** (le dernier exemplaire reste dans la collection), des pièces peuvent s'ajouter d'un côté, et **le site ne prélève rien**. Les deux côtés sont revérifiés au moment d'accepter : entre la proposition et la réponse, chacun a pu vendre ou tout dépenser. |
+| 🔨 **Les enchères du dimanche** | Un objet, une fois par semaine, tiré de la semaine elle-même — donc annoncé d'avance et impossible à choisir. La mise gagnante est **détruite**, pas reversée : c'est ce qui empêche l'enchère de devenir un moyen de faire monter un copain au classement, et l'économie a besoin d'endroits où les pièces disparaissent. Toute mise dans les **trois dernières minutes repousse la fin de trois minutes** : on ne gagne pas au chronomètre, on gagne quand plus personne ne suit. |
+| 🎁 **L'objet du jour** | Un des 518 objets, tiré de la date — le même pour tout le monde, visible d'avance. Le sortir d'une caisse aujourd'hui paie une prime (400 à 9 000 pièces selon la rareté), **trois fois par jour au maximum**. Ce n'est pas une course au premier arrivé : ces courses-là ne se gagnent qu'en étant réveillé à l'heure, ce qui n'est pas un talent. |
+| 📰 **Le journal du lendemain** | Chaque matin, trois ou quatre phrases sur la veille — écrites, pas tabulées : « Momo a sorti 68 000 pièces d'une mise de 2 000 à Horse House. Momo avait pourtant laissé 40 000 pièces au Plinko un peu plus tôt. » Rien ne s'affiche les jours sans soirée : un journal qui gronde ses lecteurs se ferme. |
+| 🍋 **Le prix Citron** | Le site ne célébrait que les gains, alors que perdre est 95 % de ce qui se passe et de loin ce qui fait le plus rire. Chaque semaine, un trophée à la pire décision de la bande : La Chute, L'Obstiné, ou Le Bredouille. Médaille en chocolat, aucun effet sur le classement. |
+| 🖼️ **La carte de fin de soirée** | Un bouton en fin de soirée, une image PNG : podium, manches, et le moment de la soirée. Faite pour être collée dans Discord le lendemain. Le serveur dessine du SVG, le navigateur en fait un PNG — aucune bibliothèque native, aucun temps de démarrage en plus. |
+| 💬 **Fil Discord** | Facultatif, par simple webhook (pas de bot, pas de jeton) : une table qui s'ouvre, le journal du matin, le prix Citron, le vainqueur du mois. **Quatre messages, pas un de plus** — un salon qui reçoit trente notifications par soirée finit en sourdine. |
 | 📊 **Économie** | Un tableau dans le panel admin : ce qui est créé, ce qui est détruit, par source et par jour, sur trente jours glissants. On voit d'un coup d'œil si le site inflate. |
 | 📤 **Export** | Un bouton qui télécharge **toute la base en JSON** — profils, marché, saison, journal. Réservé aux administrateurs, avec l'état vidé sur disque avant l'export. |
 | 🚧 **Porte d'ouverture** | Tant que le site n'a pas ouvert, **toute** adresse renvoie un compte à rebours — pas de page qui fuit parce qu'on connaît son URL, et les websockets sont fermés aussi. L'ouverture se fait **toute seule à la date prévue** (2 septembre 2026, midi, heure de Paris) ; le panel admin permet d'ouvrir plus tôt, de refermer, ou de changer la date. Un « accès équipe » discret sur la page d'attente et sur l'écran de connexion accepte la clé `ADMIN_KEY` et donne un laissez-passer de douze heures. |
@@ -308,6 +321,16 @@ npm run test:soiree    # le barème, le cumul, et la survie au redéploiement
 npm run test:soiree-live # trois clients enchaînent trois jeux pour de vrai
 npm run test:slots     # les règles de la machine à sous, puis sa redistribution
 npm run test:objectif  # le classement du mois compte bien l'XP, et rien d'autre
+npm run test:fuites    # ce qui ne doit jamais quitter le serveur en sort-il ?
+npm run test:youtube   # la lecture d'une playlist, sur des pages figées
+npm run test:journal   # le journal du lendemain : des phrases, pas un tableau
+npm run test:carte     # la carte de fin de soirée : une image que rien ne casse
+npm run test:paris     # 3 000 pots mutuels : rien ne se crée, rien ne se perd
+npm run test:mois      # la cible, la prime, et le plafond de la dernière ligne droite
+npm run test:rivalites # duel, pari et face-à-face, avec de vrais clients
+npm run test:ui-rivalites # les fenêtres et les boutons, dans un vrai navigateur
+npm run test:echanges  # cagnotte, troc, enchères : rien ne se crée, rien ne se perd
+npm run test:ui-echanges  # les panneaux du marché, dans un vrai navigateur
 npm run test:ui-chat   # le chat colle en bas, et les paliers n'ont plus de nom
 npm run test:ui        # parcours navigateur du casino + captures d'écran
 npm run test:ui-party  # parcours navigateur de la section Party
@@ -480,13 +503,27 @@ server/
   party/soiree.js     plusieurs jeux à la suite, un seul classement
   ledger.js      le grand livre de l'économie (créé, détruit, par jour)
   quests.js      les trois défis du jour, tirés de la date
+  faits.js       le carnet des faits marquants (14 jours de mémoire)
+  journal.js     le journal du lendemain et le prix Citron
+  carte.js       la carte de fin de soirée, en SVG
+  defis.js       le défi direct : la machine à états, pas les pièces
+  paris.js       le pot mutuel des parieurs
+  faceaface.js   qui a fini devant qui, paire par paire
+  cible.js       la cible du mois et sa prime
+  finale.js      les 48 dernières heures du mois
+  cagnotte.js    le pot commun, et ce qu'on rend s'il n'aboutit pas
+  troc.js        l'échange d'objets entre deux joueurs
+  encheres.js    l'enchère hebdomadaire, et son sursis anti-snipe
+  objet.js       l'objet du jour, tiré de la date
+  youtube.js     la lecture des playlists, côté serveur
+  discord.js     le fil Discord, par webhook
 public/
   index.html     la coquille
   css/style.css  toute la direction artistique
   js/            app, lobby, chat, mine, plinko, roulette, blackjack,
                  slots, medals, vault, market, party, undercover, poker,
                  uno, belote, monopoly, loup, blindtest, profile,
-                 admin, sfx
+                 rivalites, echanges, admin, sfx
 test/
   harness.js     banc d'essai Socket.IO du casino
   party.js       banc d'essai de la section Party
@@ -502,6 +539,17 @@ test/
   soiree-sim.js  le barème, le cumul, la survie au redéploiement
   soiree-live.js trois clients enchaînent trois jeux pour de vrai
   party-persist.js tue le serveur en pleine partie et vérifie qu'elle repart
+  slots-sim.js   Horse House : les règles, puis le RTP mesuré
+  fuites-sim.js  ce qui ne doit jamais quitter le serveur
+  youtube-sim.js la lecture d'une playlist, sur des pages figées
+  journal-sim.js des phrases, pas un tableau
+  carte-sim.js   une image valide, que rien ne peut casser
+  paris-sim.js   3 000 pots : ce qui est versé égale ce qui est misé
+  mois-sim.js    la cible, la prime, et le plafond de la ligne droite
+  rivalites-live.js  duel, pari et face-à-face avec de vrais clients
+  ui-rivalites.js    les fenêtres, les boutons, le bandeau
+  echanges-sim.js    cagnotte, troc, enchères, objet du jour
+  ui-echanges.js     les trois panneaux du marché, dans un navigateur
   shots-soiree.js  les captures de la soirée
 ```
 

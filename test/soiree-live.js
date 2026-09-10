@@ -189,6 +189,31 @@ async function guest(name) {
   check('ni une manche en cours',
     a.toasts.some((t) => t.kind === 'warn'), (a.toasts.find((t) => t.kind === 'warn') || {}).message);
 
+  /* ── LA CARTE ── */
+  /*
+   * `test/carte-sim.js` vérifie le dessin. Ici on vérifie la seule chose
+   * qu'il ne peut pas voir : que la route trouve la bonne soirée et lui
+   * donne les vrais noms. Une carte parfaite qui décrit la soirée d'à côté
+   * ne vaut rien.
+   */
+  section('La carte de la soirée');
+  {
+    const res = await fetch(`${BASE}/api/carte/${s2.code}`, { headers: { Cookie: pass } });
+    check('elle se télécharge', res.ok, `HTTP ${res.status}`);
+    const svg = await res.text();
+    check('c’est bien du SVG',
+      String(res.headers.get('content-type')).includes('svg') && svg.trim().startsWith('<svg'));
+    check('elle nomme les joueurs de CETTE soirée',
+      [a, b, c].every((p) => svg.includes(p.name)));
+    check('elle annonce les jeux joués', svg.includes('Undercover') && svg.includes('Uno'));
+    check('elle ne va rien chercher sur le réseau',
+      !/https?:\/\/(?!www\.w3\.org)/i.test(svg),
+      'sinon le navigateur ne peut pas en faire un PNG');
+
+    const inconnue = await fetch(`${BASE}/api/carte/ZZZZ`, { headers: { Cookie: pass } });
+    check('une soirée qui n’existe pas n’a pas de carte', inconnue.status === 404, `HTTP ${inconnue.status}`);
+  }
+
   console.log('\n──────────────────────────────');
   console.log(failures === 0 ? 'TOUT PASSE' : `${failures} vérification(s) en échec.`);
   [a, b, c].forEach((p) => p.socket.close());

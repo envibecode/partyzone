@@ -27,6 +27,30 @@ const MAX_CLICKS_PER_SEC = 10;   // plafond dur, en plus de l'endurance
 const CRIT_CHANCE = 0.04;
 const CRIT_MULT = 6;
 
+/* ─── La preuve de présence ────────────────────────────── */
+
+/*
+ * DIX MINUTES, PUIS ON DEMANDE S'IL Y A QUELQU'UN.
+ *
+ * L'endurance suffisait à rendre l'autoclic peu rentable, mais « peu
+ * rentable » multiplié par huit heures de nuit, ça finit par faire une
+ * somme — et surtout, ça vide le sens de la mine. Une main humaine ne mine
+ * pas dix minutes d'affilée sans s'arrêter ; un script, si.
+ *
+ * On compte donc la durée d'une SESSION de minage — une suite de coups
+ * séparés de moins de trente secondes. Au-delà de dix minutes, la mine se
+ * met en pause et demande une preuve de présence. Ce n'est pas un captcha :
+ * c'est un bouton qui apparaît à un endroit au hasard, ailleurs que sur le
+ * rocher. Un humain le voit et clique dessus ; un autoclic braqué sur le
+ * rocher tape dans le vide jusqu'au matin.
+ *
+ * Le jeton attendu est tiré par le SERVEUR et n'est jamais deviné par le
+ * navigateur : impossible de le renvoyer sans avoir reçu la question.
+ */
+const SESSION_MAX_MS = 10 * 60 * 1000;   // dix minutes de minage d'affilée
+const SESSION_GAP_MS = 30 * 1000;        // une pause de trente secondes remet à zéro
+const AWAKE_GRACE_MS = 2 * 60 * 1000;    // le temps laissé pour répondre
+
 /* ─── Endurance ────────────────────────────────────────── */
 
 const STAMINA_MAX = 60;          // coups tapables d'affilée à plein régime
@@ -106,6 +130,9 @@ function blankClicker(now = Date.now()) {
     stamina: STAMINA_MAX,
     lastClickAt: now,
     clickBudget: MAX_CLICKS_PER_SEC,
+    // La session en cours, et la preuve de présence éventuellement demandée.
+    sessionStart: now,
+    awake: null,          // { token, askedAt } quand la mine attend une réponse
   };
 }
 
@@ -145,9 +172,76 @@ function recover(mine, now) {
  * Enregistre une salve de coups. Le navigateur peut en regrouper plusieurs
  * pour ne pas saturer le réseau ; le serveur refait tout le calcul.
  */
+/**
+ * Ouvre une session de minage, ou la referme si la pause a été longue.
+ * Renvoie `true` quand il est temps de demander une preuve de présence.
+ */
+function trackSession(mine, now) {
+  const gap = now - (mine.lastClickAt || now);
+  if (gap > SESSION_GAP_MS || !mine.sessionStart) {
+    // Une vraie pause : on repart sur une session neuve.
+    mine.sessionStart = now;
+    return false;
+  }
+  return now - mine.sessionStart > SESSION_MAX_MS;
+}
+
+/** Tire une question de présence. Le jeton ne sort que d'ici. */
+function askAwake(mine, now) {
+  mine.awake = {
+    token: require('crypto').randomBytes(8).toString('hex'),
+    askedAt: now,
+    // Où poser le bouton, en pourcentage de la zone de jeu. Un autoclic
+    // braqué sur le rocher ne tombera pas dessus.
+    x: 8 + Math.floor(Math.random() * 84),
+    y: 8 + Math.floor(Math.random() * 84),
+  };
+  return mine.awake;
+}
+
+/**
+ * Répond à la question de présence. Le jeton doit correspondre, et arriver
+ * dans les deux minutes : un script qui rejouerait une vieille réponse
+ * enregistrée tombe à côté.
+ */
+function stayAwake(profile, token, now = Date.now()) {
+  const mine = profile.clicker;
+  if (!mine.awake) return { ok: true };
+  if (token !== mine.awake.token) return { ok: false, message: 'Réponse invalide.' };
+  if (now - mine.awake.askedAt > AWAKE_GRACE_MS) {
+    // Trop tard : on repose la question plutôt que de laisser passer.
+    return { ok: false, message: 'Trop tard, la mine s’est rendormie.', awake: askAwake(mine, now) };
+  }
+  mine.awake = null;
+  mine.sessionStart = now;
+  mine.lastClickAt = now;
+  return { ok: true };
+}
+
 function click(profile, count = 1, now = Date.now()) {
   const mine = profile.clicker;
   recover(mine, now);
+
+  // La mine attend une preuve de présence : rien ne se passe tant qu'on n'a
+  // pas répondu. On ne consomme ni endurance ni budget de clics — ce serait
+  // punir quelqu'un qui s'est absenté deux minutes.
+  if (mine.awake) {
+    return {
+      coins: 0, crits: 0, counted: 0, asleep: true,
+      awake: { token: mine.awake.token, x: mine.awake.x, y: mine.awake.y },
+      stamina: Math.round(mine.stamina), staminaMax: staminaMax(mine),
+    };
+  }
+
+  if (trackSession(mine, now)) {
+    const ask = askAwake(mine, now);
+    mine.lastClickAt = now;
+    return {
+      coins: 0, crits: 0, counted: 0, asleep: true,
+      awake: { token: ask.token, x: ask.x, y: ask.y },
+      stamina: Math.round(mine.stamina), staminaMax: staminaMax(mine),
+    };
+  }
 
   // Plafond dur, en plus de l'endurance : personne ne dépasse la cadence
   // d'une main rapide, même en trichant sur le regroupement des coups.
@@ -243,6 +337,11 @@ function view(profile, now = Date.now()) {
     staminaRegen: Math.round(staminaRegen(mine) * 10) / 10,
     tiredFactor: TIRED_FACTOR,
     maxClicksPerSec: MAX_CLICKS_PER_SEC,
+    sessionMaxMs: SESSION_MAX_MS,
+    // Une preuve de présence en attente survit à un rechargement de page :
+    // on la renvoie avec l'état, sinon il suffirait de recharger pour
+    // repartir pour dix minutes.
+    awake: mine.awake ? { token: mine.awake.token, x: mine.awake.x, y: mine.awake.y } : null,
     serverNow: now,
     upgrades: UPGRADES.map((up) => {
       const level = l[up.id];
@@ -272,6 +371,7 @@ function collect() {
 }
 
 module.exports = {
-  blankClicker, collect, click, buy, view,
+  blankClicker, collect, click, buy, view, stayAwake,
   clickValue, staminaMax, UPGRADES, MAX_CLICKS_PER_SEC,
+  SESSION_MAX_MS, SESSION_GAP_MS, AWAKE_GRACE_MS,
 };

@@ -22,6 +22,7 @@ const season = require('./season');
 const fairness = require('./fair');
 const ledger = require('./ledger');
 const quests = require('./quests');
+const faits = require('./faits');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'profiles.json');
@@ -80,6 +81,15 @@ function blankProfile(user, now = Date.now()) {
       rounds: 0, // nombre de manches jouées
       biggestWin: 0,
       cases: 0,
+      // Le retour des enfers : le point le plus bas atteint, et le nombre
+      // de fois où l'on en est remonté. Ça ne se voit dans aucun autre
+      // compteur — le solde final est le même que si on n'était jamais
+      // tombé — et c'est pourtant la seule chose qui vaille d'être
+      // racontée d'une soirée de malchance.
+      lowPoint: null,
+      comebacks: 0,
+      streakLoss: 0,
+      streakTold: 0,
     },
     vault: blankVault(now),
     clicker: blankClicker(now),
@@ -423,6 +433,45 @@ function recordPlay(profile, staked, returned, game = 'jeu', { risked = null } =
   s.returned += returned;
   s.rounds += 1;
   s.biggestWin = Math.max(s.biggestWin, returned);
+
+  /*
+   * LE CARNET DES FAITS MARQUANTS.
+   *
+   * Un seul passage obligé pour toutes les manches du site : aucun jeu ne
+   * peut oublier de raconter ce qu'il vient de se passer. On ne retient
+   * que les extrêmes — le carnet doit rester lisible le lendemain matin.
+   */
+  faits.manche(profile, { staked, returned, game });
+
+  // La série de défaites. Elle vit sur le profil, pas dans le carnet : on
+  // ne note l'événement qu'une fois qu'elle devient racontable, et une
+  // seule fois — sinon la sixième, la septième et la huitième défaite
+  // écriraient chacune leur ligne.
+  if (returned >= staked) {
+    if ((s.streakLoss || 0) >= faits.SERIE_MINI) s.streakTold = 0;
+    s.streakLoss = 0;
+  } else {
+    s.streakLoss = (s.streakLoss || 0) + 1;
+    if (s.streakLoss >= faits.SERIE_MINI && s.streakLoss > (s.streakTold || 0)) {
+      s.streakTold = s.streakLoss;
+      faits.serie(profile, s.streakLoss, game);
+    }
+  }
+
+  /*
+   * LE RETOUR.
+   *
+   * On garde le point le plus bas atteint depuis le dernier « retour ».
+   * Remonter d'un facteur vingt depuis un creux réel, c'est une histoire —
+   * et ça mérite une décoration sur le profil.
+   */
+  const coins = profile.vault.coins;
+  if (typeof s.lowPoint !== 'number' || coins < s.lowPoint) s.lowPoint = coins;
+  if (s.lowPoint <= 500 && coins >= Math.max(20000, s.lowPoint * 20)) {
+    s.comebacks = (s.comebacks || 0) + 1;
+    faits.retour(profile, s.lowPoint, coins);
+    s.lowPoint = coins;
+  }
 
   // Le compteur de bénéfice du mois reste tenu, mais il ne classe plus
   // personne : c'est une statistique, affichée à côté de l'XP. Ce qui

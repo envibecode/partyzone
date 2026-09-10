@@ -34,6 +34,20 @@ const { Monopoly } = require('./party/monopoly');
 const { Loup } = require('./party/loup');
 const { Blindtest } = require('./party/blindtest');
 const soirees = require('./party/soiree');
+const youtube = require('./youtube');
+const faits = require('./faits');
+const journal = require('./journal');
+const carte = require('./carte');
+const finale = require('./finale');
+const cible = require('./cible');
+const face = require('./faceaface');
+const defis = require('./defis');
+const paris = require('./paris');
+const cagnotte = require('./cagnotte');
+const troc = require('./troc');
+const encheres = require('./encheres');
+const objetDuJour = require('./objet');
+const discord = require('./discord');
 const gate = require('./gate');
 const assets = require('./assets');
 const ledger = require('./ledger');
@@ -153,6 +167,139 @@ app.get('/api/admin/export', async (req, res) => {
  * monde en tête du tableau.
  */
 const PALMARES_MIN = 3;
+
+/*
+ * LE JOURNAL DU LENDEMAIN.
+ *
+ * Trois phrases sur la veille, tirées du carnet des faits marquants. On
+ * renvoie aussi les jours précédents : à quatre joueurs, on ne joue pas
+ * tous les soirs, et un journal vide au réveil du mardi n'apprend rien.
+ */
+app.get('/api/journal', async (req, res) => {
+  const state = await store.siteState();
+  await faits.flush();
+  const jours = [];
+  for (let i = 1; i <= 7 && jours.length < 3; i++) {
+    const page = journal.pour(state, faits.jour(Date.now() - i * 86400000));
+    if (page) jours.push(page);
+  }
+  // Et la soirée en cours, si elle a déjà produit quelque chose : le
+  // journal du jour même se lit aussi, à deux heures du matin.
+  const ceSoir = journal.pour(state, faits.jour());
+  res.json({ jours, ceSoir, citron: journal.citron(state) });
+});
+
+/*
+ * LA CARTE DE FIN DE SOIRÉE.
+ *
+ * Le classement d'une soirée disparaît quinze minutes après la dernière
+ * manche, et il n'a jamais existé qu'à l'écran de ceux qui étaient là. Cette
+ * route en fait une IMAGE, qu'on colle dans Discord le lendemain.
+ *
+ * Le serveur ne renvoie que du SVG : c'est le navigateur qui en fait un PNG
+ * au téléchargement (voir l'en-tête de `carte.js`). Aucune bibliothèque
+ * native, aucun temps de démarrage en plus.
+ */
+app.get('/api/carte/:code', async (req, res) => {
+  const s = soirees.get(req.params.code);
+  if (!s || !s.history.length) return res.status(404).send('Soirée introuvable.');
+
+  const state = await store.siteState();
+  await faits.flush();
+  const ids = [...s.scores.keys()];
+
+  const svg = carte.soiree({
+    games: s.games.map((g) => (PARTY_GAMES[g] ? PARTY_GAMES[g].name : g)),
+    rounds: s.history.length,
+    standings: s.standings(),
+  }, {
+    moment: journal.moment(state, ids),
+    date: new Date(s.createdAt).toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    }),
+  });
+
+  res.type('image/svg+xml');
+  // Une soirée finie ne change plus : le navigateur peut la garder.
+  res.set('Cache-Control', s.over ? 'private, max-age=900' : 'no-store');
+  res.send(svg);
+});
+
+/*
+ * LE FACE-À-FACE.
+ *
+ * « Toi et moi, ça donne quoi ? » — la seule question à laquelle ni le
+ * classement ni le palmarès ne répondaient. On renvoie les deux profils
+ * côte à côte ET l'historique de la rivalité, toujours du point de vue de
+ * celui qui demande (voir `faceaface.js`).
+ */
+app.get('/api/face/:id', async (req, res) => {
+  try {
+    const user = auth.userFromCookieHeader(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: 'Session absente.' });
+    if (user.id === req.params.id) return res.status(400).json({ error: 'Choisis quelqu’un d’autre.' });
+
+    const [moi, lui, state] = await Promise.all([
+      store.findProfile(user.id),
+      store.findProfile(req.params.id),
+      store.siteState(),
+    ]);
+    if (!moi || !lui) return res.status(404).json({ error: 'Joueur introuvable.' });
+
+    const f = face.between(state, moi.id, lui.id);
+    res.json({
+      moi: store.publicProfile(moi),
+      lui: store.publicProfile(lui),
+      face: f,
+      resume: face.resume(f, moi.name, lui.name),
+    });
+  } catch (err) {
+    console.error('[face]', err.message);
+    res.status(500).json({ error: 'Impossible de comparer.' });
+  }
+});
+
+/** Les adversaires connus de celui qui demande, du plus fréquenté au moins. */
+app.get('/api/rivaux', async (req, res) => {
+  try {
+    const user = auth.userFromCookieHeader(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: 'Session absente.' });
+    const state = await store.siteState();
+    res.json({ rivaux: face.rivaux(state, user.id) });
+  } catch (err) {
+    res.status(500).json({ error: 'Impossible de lire les rivalités.' });
+  }
+});
+
+/*
+ * LE MOIS : LA CIBLE, ET LA DERNIÈRE LIGNE DROITE.
+ *
+ * Deux informations que toutes les pages affichent en bandeau, et qui
+ * n'avaient pas de raison de voyager dans chaque état de jeu.
+ */
+app.get('/api/mois', async (req, res) => {
+  try {
+    const user = auth.userFromCookieHeader(req.headers.cookie);
+    const profile = user ? await store.findProfile(user.id) : null;
+    const state = await store.siteState();
+    const target = await cible.current(store);
+    res.json({
+      saison: season.view(state),
+      finale: finale.view(profile),
+      cible: target,
+      // « C'est toi la cible » se dit autrement que « la cible, c'est Momo ».
+      jeSuisLaCible: Boolean(target && profile && target.id === profile.id),
+      prime: cible.PRIME,
+      restant: profile ? cible.MAX_PAR_JOUR - cible.ensure(profile).taken : cible.MAX_PAR_JOUR,
+      // L'objet du jour voyage avec le reste : c'est la même question —
+      // « qu'est-ce qui se passe aujourd'hui ? »
+      objet: objetDuJour.view(profile),
+    });
+  } catch (err) {
+    console.error('[mois]', err.message);
+    res.status(500).json({ error: 'Impossible de lire le mois.' });
+  }
+});
 
 app.get('/api/palmares', async (req, res) => {
   try {
@@ -293,7 +440,24 @@ async function checkSeason() {
         text: `${winner.name} remporte le mois de ${winner.label} avec ${(winner.xp || 0).toLocaleString('fr-FR')} XP — ${winner.prize} !`,
       });
       chat.system(`🏆 ${winner.name} termine premier de ${winner.label}. Le lot est remis à la main par un administrateur.`, 'announce');
+      discord.mois(winner);
       console.log(`[saison] ${winner.label} remporté par ${winner.name} (${winner.xp || 0} XP)`);
+
+      /*
+       * Les cagnottes « pour le vainqueur du mois » se vident ici, et
+       * nulle part ailleurs : c'est le seul instant où l'on sait qui a
+       * gagné. Elles ont attendu tout le mois pour ça.
+       */
+      for (const paye of cagnotte.verserAuMois(state, winner)) {
+        await crediter(paye.to, paye.amount, {
+          message: `💰 La cagnotte du mois te revient : ${paye.amount.toLocaleString('fr-FR')} pièces.`,
+          source: 'cagnotte',
+        });
+        chat.system(`💰 ${winner.name} récupère la cagnotte du mois : ${paye.amount.toLocaleString('fr-FR')} pièces.`, 'announce');
+      }
+      store.touchState();
+      // La cible du mois change forcément : on jette le cache.
+      cible.forget();
     }
   } finally {
     seasonChecking = false;
@@ -312,11 +476,59 @@ setInterval(() => checkSeason().catch(() => {}), 3600 * 1000).unref();
  * paieraient deux fois. Il est sauvegardé avec le salon, donc un
  * redémarrage ne le remet pas à zéro.
  */
+/**
+ * Verse (ou retire) des pièces à quelqu'un qui n'est pas forcément
+ * connecté, et le prévient s'il l'est.
+ *
+ * Les primes, les pots et les séquestres passent tous par ici : un seul
+ * endroit qui écrit sur le disque, rafraîchit le profil gardé en mémoire
+ * par la présence, et envoie le message. Sans ça, on oublie une fois sur
+ * deux de mettre à jour l'un des trois, et le joueur voit un solde faux
+ * jusqu'à ce qu'il recharge la page.
+ */
+async function crediter(userId, coins, { message = '', kind = 'success', source = '' } = {}) {
+  const target = await store.findProfile(userId);
+  if (!target) return null;
+
+  if (coins) {
+    target.vault.coins = Math.max(0, target.vault.coins + coins);
+    if (source) {
+      if (coins > 0) ledger.mint(source, coins);
+      else ledger.burn(source, -coins);
+    }
+    await store.saveProfile(target);
+  }
+
+  const entry = presence.users.get(userId);
+  if (entry) {
+    entry.profile = target;
+    for (const socketId of entry.sockets) {
+      io.to(socketId).emit('profile:update', store.publicProfile(target));
+      if (message) io.to(socketId).emit('toast', { message, kind });
+    }
+  }
+  return target;
+}
+
+/** Envoie un événement à tous les onglets d'une personne. */
+function pousser(userId, event, payload) {
+  const entry = presence.users.get(userId);
+  if (!entry) return false;
+  for (const socketId of entry.sockets) io.to(socketId).emit(event, payload);
+  return true;
+}
+
 async function creditPartyRoom(room) {
   if (!room.result || room.credited) return;
   room.credited = true;
   const winners = new Set(room.winners());
   const players = room.players;
+
+  // Le carnet retient qui a gagné quoi : c'est la matière du journal du
+  // lendemain et du face-à-face.
+  faits.party(room.game, room.gameName,
+    players.filter((p) => winners.has(p.id)).map((p) => ({ id: p.id, name: p.name })),
+    players);
 
   for (const p of players) {
     const target = await store.findProfile(p.id);
@@ -346,6 +558,97 @@ async function creditPartyRoom(room) {
   }
 }
 
+/*
+ * LE COURRIER DU MATIN.
+ *
+ * Une fois par jour, on relit la veille et on l'envoie sur Discord. Le
+ * repère est stocké dans l'état du site : un redémarrage ne renvoie pas le
+ * journal d'hier une deuxième fois, et un serveur endormi toute la nuit le
+ * rattrape à son réveil plutôt que de le sauter.
+ *
+ * Le prix Citron suit le même chemin, une fois par semaine.
+ */
+async function courrierDuMatin() {
+  if (!discord.actif()) return;
+  try {
+    await faits.flush();
+    const state = await store.siteState();
+    if (!state.courrier) state.courrier = { jour: null, semaine: null };
+
+    const hier = faits.jour(Date.now() - 86400000);
+    if (state.courrier.jour !== hier) {
+      const page = journal.pour(state, hier);
+      // Pas de soirée, pas de journal : un site qui écrit « personne n'a
+      // joué hier » se fait fermer.
+      if (page) await discord.matin(page);
+      state.courrier.jour = hier;
+      store.touchState();
+    }
+
+    const semaine = faits.semaine();
+    if (state.courrier.semaine !== semaine) {
+      const prix = journal.citron(state);
+      if (prix) await discord.citron(prix);
+      state.courrier.semaine = semaine;
+      store.touchState();
+    }
+  } catch (err) {
+    console.error('[courrier]', err.message);
+  }
+}
+setInterval(() => { courrierDuMatin(); }, 20 * 60 * 1000).unref();
+setTimeout(() => { courrierDuMatin(); }, 25000).unref();
+
+/*
+ * LA CLÔTURE DE L'ENCHÈRE.
+ *
+ * On regarde toutes les minutes plutôt que de poser un minuteur sur la fin
+ * exacte : la fin BOUGE (une mise dans les trois dernières minutes la
+ * repousse), et un minuteur ne survivrait pas à un redémarrage — le
+ * dimanche soir, ce serait le pire moment pour perdre l'objet de la
+ * semaine.
+ */
+async function cloreEnchere() {
+  try {
+    const state = await store.siteState();
+    const e = encheres.ensure(state);
+    const result = encheres.clore(e);
+    if (!result) return;
+
+    store.touchState();
+    const item = require('./data/collection').BY_ID.get(result.itemId);
+
+    if (!result.winner) {
+      chat.system(`🔨 Personne n’a voulu de ${item.emoji} ${item.name} cette semaine. Il retourne d’où il vient.`, 'announce');
+      return;
+    }
+
+    const gagnant = await store.findProfile(result.winner);
+    if (!gagnant) return;
+    gagnant.vault.items[item.id] = (gagnant.vault.items[item.id] || 0) + 1;
+    await store.saveProfile(gagnant);
+
+    // Les pièces ont été détruites au moment de la mise : il n'y a rien à
+    // reverser ici, seulement l'objet à remettre.
+    await crediter(result.winner, 0, {
+      message: `🔨 Adjugé ! ${item.emoji} ${item.name} est à toi pour ${result.amount.toLocaleString('fr-FR')} pièces.`,
+    });
+    io.emit('announce', {
+      text: `🔨 ${result.name} remporte ${item.emoji} ${item.name} aux enchères du dimanche — ${result.amount.toLocaleString('fr-FR')} pièces.`,
+    });
+    chat.system(`🔨 ${result.name} remporte ${item.emoji} ${item.name} pour ${result.amount.toLocaleString('fr-FR')} pièces.`, 'announce');
+
+    for (const [id, entry] of presence.users) {
+      const vue = encheres.view(state, id);
+      for (const socketId of entry.sockets) io.to(socketId).emit('enchere:state', vue);
+    }
+  } catch (err) {
+    console.error('[enchère]', err.message);
+  }
+}
+setInterval(() => { cloreEnchere(); }, 60000).unref();
+setTimeout(() => { cloreEnchere(); }, 20000).unref();
+
 /* ═══════════ LA SOIRÉE ═══════════ */
 
 /**
@@ -355,6 +658,22 @@ async function creditPartyRoom(room) {
  * manches, la soirée n'a pas de salon, et les spectateurs d'une manche ne
  * font pas partie de la soirée.
  */
+/**
+ * La liste des salons, telle que le hall la reçoit.
+ *
+ * Elle passe par ici et non par `partyRooms.list()` directement pour une
+ * raison : le pot des parieurs s'y ajoute. Le hall doit pouvoir afficher
+ * « 3 400 pièces en jeu » à côté d'une table qui n'a pas encore commencé —
+ * c'est ce chiffre qui donne envie d'aller voir.
+ */
+function listeSalons() {
+  return partyRooms.list().map((r) => {
+    const pot = paris.of(r.code);
+    if (!pot || !pot.bets.length) return r;
+    return { ...r, pot: paris.total(pot), parieurs: new Set(pot.bets.map((b) => b.id)).size };
+  });
+}
+
 function emitSoiree(s) {
   const payload = s.state();
   for (const id of s.scores.keys()) {
@@ -371,8 +690,126 @@ function emitSoiree(s) {
  * une manche de soirée, le classement cumulé est mis à jour. Les deux
  * chemins de fin — le clic et le minuteur — passent ici.
  */
+/** Ce qu'une personne voit de ses défis : reçus, envoyés, en cours. */
+function defiState(userId) {
+  const nom = (id) => (PARTY_GAMES[id] ? PARTY_GAMES[id].name : id);
+  const habiller = (d) => ({ ...d, gameName: nom(d.game) });
+  return {
+    inbox: defis.inbox(userId).map(habiller),
+    outbox: defis.outbox(userId).map(habiller),
+    live: (() => { const d = defis.live(userId); return d ? habiller(d) : null; })(),
+    // Le dernier duel fini : c'est ce qu'on affiche au moment où il y a
+    // quelque chose à dire — qui a gagné, et combien.
+    dernier: (() => { const d = defis.last(userId); return d ? habiller(d) : null; })(),
+    games: defis.JEUX.filter((g) => PARTY_GAMES[g]).map((id) => ({ id, name: nom(id) })),
+    max: defis.MAX_MISE,
+  };
+}
+
+/**
+ * TOUT CE QUI SE RÈGLE À LA FIN D'UNE PARTIE, EN DEHORS DU RANG.
+ *
+ * Quatre choses, dans cet ordre : la rivalité entre chaque paire de
+ * joueurs, la prime de la cible du mois, le duel s'il y en avait un, et le
+ * pot des parieurs. Chacune est isolée dans son `try` — un pot mal réglé ne
+ * doit pas empêcher la prime d'être versée, et réciproquement.
+ */
+async function finPartie(room) {
+  let ranking = [];
+  try { ranking = room.ranking() || []; } catch { ranking = []; }
+
+  /* ── Le face-à-face ── */
+  try {
+    const state = await store.siteState();
+    if (face.record(state, room)) store.touchState();
+  } catch (err) { console.error('[face]', err.message); }
+
+  /* ── La cible du mois ── */
+  try {
+    const target = await cible.current(store);
+    const gagnants = cible.vainqueurs(target, ranking);
+    for (const id of gagnants) {
+      const p = await store.findProfile(id);
+      if (!p) continue;
+      const { paid, left } = cible.verser(p);
+      if (!paid) continue;
+      await store.saveProfile(p);
+      await crediter(id, 0, {
+        message: `🎯 Prime de ${paid.toLocaleString('fr-FR')} pièces — tu as fini devant ${target.name}, la cible du mois.`
+          + (left ? '' : ' (dernière du jour)'),
+      });
+      room.system(`🎯 ${p.name} touche la prime : fini devant ${target.name}, la cible du mois.`, 'end');
+    }
+  } catch (err) { console.error('[cible]', err.message); }
+
+  /* ── Le duel ── */
+  try {
+    const duel = room.defi ? defis.get(room.defi) : null;
+    if (duel && duel.status === 'live') {
+      const res = defis.settle(duel, ranking);
+      if (res && duel.stake > 0) {
+        if (res.refund) {
+          for (const id of [duel.fromId, duel.toId]) {
+            await crediter(id, duel.stake, {
+              message: `Duel nul : tes ${duel.stake.toLocaleString('fr-FR')} pièces te sont rendues.`,
+              kind: 'info', source: 'défi',
+            });
+          }
+        } else {
+          await crediter(res.winner, res.pot, {
+            message: `⚔️ Duel remporté — tu empoches ${res.pot.toLocaleString('fr-FR')} pièces.`,
+            source: 'défi',
+          });
+          const perdant = res.winner === duel.fromId ? duel.toId : duel.fromId;
+          await crediter(perdant, 0, {
+            message: `⚔️ Duel perdu — ${duel.stake.toLocaleString('fr-FR')} pièces envolées.`, kind: 'warn',
+          });
+        }
+      }
+      room.system(res && res.winner
+        ? `⚔️ Duel remporté par ${res.winner === duel.fromId ? duel.fromName : duel.toName}.`
+        : '⚔️ Duel nul : les mises sont rendues.', 'end');
+      pousser(duel.fromId, 'defi:state', defiState(duel.fromId));
+      pousser(duel.toId, 'defi:state', defiState(duel.toId));
+    }
+  } catch (err) { console.error('[défi]', err.message); }
+
+  /* ── Les paris ── */
+  try {
+    const pot = paris.of(room.code);
+    if (pot && !pot.result) {
+      const res = paris.settle(pot, ranking);
+      if (res && res.payouts.length) {
+        for (const p of res.payouts) {
+          await crediter(p.id, p.amount, {
+            message: res.refund
+              ? `Pari remboursé : ${p.amount.toLocaleString('fr-FR')} pièces (personne n’avait misé sur le vainqueur).`
+              : `🎟️ Pari gagné sur ${p.on} — ${p.amount.toLocaleString('fr-FR')} pièces (mise : ${p.mise.toLocaleString('fr-FR')}).`,
+            kind: res.refund ? 'info' : 'success',
+            source: 'paris',
+          });
+        }
+        if (!res.refund) {
+          const noms = [...new Set(res.payouts.map((p) => p.name))].join(', ');
+          room.system(`🎟️ Pot de ${res.pot.toLocaleString('fr-FR')} pièces pour ${noms}.`, 'end');
+        }
+      }
+      /*
+       * On prévient les PARIEURS un par un, pas le canal du salon : la
+       * plupart d'entre eux ont misé depuis le hall et ne sont pas dans le
+       * salon du tout. Chacun reçoit sa propre vue, avec sa mise à lui.
+       */
+      for (const id of new Set([...room.players.map((p) => p.id), ...pot.bets.map((b) => b.id)])) {
+        pousser(id, 'pari:state', paris.view(pot, id));
+      }
+      broadcastPartyList();
+    }
+  } catch (err) { console.error('[paris]', err.message); }
+}
+
 function onPartyEnd(room) {
   creditPartyRoom(room).catch((e) => console.error('[party]', e.message));
+  finPartie(room).catch((e) => console.error('[fin de partie]', e.message));
 
   const s = soirees.ofRoom(room);
   if (s && s.record(room)) {
@@ -382,6 +819,11 @@ function onPartyEnd(room) {
         const who = s.names.get(id);
         return who ? who.name : '—';
       });
+      faits.soiree(
+        s.result.winnerIds.map((id) => ({ id, name: (s.names.get(id) || {}).name || '—' })),
+        s.history.length,
+        s.result.table.map((t) => ({ name: t.name, points: t.points }))
+      );
       room.system(names.length
         ? `Soirée terminée — ${names.join(' et ')} l’emporte au cumul après ${s.history.length} manches.`
         : 'Soirée terminée.', 'end');
@@ -391,7 +833,7 @@ function onPartyEnd(room) {
     }
   }
 
-  io.emit('party:list', { rooms: partyRooms.list() });
+  io.emit('party:list', { rooms: listeSalons() });
 }
 
 /* ═══════════ LES JEUX PARTY, ET LEUR SURVIE ═══════════ */
@@ -431,6 +873,49 @@ async function savePartyRooms() {
     // redéploiement comme les parties elles-mêmes.
     soirees.sweep(partyRooms);
     state.soirees = soirees.saveAll();
+
+    /*
+     * Les duels et les pots tiennent des pièces en séquestre. Deux règles :
+     * on les écrit sur le disque comme les salons, et tout ce qui n'a plus
+     * de partie est REMBOURSÉ. Un séquestre orphelin, c'est de l'argent qui
+     * disparaît sans que personne ne comprenne pourquoi.
+     */
+    for (const duel of defis.sweep(partyRooms)) {
+      const res = defis.abort(duel, 'la partie n’a pas eu lieu');
+      if (res && duel.stake > 0) {
+        for (const id of [duel.fromId, duel.toId]) {
+          await crediter(id, duel.stake, {
+            message: `Duel annulé : tes ${duel.stake.toLocaleString('fr-FR')} pièces te sont rendues.`,
+            kind: 'info', source: 'défi',
+          });
+        }
+      }
+    }
+    for (const pot of paris.sweep(partyRooms)) {
+      const res = paris.cancel(pot, 'la partie n’a pas eu lieu');
+      for (const p of (res ? res.payouts : [])) {
+        await crediter(p.id, p.amount, {
+          message: `Pari remboursé : la partie n’a pas eu lieu (${p.amount.toLocaleString('fr-FR')} pièces).`,
+          kind: 'info', source: 'paris',
+        });
+      }
+    }
+    state.defis = defis.saveAll();
+    state.paris = paris.saveAll();
+    state.trocs = troc.saveAll();
+    troc.sweep();
+
+    /*
+     * Une cagnotte qui n'a pas abouti en quinze jours est RENDUE, part par
+     * part. Sans cette règle, ouvrir une cagnotte trop ambitieuse
+     * reviendrait à détruire l'argent de ses copains.
+     */
+    for (const rendu of cagnotte.sweep(state)) {
+      await crediter(rendu.id, rendu.amount, {
+        message: `La cagnotte « ${rendu.titre} » n’a pas abouti : ${rendu.amount.toLocaleString('fr-FR')} pièces te sont rendues.`,
+        kind: 'info', source: 'cagnotte',
+      });
+    }
     store.touchState();
   } catch (err) {
     console.error('[party] sauvegarde impossible :', err.message);
@@ -446,6 +931,11 @@ async function restorePartyRooms() {
     if (n) console.log(`  Salons Party  : ${n} partie(s) reprise(s) après redémarrage`);
     const s = soirees.restoreAll(state.soirees);
     if (s) console.log(`  Soirées       : ${s} reprise(s) après redémarrage`);
+    const d = defis.restoreAll(state.defis);
+    const pa = paris.restoreAll(state.paris);
+    const tr = troc.restoreAll(state.trocs);
+    if (tr) console.log(`  Trocs         : ${tr} proposition(s) reprise(s)`);
+    if (d || pa) console.log(`  Duels & paris : ${d} duel(s), ${pa} pot(s) repris`);
     // Les salons rechargés doivent recevoir le crédit de fin de partie
     // comme les autres : on rebranche le rappel, perdu à la sérialisation.
     for (const room of partyRooms.rooms.values()) {
@@ -526,6 +1016,20 @@ io.on('connection', async (socket) => {
     saveSoon();
     socket.emit('mine:hit', result);
     socket.emit('profile:update', store.publicProfile(profile));
+  });
+
+  /*
+   * « Tu es toujours là ? »
+   *
+   * La mine pose la question après dix minutes de minage d'affilée. Le
+   * jeton attendu est tiré par le serveur : le navigateur ne peut pas le
+   * deviner, seulement le renvoyer après l'avoir reçu.
+   */
+  socket.on('mine:awake', ({ token } = {}) => {
+    const result = clicker.stayAwake(profile, token);
+    saveSoon();
+    socket.emit('mine:awake', result);
+    if (result.ok) socket.emit('toast', { message: 'On reprend. Bon courage.', kind: 'success' });
   });
 
   socket.on('mine:buy', async ({ id } = {}) => {
@@ -885,7 +1389,49 @@ io.on('connection', async (socket) => {
     if (!result.ok) return socket.emit('vault:state', vaultPayload({ result }));
 
     store.grantXp(profile, result.xp);
+
+    /*
+     * LA DERNIÈRE LIGNE DROITE.
+     *
+     * Pendant les 48 dernières heures du mois, les dix premières caisses de
+     * chacun rapportent une fois et demie l'XP. Le bonus est versé ici,
+     * juste après l'XP normale, et compte dans le classement du mois comme
+     * elle — c'est le même `grantXp` (voir `finale.js` pour le pourquoi du
+     * plafond en nombre de caisses).
+     */
+    const boost = finale.bonus(profile, result.xp, result.pulls.length);
+    if (boost.xp > 0) {
+      store.grantXp(profile, boost.xp);
+      socket.emit('toast', {
+        message: `🔥 Dernière ligne droite : +${boost.xp} XP de bonus`
+          + (boost.left
+            ? ` (${boost.left} caisse${boost.left > 1 ? 's' : ''} boostée${boost.left > 1 ? 's' : ''} restante${boost.left > 1 ? 's' : ''})`
+            : ' — c’était la dernière boostée.'),
+        kind: 'success',
+      });
+    }
+
     profile.stats.cases += result.pulls.length;
+
+    /*
+     * L'OBJET DU JOUR.
+     *
+     * On regarde ce qui vient de sortir. La prime est en pièces — elle ne
+     * déplace donc pas le classement du mois toute seule : elle donne de
+     * quoi ouvrir la caisse suivante, et c'est cette caisse-là qui donnera
+     * l'XP.
+     */
+    const dujour = objetDuJour.verifier(profile, result.pulls);
+    if (dujour.prime > 0) {
+      profile.vault.coins += dujour.prime;
+      ledger.mint('objet du jour', dujour.prime);
+      socket.emit('toast', {
+        message: `${dujour.item.emoji} L’objet du jour ! +${dujour.prime.toLocaleString('fr-FR')} pièces`
+          + (dujour.fois > 1 ? ` (×${dujour.fois})` : ''),
+        kind: 'success',
+      });
+      chat.system(`${dujour.item.emoji} ${user.name} sort l’objet du jour : ${dujour.item.name}.`, 'drop');
+    }
 
     // Les paliers de collection se contrôlent ici, juste après le tirage.
     const state = await store.siteState();
@@ -904,6 +1450,7 @@ io.on('connection', async (socket) => {
     }
 
     for (const pull of result.pulls.filter((p) => ['mythic', 'cursed'].includes(p.r))) {
+      faits.trouvaille(profile, pull);
       io.emit('feed', {
         name: user.name,
         avatar: user.avatar,
@@ -1020,7 +1567,22 @@ io.on('connection', async (socket) => {
     }
 
     store.grantXp(profile, result.xp);
+    // Une caisse offerte reste une caisse : elle profite du bonus de fin de
+    // mois comme les autres, et consomme le même quota.
+    const boostCadeau = finale.bonus(profile, result.xp, result.pulls.length);
+    if (boostCadeau.xp > 0) store.grantXp(profile, boostCadeau.xp);
     profile.stats.cases += result.pulls.length;
+
+    // Une caisse offerte peut contenir l'objet du jour comme une autre.
+    const cadeauJour = objetDuJour.verifier(profile, result.pulls);
+    if (cadeauJour.prime > 0) {
+      profile.vault.coins += cadeauJour.prime;
+      ledger.mint('objet du jour', cadeauJour.prime);
+      socket.emit('toast', {
+        message: `${cadeauJour.item.emoji} L’objet du jour ! +${cadeauJour.prime.toLocaleString('fr-FR')} pièces`,
+        kind: 'success',
+      });
+    }
 
     const state = await store.siteState();
     const earned = medals.check(profile, state.records);
@@ -1221,7 +1783,7 @@ io.on('connection', async (socket) => {
   const partyRoom = () => partyRooms.roomOf(user.id);
 
   function broadcastPartyList() {
-    io.emit('party:list', { rooms: partyRooms.list() });
+    io.emit('party:list', { rooms: listeSalons() });
   }
 
   /** Un onglet se ferme : le salon décide lui-même si le joueur sort ou non. */
@@ -1284,7 +1846,7 @@ io.on('connection', async (socket) => {
 
   socket.on('party:open', () => {
     presence.setStatus(user.id, 'party');
-    socket.emit('party:list', { rooms: partyRooms.list() });
+    socket.emit('party:list', { rooms: listeSalons() });
     socket.emit('party:rank', partyRank.view(profile));
 
     // Reconnexion : si le joueur était déjà dans un salon, on l'y remet
@@ -1334,6 +1896,9 @@ io.on('connection', async (socket) => {
       max: room.max,
       at: Date.now(),
     });
+    // Et sur Discord, là où la bande discute vraiment. Sans webhook
+    // configuré, cette ligne ne fait rien du tout.
+    discord.table({ host: user.name, gameName: room.gameName, code: room.code, max: room.max });
 
     // Et l'état APRÈS avoir dit où aller. `enterRoom` a déjà diffusé une
     // fois, mais le client n'écoutait pas encore : sa page du jeu n'est
@@ -1392,7 +1957,7 @@ io.on('connection', async (socket) => {
 
   socket.on('party:leave', () => { stopWatching(); leaveParty(); });
 
-  socket.on('party:list', () => socket.emit('party:list', { rooms: partyRooms.list() }));
+  socket.on('party:list', () => socket.emit('party:list', { rooms: listeSalons() }));
 
   /*
    * LES RÉACTIONS RAPIDES.
@@ -1431,6 +1996,19 @@ io.on('connection', async (socket) => {
     room.credited = false; // une relance doit pouvoir créditer à nouveau
     const result = room.start(user.id);
     if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'error' });
+
+    // Les paris ferment ICI. Une seconde de plus et on miserait en
+    // connaissant la donne, ce qui n'est plus un pari.
+    const pot = paris.of(room.code);
+    if (pot && pot.open) {
+      paris.close(pot);
+      if (pot.bets.length) {
+        room.system(`🎟️ Paris fermés : ${paris.total(pot).toLocaleString('fr-FR')} pièces dans le pot.`);
+      }
+      for (const id of new Set([...room.players.map((p) => p.id), ...pot.bets.map((b) => b.id)])) {
+        pousser(id, 'pari:state', paris.view(pot, id));
+      }
+    }
     broadcastPartyList();
   });
 
@@ -1577,6 +2155,430 @@ io.on('connection', async (socket) => {
     socket.emit('soiree:state', null);
   });
 
+  /* ══════════ LE DÉFI DIRECT ══════════
+   *
+   * « Toi et moi, tout de suite. » On désigne quelqu'un, on choisit le jeu,
+   * on pose une mise si on veut. L'autre accepte, et le salon s'ouvre pour
+   * eux deux. Les règles et la machine à états sont dans `defis.js` ; ici
+   * on ne fait que déplacer les pièces et ouvrir la porte.
+   */
+
+  const envoyerDefis = (id) => pousser(id, 'defi:state', defiState(id));
+
+  socket.on('defi:list', () => socket.emit('defi:state', defiState(user.id)));
+
+  socket.on('defi:send', async ({ to, game, stake } = {}) => {
+    const cible2 = await store.findProfile(String(to || ''));
+    if (!cible2 || cible2.banned) {
+      return socket.emit('toast', { message: 'Ce joueur est introuvable.', kind: 'error' });
+    }
+    if (!presence.users.get(cible2.id)) {
+      return socket.emit('toast', { message: `${cible2.name} n’est pas connecté.`, kind: 'warn' });
+    }
+
+    const result = defis.create({
+      from: { id: user.id, name: user.name, avatar: user.avatar },
+      to: { id: cible2.id, name: cible2.name, avatar: cible2.avatar },
+      game: String(game || ''),
+      stake,
+    });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    // La mise doit être là au moment d'envoyer le défi, sinon on défie
+    // pour un million qu'on n'a pas et l'autre accepte pour rien.
+    if (result.defi.stake > profile.vault.coins) {
+      defis.decline(result.defi.id, user.id);
+      return socket.emit('toast', { message: 'Tu n’as pas cette somme.', kind: 'error' });
+    }
+
+    envoyerDefis(user.id);
+    envoyerDefis(cible2.id);
+    pousser(cible2.id, 'toast', {
+      message: `⚔️ ${user.name} te défie à ${PARTY_GAMES[result.defi.game].name}`
+        + (result.defi.stake ? ` pour ${result.defi.stake.toLocaleString('fr-FR')} pièces.` : '.'),
+      kind: 'info',
+    });
+  });
+
+  socket.on('defi:decline', ({ id } = {}) => {
+    const d = defis.get(id);
+    const result = defis.decline(id, user.id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+    envoyerDefis(d.fromId);
+    envoyerDefis(d.toId);
+    const autre = user.id === d.fromId ? d.toId : d.fromId;
+    pousser(autre, 'toast', {
+      message: user.id === d.fromId ? `${user.name} a retiré son défi.` : `${user.name} décline ton défi.`,
+      kind: 'info',
+    });
+  });
+
+  socket.on('defi:accept', async ({ id } = {}) => {
+    const d = defis.get(id);
+    if (!d) return socket.emit('toast', { message: 'Ce défi n’existe plus.', kind: 'warn' });
+
+    const lanceur = await store.findProfile(d.fromId);
+    if (!lanceur) return socket.emit('toast', { message: 'Ce joueur a disparu.', kind: 'error' });
+
+    // On revérifie les deux bourses ICI, au moment de séquestrer : entre
+    // l'envoi et l'acceptation, les deux ont pu jouer et tout perdre.
+    if (d.stake > profile.vault.coins) {
+      return socket.emit('toast', { message: 'Tu n’as pas de quoi couvrir la mise.', kind: 'error' });
+    }
+    if (d.stake > lanceur.vault.coins) {
+      defis.decline(d.id, user.id);
+      envoyerDefis(d.fromId); envoyerDefis(d.toId);
+      return socket.emit('toast', { message: `${d.fromName} n’a plus de quoi couvrir sa mise.`, kind: 'warn' });
+    }
+
+    const ok = defis.accept(d.id, user.id);
+    if (!ok.ok) return socket.emit('toast', { message: ok.message, kind: 'warn' });
+
+    const entry = PARTY_GAMES[d.game];
+    const room = entry.build();
+    room.onEnd = onPartyEnd;
+    room.defi = d.id;
+    room.reserveHost = d.fromId;
+    defis.attach(d, room.code);
+
+    // Le séquestre, maintenant. `crediter` écrit sur le disque et rafraîchit
+    // les deux profils en mémoire : personne ne peut redépenser sa mise.
+    if (d.stake > 0) {
+      await crediter(d.fromId, -d.stake, { message: '', source: 'défi' });
+      await crediter(d.toId, -d.stake, { message: '', source: 'défi' });
+      profile.vault.coins = Math.max(0, profile.vault.coins - d.stake);
+    }
+
+    if (partyRoom()) leaveParty();
+    const joined = enterRoom(room);
+    if (!joined.ok) {
+      // Impossible d'entrer : on annule tout et on rend les mises.
+      defis.abort(d, 'salon impossible à ouvrir');
+      if (d.stake > 0) {
+        await crediter(d.fromId, d.stake, { message: 'Duel annulé : mise rendue.', kind: 'info', source: 'défi' });
+        await crediter(d.toId, d.stake, { message: 'Duel annulé : mise rendue.', kind: 'info', source: 'défi' });
+      }
+      room.close();
+      return socket.emit('toast', { message: joined.message, kind: 'error' });
+    }
+    socket.emit('party:joined', { code: room.code, game: room.game });
+
+    room.system(d.stake
+      ? `⚔️ Duel : ${d.fromName} contre ${d.toName}, ${d.stake.toLocaleString('fr-FR')} pièces de chaque côté.`
+      : `⚔️ Duel : ${d.fromName} contre ${d.toName}, pour l’honneur.`, 'end');
+
+    pousser(d.fromId, 'defi:go', { code: room.code, game: room.game, stake: d.stake, vs: d.toName });
+    envoyerDefis(d.fromId);
+    envoyerDefis(d.toId);
+    room.broadcast();
+    broadcastPartyList();
+  });
+
+  /* ══════════ LES PARIS ENTRE POTES ══════════
+   *
+   * On mise sur quelqu'un avant que la partie commence. Un joueur de la
+   * partie ne peut miser que sur lui-même — c'est la règle qui empêche
+   * quiconque d'avoir intérêt à perdre.
+   */
+
+  /*
+   * On parie DEPUIS LE HALL, sur un salon qui n'a pas encore commencé.
+   *
+   * C'était la seule place possible : un salon ne devient regardable qu'une
+   * fois lancé (`watchable`), et à ce moment-là les paris sont déjà fermés.
+   * Miser depuis le hall a d'ailleurs plus de sens — c'est là qu'on voit
+   * qui s'installe à quelle table.
+   */
+  const potDiffuse = (room) => {
+    const pot = paris.of(room.code);
+    if (!pot) return;
+    // Chacun voit ses propres mises : la vue est construite par personne.
+    const vus = new Set();
+    for (const id of [...room.players.map((p) => p.id), ...pot.bets.map((b) => b.id)]) {
+      if (vus.has(id)) continue;
+      vus.add(id);
+      pousser(id, 'pari:state', paris.view(pot, id));
+    }
+    broadcastPartyList();
+  };
+
+  socket.on('pari:state', ({ code } = {}) => {
+    const room = partyRooms.get(code) || partyRoom();
+    if (!room) return socket.emit('pari:state', null);
+    socket.emit('pari:state', paris.view(paris.of(room.code) || paris.open(room), user.id));
+  });
+
+  socket.on('pari:place', async ({ code, on, amount } = {}) => {
+    const room = partyRooms.get(code) || partyRoom();
+    if (!room) return socket.emit('toast', { message: 'Aucun salon avec ce code.', kind: 'warn' });
+    if (room.phase !== 'lobby') {
+      return socket.emit('toast', { message: 'La partie a commencé : les paris sont fermés.', kind: 'warn' });
+    }
+
+    const sur = room.players.find((p) => p.id === String(on || ''));
+    if (!sur) return socket.emit('toast', { message: 'Ce joueur n’est pas dans la partie.', kind: 'warn' });
+
+    const pot = paris.open(room);
+    const joueur = room.players.some((p) => p.id === user.id);
+    const result = paris.place(pot, { id: user.id, name: user.name }, { id: sur.id, name: sur.name },
+      amount, { joueur });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    if (result.amount > profile.vault.coins) {
+      // Trop tard pour vérifier avant : on retire le pari qu'on vient de poser.
+      pot.bets.pop();
+      return socket.emit('toast', { message: 'Tu n’as pas cette somme.', kind: 'error' });
+    }
+    profile.vault.coins -= result.amount;
+    ledger.burn('paris', result.amount);
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+
+    room.system(`🎟️ ${user.name} mise ${result.amount.toLocaleString('fr-FR')} sur ${sur.name}.`);
+    potDiffuse(room);
+  });
+
+  /* ══════════ LA CAGNOTTE COMMUNE ══════════
+   *
+   * Tout le reste du site oppose les gens ; ici on se cotise. Les règles
+   * sont dans `cagnotte.js` — en particulier celle qui rend tout si le pot
+   * ne se remplit pas.
+   */
+
+  async function cagnotteEtat(cible2 = null) {
+    const state = await store.siteState();
+    const payload = cagnotte.view(state, user.id);
+    if (cible2 === 'tous') io.emit('cagnotte:list', payload);
+    else socket.emit('cagnotte:list', payload);
+  }
+
+  socket.on('cagnotte:list', () => { cagnotteEtat().catch(() => {}); });
+
+  socket.on('cagnotte:open', async ({ titre, but, pour } = {}) => {
+    const state = await store.siteState();
+    let dest = pour;
+    if (pour && pour.type === 'joueur' && pour.id) {
+      const p = await store.findProfile(pour.id);
+      if (!p) return socket.emit('toast', { message: 'Ce joueur est introuvable.', kind: 'error' });
+      dest = { type: 'joueur', id: p.id, name: p.name };
+    }
+
+    const result = cagnotte.ouvrir(state, { id: user.id, name: user.name }, { titre, but, pour: dest });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+    store.touchState();
+
+    io.emit('cagnotte:list', cagnotte.view(state));
+    chat.system(`💰 ${user.name} ouvre une cagnotte : « ${result.cagnotte.titre} » — objectif ${result.cagnotte.but.toLocaleString('fr-FR')} pièces.`, 'announce');
+  });
+
+  socket.on('cagnotte:give', async ({ id, amount } = {}) => {
+    const state = await store.siteState();
+    const c = cagnotte.get(state, id);
+    if (!c) return socket.emit('toast', { message: 'Cette cagnotte n’existe plus.', kind: 'warn' });
+
+    const result = cagnotte.mettre(c, { id: user.id, name: user.name }, amount);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    if (result.amount > profile.vault.coins) {
+      c.parts.pop();   // on retire ce qu'on vient d'écrire
+      return socket.emit('toast', { message: 'Tu n’as pas cette somme.', kind: 'error' });
+    }
+
+    profile.vault.coins -= result.amount;
+    ledger.burn('cagnotte', result.amount);
+    store.touchState();
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+    socket.emit('toast', {
+      message: result.rabote
+        ? `Il ne manquait que ${result.amount.toLocaleString('fr-FR')} pièces : c’est ce qui a été pris.`
+        : `${result.amount.toLocaleString('fr-FR')} pièces au pot.`,
+      kind: 'success',
+    });
+
+    // Pleine ? Elle part chez son bénéficiaire tout de suite (sauf celles
+    // du mois, qui attendent la bascule).
+    const paye = cagnotte.verser(c);
+    if (paye) {
+      await crediter(paye.to, paye.amount, {
+        message: `💰 La cagnotte « ${c.titre} » est pleine : ${paye.amount.toLocaleString('fr-FR')} pièces pour toi.`,
+        source: 'cagnotte',
+      });
+      chat.system(`💰 Cagnotte « ${c.titre} » remplie : ${paye.amount.toLocaleString('fr-FR')} pièces pour ${paye.name}.`, 'announce');
+      store.touchState();
+    } else if (cagnotte.pleine(c)) {
+      chat.system(`💰 La cagnotte « ${c.titre} » est pleine. Elle part au vainqueur du mois.`, 'announce');
+    }
+
+    io.emit('cagnotte:list', cagnotte.view(state));
+  });
+
+  /* ══════════ LE TROC ══════════
+   *
+   * « Je te donne mon Doge contre ton Pepe. » Nommé, direct, et négocié —
+   * ce que le marché anonyme ne saura jamais faire.
+   */
+
+  const trocEtat = (id) => pousser(id, 'troc:state', {
+    inbox: troc.inbox(id),
+    outbox: troc.outbox(id),
+    max: troc.MAX_OBJETS,
+    maxPieces: troc.MAX_PIECES,
+  });
+
+  socket.on('troc:list', () => trocEtat(user.id));
+
+  /**
+   * Ce qu'on peut demander à quelqu'un : ses DOUBLONS, et rien d'autre.
+   *
+   * On envoie aussi les siens, pour que la fenêtre de troc se remplisse
+   * d'un seul aller-retour — sans ça, l'écran s'affiche à moitié pendant
+   * une demi-seconde, et on clique sur une liste vide.
+   */
+  socket.on('troc:peek', async ({ id } = {}) => {
+    const autre = await store.findProfile(String(id || ''));
+    if (!autre) return socket.emit('toast', { message: 'Ce joueur est introuvable.', kind: 'error' });
+
+    const { BY_ID } = require('./data/collection');
+    const doublons = (p) => Object.entries(p.vault.items || {})
+      .filter(([, n]) => n > 1)
+      .map(([itemId, n]) => {
+        const item = BY_ID.get(itemId);
+        return item ? { id: item.id, name: item.name, emoji: item.emoji, r: item.r, spare: n - 1 } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    socket.emit('troc:peek', {
+      lui: { id: autre.id, name: autre.name, avatar: autre.avatar || null, items: doublons(autre) },
+      moi: { items: doublons(profile) },
+      maxPieces: troc.MAX_PIECES,
+      max: troc.MAX_OBJETS,
+    });
+  });
+
+  socket.on('troc:send', async ({ to, donne, veut, pieces } = {}) => {
+    const dest = await store.findProfile(String(to || ''));
+    if (!dest || dest.banned) return socket.emit('toast', { message: 'Ce joueur est introuvable.', kind: 'error' });
+
+    const result = troc.proposer(profile, { id: dest.id, name: dest.name }, { donne, veut, pieces });
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    trocEtat(user.id);
+    trocEtat(dest.id);
+    pousser(dest.id, 'toast', { message: `🔁 ${user.name} te propose un troc.`, kind: 'info' });
+  });
+
+  socket.on('troc:decline', ({ id } = {}) => {
+    const t = troc.get(id);
+    const result = troc.refuser(t, user.id);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+    trocEtat(t.fromId);
+    trocEtat(t.toId);
+  });
+
+  socket.on('troc:accept', async ({ id } = {}) => {
+    const t = troc.get(id);
+    if (!t) return socket.emit('toast', { message: 'Ce troc n’existe plus.', kind: 'warn' });
+    if (t.toId !== user.id) return socket.emit('toast', { message: 'Ce troc ne t’est pas adressé.', kind: 'warn' });
+
+    const autre = await store.findProfile(t.fromId);
+    if (!autre) return socket.emit('toast', { message: 'Ce joueur a disparu.', kind: 'error' });
+
+    /*
+     * On revérifie TOUT ici, avec les deux profils sous les yeux : entre la
+     * proposition et l'acceptation, chacun a pu vendre, troquer ailleurs ou
+     * tout dépenser. Une proposition n'est qu'une intention.
+     */
+    const ok = troc.verifier(t, autre, profile);
+    if (!ok.ok) {
+      trocEtat(t.fromId); trocEtat(t.toId);
+      return socket.emit('toast', { message: ok.message, kind: 'warn' });
+    }
+
+    // L'échange lui-même. Aucun `await` entre les deux moitiés : ni l'un ni
+    // l'autre ne peut se retrouver avec un demi-troc.
+    for (const o of t.donne) {
+      autre.vault.items[o.id] -= 1;
+      profile.vault.items[o.id] = (profile.vault.items[o.id] || 0) + 1;
+    }
+    for (const o of t.veut) {
+      profile.vault.items[o.id] -= 1;
+      autre.vault.items[o.id] = (autre.vault.items[o.id] || 0) + 1;
+    }
+    if (t.pieces > 0) {
+      autre.vault.coins -= t.pieces;
+      profile.vault.coins += t.pieces;
+    }
+    troc.conclure(t);
+
+    await store.saveProfile(autre);
+    await save();
+
+    const entry = presence.users.get(autre.id);
+    if (entry) entry.profile = autre;
+    socket.emit('profile:update', store.publicProfile(profile));
+    pousser(autre.id, 'profile:update', store.publicProfile(autre));
+
+    const resume = `${t.donne.map((o) => o.emoji).join('')}${t.pieces ? ` +${t.pieces.toLocaleString('fr-FR')} ¤` : ''} ⇄ ${t.veut.map((o) => o.emoji).join('')}`;
+    pousser(autre.id, 'toast', { message: `🔁 ${user.name} accepte ton troc : ${resume}`, kind: 'success' });
+    socket.emit('toast', { message: `🔁 Troc conclu avec ${t.fromName} : ${resume}`, kind: 'success' });
+
+    trocEtat(t.fromId);
+    trocEtat(t.toId);
+  });
+
+  /* ══════════ LES ENCHÈRES DU DIMANCHE ══════════
+   *
+   * Un objet, une fois par semaine, et les pièces gagnantes sont DÉTRUITES
+   * (voir l'en-tête de `encheres.js` : c'est ce qui empêche l'enchère de
+   * devenir un transfert entre copains).
+   */
+
+  async function enchereEtat(tous = false) {
+    const state = await store.siteState();
+    if (!tous) return socket.emit('enchere:state', encheres.view(state, user.id));
+    for (const [id, entry] of presence.users) {
+      const vue = encheres.view(state, id);
+      for (const socketId of entry.sockets) io.to(socketId).emit('enchere:state', vue);
+    }
+    return null;
+  }
+
+  socket.on('enchere:state', () => { enchereEtat().catch(() => {}); });
+
+  socket.on('enchere:bid', async ({ amount } = {}) => {
+    const state = await store.siteState();
+    const e = encheres.ensure(state);
+    const m = Math.floor(Number(amount) || 0);
+
+    if (m > profile.vault.coins) {
+      return socket.emit('toast', { message: 'Tu n’as pas cette somme.', kind: 'error' });
+    }
+
+    const result = encheres.miser(e, { id: user.id, name: user.name }, m);
+    if (!result.ok) return socket.emit('toast', { message: result.message, kind: 'warn' });
+
+    // La mise est séquestrée tout de suite, et celle du précédent lui est
+    // rendue : à tout instant, une seule mise est immobilisée.
+    profile.vault.coins -= result.amount;
+    ledger.burn('enchère', result.amount);
+    store.touchState();
+    await save();
+    socket.emit('profile:update', store.publicProfile(profile));
+
+    if (result.depasse) {
+      await crediter(result.depasse.id, result.depasse.amount, {
+        message: `🔨 Tu es dépassé sur l’enchère : tes ${result.depasse.amount.toLocaleString('fr-FR')} pièces te sont rendues.`,
+        kind: 'info', source: 'enchère',
+      });
+    }
+    if (result.prolonge) {
+      chat.system('🔨 Mise dans la dernière minute : l’enchère est prolongée de trois minutes.', 'announce');
+    }
+    await enchereEtat(true);
+  });
+
   /* ─── Blindtest ─── */
 
   const btRoom = () => {
@@ -1591,6 +2593,47 @@ io.on('connection', async (socket) => {
   };
 
   socket.on('bt:configure', (payload = {}) => btDo((r) => r.configure(user.id, payload)));
+  /*
+   * LE SERVEUR VA CHERCHER LA PLAYLIST LUI-MÊME.
+   *
+   * Une requête au lieu de deux minutes d'aller-retour dans un lecteur
+   * caché. Si ça rate — hébergement sans accès à YouTube, playlist privée,
+   * page qui a changé de forme — on renvoie `fallback: true` et l'écran
+   * reprend l'ancienne méthode, lente mais qui marche depuis la machine de
+   * l'hôte.
+   */
+  socket.on('bt:fetch', async ({ url } = {}) => {
+    const room = btRoom();
+    if (!room) return;
+    if (room.hostId !== user.id) {
+      return socket.emit('toast', { message: 'Seul l’hôte charge la playlist.', kind: 'warn' });
+    }
+
+    socket.emit('bt:fetching', { on: true });
+    const found = await youtube.playlist(url).catch((err) => ({
+      ok: false, reason: 'lecture', message: 'Lecture impossible.', detail: err.message,
+    }));
+    socket.emit('bt:fetching', { on: false });
+
+    if (!found.ok) {
+      // Une adresse invalide ne mérite pas qu'on lance le repli : il
+      // échouerait pareil, en deux minutes au lieu de deux secondes.
+      const fallback = found.reason !== 'adresse';
+      if (found.detail) console.log(`[blindtest] ${url} → ${found.detail}`);
+      return socket.emit('bt:fetched', { ok: false, message: found.message, fallback });
+    }
+
+    const out = room.setPlaylist(user.id, found);
+    if (!out.ok) return socket.emit('bt:fetched', { ok: false, message: out.message, fallback: false });
+
+    socket.emit('bt:fetched', {
+      ok: true,
+      count: out.count,
+      cached: Boolean(found.cached),
+      source: found.source,
+    });
+  });
+
   socket.on('bt:playlist', (payload = {}) => btDo((r) => {
     const out = r.setPlaylist(user.id, payload);
     if (out.ok) socket.emit('toast', { message: `Playlist chargée : ${out.count} morceaux.`, kind: 'success' });

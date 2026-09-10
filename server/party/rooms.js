@@ -369,6 +369,10 @@ class Room {
       watchable: this.phase !== 'lobby' && this.phase !== 'over' && !this.private,
       watchers: [...this.watchers.values()].filter((w) => w.sockets.size).length,
       private: this.private,
+      // Qui est assis là. Trois mots par joueur, rien de secret — et c'est
+      // ce qui permet de parier sur quelqu'un depuis le hall sans avoir à
+      // demander le détail du salon.
+      seats: this.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar || null })),
     };
   }
 }

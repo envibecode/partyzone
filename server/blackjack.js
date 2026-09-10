@@ -199,19 +199,40 @@ class Table {
     this.timer = setTimeout(() => this.startBetting(), WAKE_MS);
   }
 
+  /**
+   * Quelqu'un s'en va.
+   *
+   * Renvoie `true` si le siège a VRAIMENT été libéré. C'est important : en
+   * pleine main, on garde la place (une reconnexion doit retrouver ses
+   * cartes), et donc il faut aussi garder son profil — sinon la table paie
+   * les gains de tout le monde sauf du parti, qui a pourtant misé. Le
+   * serveur se sert de cette valeur de retour pour savoir s'il peut oublier
+   * le profil ou non.
+   *
+   * Et on ne fait pas attendre les autres : un siège vide dont c'est le
+   * tour est immédiatement passé, au lieu de bloquer la table vingt-deux
+   * secondes sur quelqu'un qui a fermé son onglet.
+   */
   removePlayer(userId) {
     const seat = this.seatOf(userId);
-    if (!seat) return;
+    if (!seat) return false;
     seat.connected = false;
-    // Pendant une main on garde le siège (reconnexion possible).
-    if (this.phase === 'waiting' || this.phase === 'betting') {
-      this.seats = this.seats.filter((s) => s.id !== userId);
-    }
+
+    const idle = this.phase === 'waiting' || this.phase === 'betting';
+    if (idle) this.seats = this.seats.filter((s) => s.id !== userId);
+
     if (this.hostId === userId) {
       const next = this.seats.find((s) => s.connected);
       this.hostId = next ? next.id : null;
     }
     if (!this.humans().some((s) => s.connected)) this.emptySince = Date.now();
+
+    // C'était à lui de jouer : on ne laisse pas la table poireauter.
+    if (!idle && this.phase === 'playing' && this.seats[this.activeSeat] === seat) {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.act(seat.id, 'stand', true), 300);
+    }
+    return idle;
   }
 
   /** Tous les joueurs assis (il n'y a plus de bots). */
@@ -487,9 +508,12 @@ class Table {
       if (!hand) continue;
       this.activeSeat = i;
       seat.activeHand = seat.hands.indexOf(hand);
-      this.deadline = Date.now() + TURN_MS;
+      // Un siège dont le joueur est parti ne fait attendre personne : on
+      // reste une seconde pour que ça se voie à l'écran, et on passe.
+      const wait = seat.connected ? TURN_MS : 1000;
+      this.deadline = Date.now() + wait;
       this.broadcast();
-      this.timer = setTimeout(() => this.act(seat.id, 'stand', true), TURN_MS);
+      this.timer = setTimeout(() => this.act(seat.id, 'stand', true), wait);
       return;
     }
 

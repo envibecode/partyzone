@@ -49,8 +49,15 @@ function rateFor(level) {
 }
 
 /**
- * Enregistre une mise. Appelé pour CHAQUE mise du casino, gagnée ou perdue —
- * c'est bien le volume joué qui compte, pas le résultat.
+ * Enregistre une mise. Appelé pour CHAQUE manche du casino, gagnée ou
+ * perdue — c'est le volume joué qui compte, pas le résultat.
+ *
+ * Le montant reçu est celui qui a été RISQUÉ, pas celui qui a été posé sur
+ * le tapis. La nuance ne change rien au blackjack ou au Plinko, où tout ce
+ * qu'on mise est exposé. Elle change tout à la roulette : couvrir rouge et
+ * noir met deux mille sur la table et n'en risque que cinquante, et sans ce
+ * détail on pouvait faire monter son rakeback sans jamais jouer. C'est
+ * `store.recordPlay` qui fait le calcul.
  */
 function record(profile, staked, level = 1) {
   const amount = Math.max(0, Math.floor(Number(staked) || 0));

@@ -397,7 +397,20 @@ function quest(profile, event, payload) {
   return questsDone(profile, quests.record(profile, event, payload || {}));
 }
 
-function recordPlay(profile, staked, returned, game = 'jeu') {
+/**
+ * Enregistre une manche jouée.
+ *
+ * `risked` sert aux jeux où l'on peut couvrir plusieurs issues à la fois —
+ * la roulette, essentiellement. Poser mille sur rouge et mille sur noir,
+ * c'est mettre deux mille sur le tapis mais n'en risquer que cinquante :
+ * le rakeback et l'XP comptent donc le RISQUE, pas le tapis. Partout
+ * ailleurs les deux sont égaux, et rien ne change.
+ *
+ * Le registre de l'économie, lui, voit toujours les vrais montants : ce
+ * qui est réellement pris et rendu ne dépend d'aucune convention.
+ */
+function recordPlay(profile, staked, returned, game = 'jeu', { risked = null } = {}) {
+  const exposed = Math.max(0, Math.min(staked, risked === null ? staked : risked));
   // Le registre d'économie compte la manche ici, et nulle part ailleurs :
   // c'est le seul endroit par lequel passent toutes les mises du site.
   ledger.play(game, staked, returned);
@@ -416,12 +429,23 @@ function recordPlay(profile, staked, returned, game = 'jeu') {
   // décide du mois, c'est l'XP — voir `grantXp`.
   season.record(profile, { profit: returned - staked, staked, rounds: 1 });
 
-  // Le rakeback se nourrit du VOLUME joué, gagné ou perdu. C'est ce qui fait
-  // qu'une soirée de malchance rapporte quand même quelque chose.
-  rakeback.record(profile, staked, levelFromXp(profile.xp).level);
+  // Le rakeback se nourrit du volume RISQUÉ, gagné ou perdu. C'est ce qui
+  // fait qu'une soirée de malchance rapporte quand même quelque chose — et
+  // ce qui empêche de le farmer en ne risquant rien.
+  rakeback.record(profile, exposed, levelFromXp(profile.xp).level);
 
-  const xp = Math.max(1, Math.floor(staked / 20));
-  grantXp(profile, xp);
+  /*
+   * L'XP suit le risque, pas le volume.
+   *
+   * C'est le même garde-fou, et il compte encore plus depuis que le
+   * classement du mois se joue à l'XP : sans lui, on gagnait le lot en
+   * couvrant rouge et noir pendant deux heures, sans jamais rien risquer.
+   *
+   * Le plancher d'une XP par manche reste, mais seulement pour une manche
+   * réellement jouée : une couverture parfaite n'en rapporte aucune.
+   */
+  const xp = exposed > 0 ? Math.max(1, Math.floor(exposed / 20)) : 0;
+  if (xp) grantXp(profile, xp);
   return xp;
 }
 

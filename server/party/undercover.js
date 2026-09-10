@@ -288,12 +288,28 @@ class Undercover extends Room {
     victim.out = true;
     victim.eliminatedRound = this.round;
 
+    /*
+     * ON RÉVÈLE LE CAMP, JAMAIS LE MOT.
+     *
+     * L'élimination doit dire si le village s'est trompé — c'est la règle
+     * du jeu, et c'est ce qui rend le vote intéressant. Mais le MOT de
+     * l'éliminé n'a rien à faire là :
+     *
+     *  · si un civil tombe, son mot était le mot des civils. L'afficher le
+     *    donne d'un coup à tous les infiltrés, qui n'ont plus qu'à recopier
+     *    la description de n'importe qui. La partie est finie ;
+     *  · si un infiltré tombe, son mot donne le sien aux autres infiltrés
+     *    et confirme aux civils qu'ils avaient raison, alors qu'il leur
+     *    reste peut-être quelqu'un à trouver.
+     *
+     * Les mots ne sortent qu'à la fin, dans le tableau final, où ils
+     * servent à comprendre la partie plutôt qu'à la gagner.
+     */
     this.lastReveal = {
       id: victim.id,
       name: victim.name,
       avatar: victim.avatar,
       role: victim.role,
-      word: victim.word,
       counts: this.voteCounts(),
     };
 

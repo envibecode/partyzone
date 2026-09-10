@@ -727,8 +727,17 @@ io.on('connection', async (socket) => {
     socket.leave('bj:' + table.code);
     socket.data.tableCode = null;
     const wasSeated = Boolean(table.seatOf(user.id));
-    table.profiles.delete(user.id);
-    table.removePlayer(user.id);
+    /*
+     * On oublie le profil SEULEMENT si la place a été libérée.
+     *
+     * En pleine main, la table garde le siège pour permettre une
+     * reconnexion — mais elle a besoin du profil pour créditer les gains à
+     * la fin de la main. En le supprimant tout de suite, on encaissait la
+     * mise et on ne payait jamais : le joueur revenait avec un solde
+     * amputé, et la table restait bloquée sur son tour.
+     */
+    const freed = table.removePlayer(user.id);
+    if (freed || !table.seatOf(user.id)) table.profiles.delete(user.id);
     table.removeWatcher(user.id);
     if (wasSeated) table.say('Croupier', `${user.name} quitte la table.`);
     presence.setStatus(user.id, 'home');

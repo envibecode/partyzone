@@ -50,6 +50,51 @@ const BETS = {
   straight: { name: 'Plein', payout: 36, test: (n, v) => n === v },
 };
 
+/**
+ * CE QUE LE JOUEUR RISQUE VRAIMENT SUR UN TOUR.
+ *
+ * Le problème, en une phrase : poser mille sur rouge et mille sur noir, ce
+ * n'est pas jouer deux mille. C'est jouer cinquante-quatre — la part qui
+ * part quand le zéro sort — et récupérer le reste à tous les coups.
+ *
+ * Or le rakeback et l'XP se calculaient sur ce qui était POSÉ sur le tapis.
+ * Un joueur pouvait donc s'installer, couvrir rouge et noir, et voir monter
+ * son rakeback et son compteur du mois sans jamais rien risquer. Ce n'est
+ * pas jouer, c'est tourner une manivelle — et comme l'XP décide du lot du
+ * mois, ça revenait à acheter le classement à la petite cuillère.
+ *
+ * On calcule donc, sur les trente-sept numéros possibles, DE COMBIEN le
+ * solde du joueur bouge en moyenne :
+ *
+ *     risque = moyenne sur les 37 numéros de | gain − mise |
+ *
+ *  · mille sur rouge      → 1000 dans tous les cas  → risque 1000
+ *  · mille rouge + noir   → 0 trente-six fois sur 37, 2000 une fois
+ *                         → risque 54
+ *
+ * On plafonne à la mise posée, sinon un numéro plein — qui fait bouger le
+ * solde de bien plus que la mise quand il sort — compterait double.
+ *
+ * Le registre de l'économie, lui, continue de voir les vrais chiffres :
+ * l'argent réellement pris et rendu ne change pas. Seuls le rakeback et
+ * l'XP regardent le risque.
+ */
+function atRisk(bets) {
+  const staked = bets.reduce((sum, b) => sum + b.amount, 0);
+  if (!staked) return 0;
+
+  let swing = 0;
+  for (const n of WHEEL) {   // les 37 cases de la roue, dans n'importe quel ordre
+    let payout = 0;
+    for (const bet of bets) {
+      const def = BETS[bet.type];
+      if (def && def.test(n, bet.value)) payout += bet.amount * def.payout;
+    }
+    swing += Math.abs(payout - staked);
+  }
+  return Math.min(staked, Math.round(swing / WHEEL.length));
+}
+
 function betLabel(type, value) {
   const def = BETS[type];
   if (!def) return '?';
@@ -149,7 +194,12 @@ class Roulette {
       const profile = await this.store.findProfile(userId).catch(() => null);
       if (profile) {
         if (payout > 0) profile.vault.coins += payout;
-        this.store.recordPlay(profile, entry.staked, payout, 'roulette');
+        // Le rakeback et l'XP ne comptent que la mise réellement exposée :
+        // couvrir rouge et noir ne rapporte plus rien d'autre que le frisson
+        // du zéro.
+        this.store.recordPlay(profile, entry.staked, payout, 'roulette', {
+          risked: atRisk(entry.bets),
+        });
         await this.store.saveProfile(profile).catch(() => {});
         this.pushProfile(profile);
       }
@@ -356,4 +406,5 @@ class Roulette {
   }
 }
 
-module.exports = { Roulette, colorOf, WHEEL, BETS, betLabel, MIN_BET, MAX_BET };
+module.exports = {
+  atRisk, Roulette, colorOf, WHEEL, BETS, betLabel, MIN_BET, MAX_BET };

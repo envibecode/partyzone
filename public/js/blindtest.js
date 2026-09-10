@@ -96,21 +96,90 @@
     return player;
   }
 
+  /**
+   * OÙ EN EST-ON DE L'EXTRAIT ?
+   *
+   * Le serveur envoie deux choses : `deadline`, l'instant où la manche se
+   * termine, et `serverNow`, son horloge au moment de l'envoi. La manche
+   * dure `levelMs`. Le temps déjà écoulé vaut donc :
+   *
+   *     levelMs − (deadline − serverNow)
+   *
+   * plus ce qui s'est passé depuis qu'on a reçu le message. Rien de plus.
+   *
+   * L'ancien calcul mélangeait les deux horloges et sortait un milliard et
+   * demi de secondes ; l'écrêtage le ramenait pile à la fin de l'extrait.
+   * Résultat : à chaque manche, la musique démarrait sur les dernières
+   * fractions de seconde avant de s'arrêter. C'est ça, « le blindtest ne
+   * marche pas ».
+   */
+  function elapsedOf(s) {
+    const sent = s.levelMs - (s.deadline - s.serverNow);
+    const since = Date.now() - (s.receivedAt || Date.now());
+    return Math.max(0, Math.min(s.levelMs, sent + since)) / 1000;
+  }
+
   /** Cale le lecteur sur l'extrait de la manche, au bon endroit. */
   async function syncAudio(s) {
     if (!s.current || s.phase !== 'ecoute') return;
     await ensurePlayer();
     if (!ready) return;
 
-    const elapsed = Math.max(0, (Date.now() - (s.serverNow - (s.deadline - s.serverNow) + s.levelMs)) / 1000);
-    const at = s.current.offset + Math.min(elapsed, s.levelMs / 1000);
+    const at = s.current.offset + elapsedOf(s);
 
     if (playing !== s.current.videoId) {
       playing = s.current.videoId;
       player.loadVideoById({ videoId: s.current.videoId, startSeconds: at });
-      player.setVolume(70);
+      player.setVolume(75);
     }
     try { player.playVideo(); } catch { /* le navigateur peut refuser avant un clic */ }
+    checkSound();
+  }
+
+  /*
+   * LE NAVIGATEUR REFUSE LE SON TANT QU'ON N'A RIEN CLIQUÉ.
+   *
+   * C'est la règle de tous les navigateurs modernes, et elle ne se
+   * contourne pas — il faut un clic. L'hôte en fait un en lançant la
+   * partie ; les autres, non : ils arrivent, la musique démarre pour tout
+   * le monde sauf eux, et ils croient que le jeu est cassé.
+   *
+   * On regarde donc si le lecteur joue vraiment, et sinon on affiche un
+   * bouton. Un clic dessus suffit, une fois pour la soirée.
+   */
+  let unlocked = false;
+  let soundTimer = null;
+
+  function checkSound() {
+    clearTimeout(soundTimer);
+    soundTimer = setTimeout(() => {
+      if (!player || !ready || unlocked) return;
+      let st = -1;
+      try { st = player.getPlayerState(); } catch { return; }
+      // 1 = en lecture, 3 = en train de charger. Tout le reste, pendant une
+      // manche, veut dire que le navigateur a dit non.
+      showUnlock(st !== 1 && st !== 3);
+    }, 900);
+  }
+
+  function showUnlock(on) {
+    const stage = $('#bt-stage');
+    let box = stage.querySelector('.bt-unlock');
+    if (!on) { if (box) box.remove(); return; }
+    if (box) return;
+
+    box = el('div', 'bt-unlock');
+    box.appendChild(el('span', null,
+      'Ton navigateur bloque le son tant que tu n’as rien cliqué sur cette page. '
+      + 'Un clic ici et c’est réglé pour toute la soirée.'));
+    const btn = el('button', 'btn btn-primary', '🔊 Activer le son');
+    btn.addEventListener('click', () => {
+      unlocked = true;
+      try { player.unMute(); player.setVolume(75); player.playVideo(); } catch { /* rien */ }
+      box.remove();
+    });
+    box.appendChild(btn);
+    stage.prepend(box);
   }
 
   function stopAudio() {
@@ -128,52 +197,112 @@
   }
 
   /**
-   * Lit une playlist sans clé d'API.
+   * LIT UNE PLAYLIST SANS CLÉ D'API.
    *
-   * On charge la playlist dans un lecteur caché, puis on avance de piste en
-   * piste en relevant le titre de chacune. C'est lent — une demi-seconde
-   * par morceau — mais ça ne demande ni compte Google ni quota, et ça se
-   * fait une fois par soirée.
+   * On charge la playlist dans un lecteur caché, muet, puis on avance de
+   * piste en piste en relevant le titre de chacune. C'est lent — environ un
+   * tiers de seconde par morceau — mais ça ne demande ni compte Google, ni
+   * projet, ni quota, et ça se fait une fois par soirée.
+   *
+   * Trois choses rataient, et il fallait les trois pour que ça marche :
+   *
+   *  · ON NE LAISSAIT PAS LE TEMPS À LA PLAYLIST D'ARRIVER. `onReady` se
+   *    déclenche quand le LECTEUR est prêt, pas quand la playlist est
+   *    chargée. On lisait donc une liste vide et on annonçait « playlist
+   *    illisible » à quelqu'un qui avait collé la bonne adresse.
+   *
+   *  · LE LECTEUR FAISAIT UN PIXEL SUR UN PIXEL. YouTube refuse de jouer
+   *    dans un lecteur qu'il considère invisible, sans dire pourquoi.
+   *
+   *  · IL N'ÉTAIT PAS MUET. Parcourir cinquante morceaux faisait donc
+   *    entendre cinquante demi-secondes de musique à l'hôte.
    */
+  let scanning = false;
+
+  /** Attend qu'une condition devienne vraie, sans bloquer la page. */
+  function until(fn, ms, step = 150) {
+    const started = Date.now();
+    return new Promise((resolve) => {
+      const tick = () => {
+        let v = null;
+        try { v = fn(); } catch { v = null; }
+        if (v) return resolve(v);
+        if (Date.now() - started > ms) return resolve(null);
+        setTimeout(tick, step);
+      };
+      tick();
+    });
+  }
+
   async function loadPlaylist(url) {
+    if (scanning) return;
     const id = playlistIdFrom(url);
     if (!id) return PZ.toast('Colle l’adresse d’une playlist YouTube (elle contient « list= »).', 'error');
 
     const btn = $('#bt-load');
-    btn.disabled = true;
     const status = $('#bt-status');
+    scanning = true;
+    btn.disabled = true;
     status.textContent = 'Ouverture de la playlist…';
 
     try {
       const YT = await youtubeApi();
+
       if (!loader) {
         await new Promise((resolve) => {
           loader = new YT.Player('bt-loader', {
-            height: '1', width: '1',
-            playerVars: { listType: 'playlist', list: id, autoplay: 0, controls: 0 },
+            height: '180', width: '320',
+            playerVars: { listType: 'playlist', list: id, autoplay: 0, controls: 0, playsinline: 1 },
             events: { onReady: () => resolve() },
           });
         });
       } else {
         loader.cuePlaylist({ listType: 'playlist', list: id });
-        await new Promise((r) => setTimeout(r, 1800));
       }
 
-      const ids = loader.getPlaylist() || [];
-      if (!ids.length) throw new Error('playlist vide');
+      // Le lecteur est prêt : la playlist, pas forcément. On attend qu'elle
+      // arrive vraiment, jusqu'à quinze secondes.
+      try { loader.mute(); } catch { /* pas encore prêt, ce n'est pas grave */ }
+      const ids = await until(() => {
+        const list = loader.getPlaylist();
+        return list && list.length ? list : null;
+      }, 15000);
 
+      if (!ids) {
+        status.textContent = 'Playlist vide ou privée.';
+        PZ.toast('Aucun morceau trouvé. La playlist doit être publique ou non répertoriée, '
+          + 'et contenir au moins quatre titres.', 'error');
+        return;
+      }
+
+      const total = Math.min(ids.length, 200);
       const tracks = [];
-      for (let i = 0; i < ids.length && i < 200; i++) {
+      const seen = new Set();
+
+      for (let i = 0; i < total; i++) {
         loader.playVideoAt(i);
-        loader.pauseVideo();
-        // Le titre n'est disponible qu'une fois la vidéo chargée : on laisse
-        // au lecteur le temps de basculer.
-        await new Promise((r) => setTimeout(r, 420));
-        const data = loader.getVideoData() || {};
-        if (data.video_id) tracks.push({ id: data.video_id, title: data.title, author: data.author });
-        status.textContent = `Lecture de la playlist… ${tracks.length} / ${ids.length}`;
+        // Le titre n'est disponible qu'une fois la vidéo chargée : on attend
+        // qu'il CHANGE, plutôt qu'un délai fixe au jugé. C'est plus rapide
+        // sur une bonne connexion, et plus sûr sur une mauvaise.
+        const data = await until(() => {
+          const d = loader.getVideoData() || {};
+          return d.video_id && !seen.has(d.video_id) ? d : null;
+        }, 2500, 120);
+
+        if (data) {
+          seen.add(data.video_id);
+          if (data.title) tracks.push({ id: data.video_id, title: data.title, author: data.author });
+        }
+        status.textContent = `Lecture de la playlist… ${tracks.length} / ${total}`;
       }
-      loader.stopVideo();
+      try { loader.stopVideo(); } catch { /* rien */ }
+
+      if (tracks.length < 4) {
+        status.textContent = `Seulement ${tracks.length} morceau(x) lisible(s).`;
+        PZ.toast('Il faut au moins quatre morceaux lisibles. Certaines vidéos sont peut-être '
+          + 'bloquées ou supprimées.', 'error');
+        return;
+      }
 
       PZ.socket.emit('bt:playlist', { id, title: (loader.getVideoData() || {}).author || '', tracks });
       status.textContent = `${tracks.length} morceaux prêts.`;
@@ -182,6 +311,7 @@
       PZ.toast('Impossible de lire cette playlist. Elle doit être publique ou non répertoriée.', 'error');
       void err;
     } finally {
+      scanning = false;
       btn.disabled = false;
     }
   }
@@ -433,7 +563,12 @@
     const socket = PZ.socket;
     if (!socket || socket.__btBound) return;
     socket.__btBound = true;
-    socket.on('bt:state', render);
+    socket.on('bt:state', (s) => {
+      // On note QUAND on a reçu l'état : c'est ce qui permet de rattraper
+      // le temps passé entre l'envoi du serveur et l'affichage.
+      s.receivedAt = Date.now();
+      render(s);
+    });
   }
 
   PZ.views.bt = {
